@@ -1,0 +1,198 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		A10000000000000000000001 /* TripMapApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000001 /* TripMapApp.swift */; };
+		A10000000000000000000002 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000002 /* RootView.swift */; };
+		A10000000000000000000003 /* Trip.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000003 /* Trip.swift */; };
+		A10000000000000000000004 /* OkinawaSample.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000004 /* OkinawaSample.swift */; };
+		A10000000000000000000005 /* DayPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000005 /* DayPicker.swift */; };
+		A10000000000000000000006 /* ActivityList.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000006 /* ActivityList.swift */; };
+		A10000000000000000000007 /* ActivityMap.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000007 /* ActivityMap.swift */; };
+		A10000000000000000000008 /* PlanView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000008 /* PlanView.swift */; };
+		A10000000000000000000009 /* GuideView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000009 /* GuideView.swift */; };
+		A10000000000000000000010 /* TripInteractionState.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000015 /* TripInteractionState.swift */; };
+		A10000000000000000000011 /* TripValidation.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000016 /* TripValidation.swift */; };
+		A10000000000000000000012 /* PrototypeEdgeCases.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000017 /* PrototypeEdgeCases.swift */; };
+		A11000000000000000000001 /* TripMapApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000001 /* TripMapApp.swift */; };
+		A11000000000000000000002 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000002 /* RootView.swift */; };
+		A11000000000000000000003 /* Trip.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000003 /* Trip.swift */; };
+		A11000000000000000000004 /* OkinawaSample.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000004 /* OkinawaSample.swift */; };
+		A11000000000000000000005 /* DayPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000005 /* DayPicker.swift */; };
+		A11000000000000000000006 /* ActivityList.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000006 /* ActivityList.swift */; };
+		A11000000000000000000007 /* ActivityMap.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000007 /* ActivityMap.swift */; };
+		A11000000000000000000008 /* PlanView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000008 /* PlanView.swift */; };
+		A11000000000000000000009 /* GuideView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000009 /* GuideView.swift */; };
+		A11000000000000000000010 /* TripInteractionState.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000015 /* TripInteractionState.swift */; };
+		A11000000000000000000011 /* TripValidation.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000016 /* TripValidation.swift */; };
+		A11000000000000000000012 /* PrototypeEdgeCases.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000017 /* PrototypeEdgeCases.swift */; };
+		A12000000000000000000001 /* TripModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000010 /* TripModelTests.swift */; };
+		A12000000000000000000002 /* XCTest.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A20000000000000000000014 /* XCTest.framework */; };
+		A12000000000000000000003 /* TripMap.app in Dependencies */ = {isa = PBXBuildFile; fileRef = A20000000000000000000012 /* TripMap.app */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		A30000000000000000000001 = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A40000000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A50000000000000000000002;
+			remoteInfo = "TripMap-macOS";
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		A20000000000000000000001 /* TripMapApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App/TripMapApp.swift; sourceTree = "<group>"; };
+		A20000000000000000000002 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App/RootView.swift; sourceTree = "<group>"; };
+		A20000000000000000000003 /* Trip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Domain/Trip.swift; sourceTree = "<group>"; };
+		A20000000000000000000004 /* OkinawaSample.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Fixtures/OkinawaSample.swift; sourceTree = "<group>"; };
+		A20000000000000000000005 /* DayPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Features/Shared/DayPicker.swift; sourceTree = "<group>"; };
+		A20000000000000000000006 /* ActivityList.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Features/Shared/ActivityList.swift; sourceTree = "<group>"; };
+		A20000000000000000000007 /* ActivityMap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Features/Map/ActivityMap.swift; sourceTree = "<group>"; };
+		A20000000000000000000008 /* PlanView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Features/Plan/PlanView.swift; sourceTree = "<group>"; };
+		A20000000000000000000009 /* GuideView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Features/Guide/GuideView.swift; sourceTree = "<group>"; };
+		A20000000000000000000010 /* TripModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripModelTests.swift; sourceTree = "<group>"; };
+		A20000000000000000000011 /* TripMap.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TripMap.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A20000000000000000000012 /* TripMap.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TripMap.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A20000000000000000000013 /* TripMapTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TripMapTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		A20000000000000000000014 /* XCTest.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = XCTest.framework; path = System/Library/Frameworks/XCTest.framework; sourceTree = SDKROOT; };
+		A20000000000000000000015 /* TripInteractionState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Domain/TripInteractionState.swift; sourceTree = "<group>"; };
+		A20000000000000000000016 /* TripValidation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Domain/TripValidation.swift; sourceTree = "<group>"; };
+		A20000000000000000000017 /* PrototypeEdgeCases.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Fixtures/PrototypeEdgeCases.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		A60000000000000000000001 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		A60000000000000000000002 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		A60000000000000000000003 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (A12000000000000000000002 /* XCTest.framework in Frameworks */, ); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		A70000000000000000000001 = {
+			isa = PBXGroup;
+			children = (
+				A70000000000000000000002 /* TripMap */,
+				A70000000000000000000003 /* TripMapTests */,
+				A70000000000000000000004 /* Frameworks */,
+				A70000000000000000000005 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		A70000000000000000000002 /* TripMap */ = {
+			isa = PBXGroup;
+			children = (
+				A20000000000000000000001, A20000000000000000000002, A20000000000000000000003,
+				A20000000000000000000004, A20000000000000000000005, A20000000000000000000006,
+				A20000000000000000000007, A20000000000000000000008, A20000000000000000000009,
+				A20000000000000000000015, A20000000000000000000016, A20000000000000000000017,
+			);
+			path = TripMap;
+			sourceTree = "<group>";
+		};
+		A70000000000000000000003 /* TripMapTests */ = {isa = PBXGroup; children = (A20000000000000000000010, ); path = TripMapTests; sourceTree = "<group>"; };
+		A70000000000000000000004 /* Frameworks */ = {isa = PBXGroup; children = (A20000000000000000000014, ); name = Frameworks; sourceTree = "<group>"; };
+		A70000000000000000000005 /* Products */ = {isa = PBXGroup; children = (A20000000000000000000011, A20000000000000000000012, A20000000000000000000013, ); name = Products; sourceTree = "<group>"; };
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		A50000000000000000000001 /* TripMap-iOS */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A80000000000000000000002;
+			buildPhases = (A90000000000000000000001, A60000000000000000000001, AA0000000000000000000001, );
+			buildRules = ();
+			dependencies = ();
+			name = "TripMap-iOS";
+			productName = TripMap;
+			productReference = A20000000000000000000011;
+			productType = "com.apple.product-type.application";
+		};
+		A50000000000000000000002 /* TripMap-macOS */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A80000000000000000000003;
+			buildPhases = (A90000000000000000000002, A60000000000000000000002, AA0000000000000000000002, );
+			buildRules = ();
+			dependencies = ();
+			name = "TripMap-macOS";
+			productName = TripMap;
+			productReference = A20000000000000000000012;
+			productType = "com.apple.product-type.application";
+		};
+		A50000000000000000000003 /* TripMapTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A80000000000000000000004;
+			buildPhases = (A90000000000000000000003, A60000000000000000000003, AA0000000000000000000003, );
+			buildRules = ();
+			dependencies = (AB0000000000000000000001, );
+			name = TripMapTests;
+			productName = TripMapTests;
+			productReference = A20000000000000000000013;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		A40000000000000000000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2700;
+				LastUpgradeCheck = 2700;
+				TargetAttributes = {
+					A50000000000000000000001 = {CreatedOnToolsVersion = 27.0; };
+					A50000000000000000000002 = {CreatedOnToolsVersion = 27.0; };
+					A50000000000000000000003 = {CreatedOnToolsVersion = 27.0; TestTargetID = A50000000000000000000002; };
+				};
+			};
+			buildConfigurationList = A80000000000000000000001;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (en, Base, ja, );
+			mainGroup = A70000000000000000000001;
+			productRefGroup = A70000000000000000000005;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (A50000000000000000000001, A50000000000000000000002, A50000000000000000000003, );
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		AA0000000000000000000001 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		AA0000000000000000000002 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		AA0000000000000000000003 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		A90000000000000000000001 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000001, A10000000000000000000002, A10000000000000000000003, A10000000000000000000004, A10000000000000000000005, A10000000000000000000006, A10000000000000000000007, A10000000000000000000008, A10000000000000000000009, A10000000000000000000010, A10000000000000000000011, A10000000000000000000012, ); runOnlyForDeploymentPostprocessing = 0; };
+		A90000000000000000000002 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A11000000000000000000001, A11000000000000000000002, A11000000000000000000003, A11000000000000000000004, A11000000000000000000005, A11000000000000000000006, A11000000000000000000007, A11000000000000000000008, A11000000000000000000009, A11000000000000000000010, A11000000000000000000011, A11000000000000000000012, ); runOnlyForDeploymentPostprocessing = 0; };
+		A90000000000000000000003 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A12000000000000000000001, ); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		AB0000000000000000000001 = {isa = PBXTargetDependency; target = A50000000000000000000002; targetProxy = A30000000000000000000001; };
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		AC0000000000000000000001 = {isa = XCBuildConfiguration; buildSettings = {CLANG_ENABLE_MODULES = YES; CLANG_ENABLE_OBJC_ARC = YES; ENABLE_TESTABILITY = YES; ONLY_ACTIVE_ARCH = YES; SWIFT_OPTIMIZATION_LEVEL = "-Onone"; SWIFT_VERSION = 6.0; }; name = Debug; };
+		AC0000000000000000000002 = {isa = XCBuildConfiguration; buildSettings = {CLANG_ENABLE_MODULES = YES; CLANG_ENABLE_OBJC_ARC = YES; SWIFT_COMPILATION_MODE = wholemodule; SWIFT_VERSION = 6.0; }; name = Release; };
+		AC0000000000000000000011 = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 1; ENABLE_PREVIEWS = YES; GENERATE_INFOPLIST_FILE = YES; INFOPLIST_KEY_CFBundleDisplayName = TripMap; INFOPLIST_KEY_UILaunchScreen_Generation = YES; IPHONEOS_DEPLOYMENT_TARGET = 17.0; LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks"; MARKETING_VERSION = 0.0.1; PRODUCT_BUNDLE_IDENTIFIER = com.rcsv.tripmap; PRODUCT_NAME = TripMap; SDKROOT = iphoneos; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; SUPPORTS_MACCATALYST = NO; SWIFT_EMIT_LOC_STRINGS = YES; SWIFT_STRICT_CONCURRENCY = complete; SWIFT_VERSION = 6.0; TARGETED_DEVICE_FAMILY = 1; }; name = Debug; };
+		AC0000000000000000000012 = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 1; GENERATE_INFOPLIST_FILE = YES; INFOPLIST_KEY_CFBundleDisplayName = TripMap; INFOPLIST_KEY_UILaunchScreen_Generation = YES; IPHONEOS_DEPLOYMENT_TARGET = 17.0; LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks"; MARKETING_VERSION = 0.0.1; PRODUCT_BUNDLE_IDENTIFIER = com.rcsv.tripmap; PRODUCT_NAME = TripMap; SDKROOT = iphoneos; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; SUPPORTS_MACCATALYST = NO; SWIFT_EMIT_LOC_STRINGS = YES; SWIFT_STRICT_CONCURRENCY = complete; SWIFT_VERSION = 6.0; TARGETED_DEVICE_FAMILY = 1; }; name = Release; };
+		AC0000000000000000000021 = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 1; ENABLE_PREVIEWS = YES; GENERATE_INFOPLIST_FILE = YES; INFOPLIST_KEY_CFBundleDisplayName = TripMap; INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.travel"; LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks"; MACOSX_DEPLOYMENT_TARGET = 14.0; MARKETING_VERSION = 0.0.1; PRODUCT_BUNDLE_IDENTIFIER = com.rcsv.tripmap; PRODUCT_NAME = TripMap; SDKROOT = macosx; SWIFT_EMIT_LOC_STRINGS = YES; SWIFT_STRICT_CONCURRENCY = complete; SWIFT_VERSION = 6.0; }; name = Debug; };
+		AC0000000000000000000022 = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 1; GENERATE_INFOPLIST_FILE = YES; INFOPLIST_KEY_CFBundleDisplayName = TripMap; INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.travel"; LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks"; MACOSX_DEPLOYMENT_TARGET = 14.0; MARKETING_VERSION = 0.0.1; PRODUCT_BUNDLE_IDENTIFIER = com.rcsv.tripmap; PRODUCT_NAME = TripMap; SDKROOT = macosx; SWIFT_EMIT_LOC_STRINGS = YES; SWIFT_STRICT_CONCURRENCY = complete; SWIFT_VERSION = 6.0; }; name = Release; };
+		AC0000000000000000000031 = {isa = XCBuildConfiguration; buildSettings = {BUNDLE_LOADER = "$(TEST_HOST)"; CODE_SIGNING_ALLOWED = NO; GENERATE_INFOPLIST_FILE = YES; LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks @loader_path/../Frameworks"; MACOSX_DEPLOYMENT_TARGET = 14.0; PRODUCT_BUNDLE_IDENTIFIER = com.rcsv.tripmap.tests; PRODUCT_NAME = "$(TARGET_NAME)"; SDKROOT = macosx; SWIFT_STRICT_CONCURRENCY = complete; SWIFT_VERSION = 6.0; TEST_HOST = "$(BUILT_PRODUCTS_DIR)/TripMap.app/Contents/MacOS/TripMap"; }; name = Debug; };
+		AC0000000000000000000032 = {isa = XCBuildConfiguration; buildSettings = {BUNDLE_LOADER = "$(TEST_HOST)"; CODE_SIGNING_ALLOWED = NO; GENERATE_INFOPLIST_FILE = YES; LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks @loader_path/../Frameworks"; MACOSX_DEPLOYMENT_TARGET = 14.0; PRODUCT_BUNDLE_IDENTIFIER = com.rcsv.tripmap.tests; PRODUCT_NAME = "$(TARGET_NAME)"; SDKROOT = macosx; SWIFT_STRICT_CONCURRENCY = complete; SWIFT_VERSION = 6.0; TEST_HOST = "$(BUILT_PRODUCTS_DIR)/TripMap.app/Contents/MacOS/TripMap"; }; name = Release; };
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		A80000000000000000000001 = {isa = XCConfigurationList; buildConfigurations = (AC0000000000000000000001, AC0000000000000000000002, ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		A80000000000000000000002 = {isa = XCConfigurationList; buildConfigurations = (AC0000000000000000000011, AC0000000000000000000012, ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		A80000000000000000000003 = {isa = XCConfigurationList; buildConfigurations = (AC0000000000000000000021, AC0000000000000000000022, ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		A80000000000000000000004 = {isa = XCConfigurationList; buildConfigurations = (AC0000000000000000000031, AC0000000000000000000032, ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+/* End XCConfigurationList section */
+	};
+	rootObject = A40000000000000000000001 /* Project object */;
+}

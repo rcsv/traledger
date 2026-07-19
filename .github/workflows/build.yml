@@ -1,0 +1,17 @@
+name: Apple build
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build macOS
+        run: xcodebuild -project TripMap.xcodeproj -scheme TripMap-macOS -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO build
+      - name: Test macOS
+        run: xcodebuild -project TripMap.xcodeproj -scheme TripMap-macOS -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO test
+      - name: Build iOS
+        run: xcodebuild -project TripMap.xcodeproj -scheme TripMap-iOS -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
