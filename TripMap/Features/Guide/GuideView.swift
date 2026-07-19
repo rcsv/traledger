@@ -52,8 +52,7 @@ struct GuideView: View {
                     .padding(.bottom, 8)
 
                     if let selectedDay {
-                        switch mode {
-                        case .map:
+                        ZStack {
                             ZStack(alignment: .bottom) {
                                 ActivityMap(
                                     day: selectedDay,
@@ -69,12 +68,18 @@ struct GuideView: View {
                                     .padding()
                                 }
                             }
-                        case .list:
+                            .opacity(mode == .map ? 1 : 0)
+                            .allowsHitTesting(mode == .map)
+                            .accessibilityHidden(mode != .map)
+
                             ActivityList(
                                 day: selectedDay,
                                 selectedActivityID: interaction.selectedActivityID,
                                 onSelectActivity: selectActivityFromList
                             )
+                            .opacity(mode == .list ? 1 : 0)
+                            .allowsHitTesting(mode == .list)
+                            .accessibilityHidden(mode != .list)
                         }
                     }
                 }

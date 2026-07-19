@@ -92,10 +92,29 @@ final class TripModelTests: XCTestCase {
         trip.days[1].activities.removeAll(where: { $0.id == second.id })
         interaction.reconcile(with: trip)
         XCTAssertEqual(interaction.selectedActivityID, third.id)
+        XCTAssertEqual(interaction.cameraRequest?.target, .activity(third.id))
 
         trip.days[1].activities.removeAll(where: { $0.id == third.id })
         interaction.reconcile(with: trip)
         XCTAssertEqual(interaction.selectedActivityID, dayTwo.orderedActivities[0].id)
+        XCTAssertEqual(interaction.cameraRequest?.target, .activity(dayTwo.orderedActivities[0].id))
+    }
+
+    func testReconcilePreservesCameraWhenDeletionSelectsPlaceLessActivity() {
+        var trip = OkinawaSample.trip
+        let dayOne = trip.orderedDays[0]
+        let first = dayOne.orderedActivities[0]
+        let placeLessSecond = dayOne.orderedActivities[1]
+        var interaction = TripInteractionState(trip: trip)
+        interaction.selectDay(dayOne.id, in: trip)
+        interaction.selectActivity(first.id, source: .list, in: trip)
+        let focusedCameraRequest = interaction.cameraRequest
+
+        trip.days[0].activities.removeAll(where: { $0.id == first.id })
+        interaction.reconcile(with: trip)
+
+        XCTAssertEqual(interaction.selectedActivityID, placeLessSecond.id)
+        XCTAssertEqual(interaction.cameraRequest, focusedCameraRequest)
     }
 
     func testValidationFindsSequenceAndCoordinateProblems() {

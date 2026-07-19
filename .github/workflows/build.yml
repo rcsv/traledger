@@ -7,8 +7,21 @@ on:
 jobs:
   build:
     runs-on: macos-26
+    env:
+      EXPECTED_SDK_MAJOR: "27"
     steps:
       - uses: actions/checkout@v4
+      - name: Verify Apple toolchain
+        shell: bash
+        run: |
+          sw_vers
+          xcodebuild -version
+          macos_sdk="$(xcrun --sdk macosx --show-sdk-version)"
+          ios_sdk="$(xcrun --sdk iphonesimulator --show-sdk-version)"
+          echo "macOS SDK: ${macos_sdk}"
+          echo "iPhone Simulator SDK: ${ios_sdk}"
+          test "${macos_sdk%%.*}" = "${EXPECTED_SDK_MAJOR}"
+          test "${ios_sdk%%.*}" = "${EXPECTED_SDK_MAJOR}"
       - name: Build macOS
         run: xcodebuild -project TripMap.xcodeproj -scheme TripMap-macOS -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO build
       - name: Test macOS

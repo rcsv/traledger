@@ -102,6 +102,9 @@ struct TripInteractionState: Equatable, Sendable {
             } ?? orderedActivities.first
             selectedActivityID = replacement?.id
             lastSelectedActivitySequence = replacement?.sequence
+            if let replacement, replacement.place != nil {
+                requestCamera(.activity(replacement.id))
+            }
         }
     }
 
