@@ -5,6 +5,7 @@ struct Trip: Identifiable, Hashable, Sendable {
     let id: UUID
     var title: String
     var dateRange: ClosedRange<Date>
+    var timeZoneIdentifier: String = "Asia/Tokyo"
     var days: [Day]
 }
 

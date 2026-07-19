@@ -1,3 +1,4 @@
+import SwiftData
 import XCTest
 @testable import TripMap
 
@@ -154,5 +155,37 @@ final class TripModelTests: XCTestCase {
 
         XCTAssertLessThan(region.span.longitudeDelta, 5)
         XCTAssertTrue(abs(region.center.longitude) > 170)
+    }
+
+    func testLocalDateAndTimeRejectInvalidValues() {
+        XCTAssertNil(LocalDate(year: 2026, month: 2, day: 29))
+        XCTAssertNil(LocalDate(code: 20261301))
+        XCTAssertNil(LocalTime(hour: 24, minute: 0))
+        XCTAssertNil(LocalTime(minuteOfDay: 1_440))
+        XCTAssertEqual(LocalDate(year: 2028, month: 2, day: 29)?.code, 20280229)
+        XCTAssertEqual(LocalTime(hour: 9, minute: 30)?.minuteOfDay, 570)
+    }
+
+    @MainActor
+    func testSwiftDataRoundTripPreservesLocalCalendarSemantics() throws {
+        let container = try TripMapStore.makeContainer(inMemoryOnly: true)
+        let context = container.mainContext
+        let storedTrip = StoredTrip(snapshot: OkinawaSample.trip)
+        context.insert(storedTrip)
+        try context.save()
+
+        let reloadedContext = ModelContext(container)
+        let fetched = try XCTUnwrap(try reloadedContext.fetch(FetchDescriptor<StoredTrip>()).first)
+        let dayOne = try XCTUnwrap(fetched.days.first(where: { $0.sequence == 1 }))
+        let arrival = try XCTUnwrap(dayOne.activities.first(where: { $0.sequence == 1 }))
+        let snapshot = try XCTUnwrap(fetched.snapshot)
+
+        XCTAssertEqual(fetched.timeZoneIdentifier, "Asia/Tokyo")
+        XCTAssertEqual(fetched.startDateCode, 20261009)
+        XCTAssertEqual(dayOne.dateCode, 20261009)
+        XCTAssertEqual(arrival.startMinuteOfDay, 11 * 60 + 30)
+        XCTAssertEqual(snapshot.timeZoneIdentifier, "Asia/Tokyo")
+        XCTAssertEqual(snapshot.days.count, 4)
+        XCTAssertEqual(snapshot.orderedDays[0].orderedActivities[0].title, "那覇空港に到着")
     }
 }
