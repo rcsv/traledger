@@ -83,6 +83,18 @@ struct TripInteractionState: Equatable, Sendable {
         }
     }
 
+    mutating func focusActivity(_ activityID: Activity.ID, in trip: Trip) {
+        guard let day = selectedDay(in: trip),
+              let activity = day.activities.first(where: { $0.id == activityID }) else {
+            return
+        }
+
+        selectedActivityID = activity.id
+        lastSelectedActivitySequence = activity.sequence
+        guard activity.place != nil else { return }
+        requestCamera(.activity(activity.id))
+    }
+
     mutating func reconcile(with trip: Trip) {
         guard let selectedDay = selectedDay(in: trip) else {
             let firstDay = trip.orderedDays.first

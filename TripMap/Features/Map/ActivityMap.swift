@@ -59,7 +59,7 @@ struct ActivityMap: View {
     }
 
     private var placedActivities: [Activity] {
-        day.orderedActivities.filter { $0.place != nil }
+        Self.activitiesWithPlaces(in: day)
     }
 
     private var selectedActivity: Activity? {
@@ -176,7 +176,7 @@ struct ActivityMap: View {
     }
 
     nonisolated static func region(for day: Day) -> MKCoordinateRegion? {
-        let coordinates = day.activities.compactMap(\.place?.coordinate)
+        let coordinates = activitiesWithPlaces(in: day).compactMap(\.place?.coordinate)
         guard let first = coordinates.first else { return nil }
 
         let latitudeBounds = coordinates.reduce((minimum: first.latitude, maximum: first.latitude)) {
@@ -194,6 +194,10 @@ struct ActivityMap: View {
                 longitudeDelta: max((longitudeBounds.end - longitudeBounds.start) * 1.8, 0.04)
             )
         )
+    }
+
+    nonisolated static func activitiesWithPlaces(in day: Day) -> [Activity] {
+        day.orderedActivities.filter { $0.place != nil }
     }
 
     nonisolated private static func minimalLongitudeBounds(_ longitudes: [Double]) -> (start: Double, end: Double) {
