@@ -34,7 +34,7 @@ Selected Day, selected Activity, Guide display mode, and map camera are transien
 
 | Event | Selection | Camera |
 |---|---|---|
-| Open Trip | Day 2 when available, otherwise first Day; first Activity by sequence | Fit all places in the selected Day |
+| Open Trip | First Day by sequence; first Activity by sequence | Fit all places in the selected Day |
 | Change Day | First Activity by sequence, including one without a place | Fit all places in the new Day |
 | Select a list Activity with a place | Select that Activity | Focus its place |
 | Select a list Activity without a place | Select that Activity and clear map annotation selection | Preserve camera and show a no-place notice |

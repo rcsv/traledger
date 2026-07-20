@@ -4,14 +4,33 @@ struct ActivityList: View {
     let day: Day
     let selectedActivityID: Activity.ID?
     let onSelectActivity: (Activity.ID) -> Void
+    let onAddActivity: (() -> Void)?
+
+    init(
+        day: Day,
+        selectedActivityID: Activity.ID?,
+        onSelectActivity: @escaping (Activity.ID) -> Void,
+        onAddActivity: (() -> Void)? = nil
+    ) {
+        self.day = day
+        self.selectedActivityID = selectedActivityID
+        self.onSelectActivity = onSelectActivity
+        self.onAddActivity = onAddActivity
+    }
 
     var body: some View {
         if day.activities.isEmpty {
-            ContentUnavailableView(
-                "予定がありません",
-                systemImage: "calendar.badge.plus",
-                description: Text("この日にActivityを追加すると、ここに表示されます。")
-            )
+            VStack(spacing: 16) {
+                ContentUnavailableView(
+                    "予定がありません",
+                    systemImage: "calendar.badge.plus",
+                    description: Text("この日に予定を追加すると、ここに表示されます。")
+                )
+                if let onAddActivity {
+                    Button("予定を追加", systemImage: "plus", action: onAddActivity)
+                        .buttonStyle(.borderedProminent)
+                }
+            }
             .accessibilityIdentifier("empty-activity-list")
         } else {
             ScrollViewReader { proxy in

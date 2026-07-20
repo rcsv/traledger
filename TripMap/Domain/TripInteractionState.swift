@@ -23,7 +23,7 @@ struct TripInteractionState: Equatable, Sendable {
     private var lastSelectedActivitySequence: Int?
 
     init(trip: Trip) {
-        let initialDay = trip.orderedDays.dropFirst().first ?? trip.orderedDays.first
+        let initialDay = trip.orderedDays.first
         selectedDayID = initialDay?.id
         selectedActivityID = initialDay?.orderedActivities.first?.id
         lastSelectedActivitySequence = initialDay?.orderedActivities.first?.sequence

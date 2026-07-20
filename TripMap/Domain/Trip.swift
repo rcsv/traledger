@@ -6,6 +6,8 @@ struct Trip: Identifiable, Hashable, Sendable {
     var title: String
     var dateRange: ClosedRange<Date>
     var timeZoneIdentifier: String = "Asia/Tokyo"
+    var defaultCurrencyCode: String = "JPY"
+    var coverImageData: Data? = nil
     var days: [Day]
 }
 
@@ -33,6 +35,7 @@ struct PlaceSnapshot: Identifiable, Hashable, Sendable {
     var latitude: Double
     var longitude: Double
     var mapKitIdentifier: String?
+    var imageData: Data? = nil
 
     var coordinate: CLLocationCoordinate2D {
         CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
@@ -45,6 +48,7 @@ struct PlaceSnapshot: Identifiable, Hashable, Sendable {
             && lhs.latitude == rhs.latitude
             && lhs.longitude == rhs.longitude
             && lhs.mapKitIdentifier == rhs.mapKitIdentifier
+            && lhs.imageData == rhs.imageData
     }
 
     func hash(into hasher: inout Hasher) {
@@ -54,5 +58,25 @@ struct PlaceSnapshot: Identifiable, Hashable, Sendable {
         hasher.combine(latitude)
         hasher.combine(longitude)
         hasher.combine(mapKitIdentifier)
+        hasher.combine(imageData)
+    }
+}
+
+extension Trip {
+    /// Temporary country inference until venues persist a geocoded country code.
+    var venueCountryNames: [String] {
+        Array(Set(days.flatMap(\.activities).compactMap { $0.place?.inferredCountryName })).sorted()
+    }
+}
+
+private extension PlaceSnapshot {
+    var inferredCountryName: String? {
+        if address.contains("県") || address.contains("都") || address.contains("府") || address.contains("道") {
+            return "Japan"
+        }
+        if (20...46).contains(latitude), (122...154).contains(longitude) {
+            return "Japan"
+        }
+        return nil
     }
 }
