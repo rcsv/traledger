@@ -83,6 +83,79 @@ final class TripModelTests: XCTestCase {
         XCTAssertEqual(interaction.cameraRequest, wholeDayCameraRequest)
     }
 
+    func testFocusingActivityAfterVenueIsSetRequestsItsCamera() throws {
+        var trip = OkinawaSample.trip
+        let day = trip.orderedDays[0]
+        let activity = day.orderedActivities[1]
+        var interaction = TripInteractionState(trip: trip)
+
+        interaction.selectDay(day.id, in: trip)
+        interaction.selectActivity(activity.id, source: .list, in: trip)
+        let cameraBeforeSettingVenue = interaction.cameraRequest
+
+        trip = try TripPlanEditor.setPlace(
+            in: trip,
+            for: activity.id,
+            place: PlaceSnapshot(
+                id: UUID(),
+                name: "瀬底ビーチ",
+                address: "沖縄県国頭郡本部町",
+                latitude: 26.653,
+                longitude: 127.861,
+                mapKitIdentifier: "mapkit-place"
+            )
+        )
+        interaction.focusActivity(activity.id, in: trip)
+
+        XCTAssertEqual(interaction.selectedActivityID, activity.id)
+        XCTAssertEqual(interaction.cameraRequest?.target, .activity(activity.id))
+        XCTAssertNotEqual(interaction.cameraRequest, cameraBeforeSettingVenue)
+    }
+
+    func testPlacedActivitiesBecomePinsInSequenceOrder() {
+        let day = OkinawaSample.trip.orderedDays[0]
+
+        let pinActivities = ActivityMap.activitiesWithPlaces(in: day)
+
+        XCTAssertEqual(pinActivities.map(\.id), day.orderedActivities.filter { $0.place != nil }.map(\.id))
+        XCTAssertEqual(pinActivities.map(\.sequence), [1, 3])
+    }
+
+    func testReplacingAndClearingVenueKeepsCameraBehaviorConsistent() throws {
+        var trip = OkinawaSample.trip
+        let day = trip.orderedDays[1]
+        let activity = day.orderedActivities[0]
+        var interaction = TripInteractionState(trip: trip)
+
+        interaction.selectDay(day.id, in: trip)
+        interaction.selectActivity(activity.id, source: .list, in: trip)
+        let cameraBeforeReplacement = interaction.cameraRequest
+
+        trip = try TripPlanEditor.setPlace(
+            in: trip,
+            for: activity.id,
+            place: PlaceSnapshot(
+                id: UUID(),
+                name: "新しい会場",
+                address: "沖縄県国頭郡本部町",
+                latitude: 26.701,
+                longitude: 127.878,
+                mapKitIdentifier: "replacement"
+            )
+        )
+        interaction.focusActivity(activity.id, in: trip)
+        let cameraAfterReplacement = interaction.cameraRequest
+
+        XCTAssertEqual(cameraAfterReplacement?.target, .activity(activity.id))
+        XCTAssertNotEqual(cameraAfterReplacement, cameraBeforeReplacement)
+
+        trip = try TripPlanEditor.setPlace(in: trip, for: activity.id, place: nil)
+        interaction.focusActivity(activity.id, in: trip)
+
+        XCTAssertEqual(interaction.selectedActivityID, activity.id)
+        XCTAssertEqual(interaction.cameraRequest, cameraAfterReplacement)
+    }
+
     func testReconcileSelectsNextThenPreviousAfterDeletion() {
         var trip = OkinawaSample.trip
         let dayTwo = trip.orderedDays[1]
@@ -310,6 +383,61 @@ final class TripModelTests: XCTestCase {
         ) { error in
             XCTAssertEqual(error as? TripPlanEditingError, .blankActivityTitle)
         }
+    }
+
+    func testUpdatingActivityNormalizesTimeAndTrimsFields() throws {
+        let trip = OkinawaSample.trip
+        let day = trip.orderedDays[1]
+        let activity = try XCTUnwrap(day.orderedActivities.first)
+        let timeZone = try XCTUnwrap(TimeZone(identifier: trip.timeZoneIdentifier))
+        let localTime = try XCTUnwrap(LocalTime(hour: 18, minute: 45))
+        let inputDate = try XCTUnwrap(LocalDate(year: 2026, month: 7, day: 20))
+        let input = try XCTUnwrap(localTime.date(on: inputDate, in: timeZone))
+
+        let updated = try TripPlanEditor.updateActivity(
+            in: trip,
+            activityID: activity.id,
+            title: "  夕食  ",
+            startTime: input,
+            note: "  海が見える席を予約  ",
+            place: activity.place
+        )
+        let edited = try XCTUnwrap(updated.days.first(where: { $0.id == day.id })?.activities.first(where: { $0.id == activity.id }))
+
+        XCTAssertEqual(edited.title, "夕食")
+        XCTAssertEqual(edited.note, "海が見える席を予約")
+        let editedStartTime = try XCTUnwrap(edited.startTime)
+        XCTAssertEqual(LocalDate(date: editedStartTime, timeZone: timeZone), LocalDate(date: day.date, timeZone: timeZone))
+        XCTAssertEqual(LocalTime(date: editedStartTime, timeZone: timeZone).minuteOfDay, 18 * 60 + 45)
+    }
+
+    func testSettingAndClearingActivityPlacePreservesActivityIdentity() throws {
+        let trip = OkinawaSample.trip
+        let activity = trip.orderedDays[0].orderedActivities[1]
+        let place = PlaceSnapshot(
+            id: UUID(), name: "瀬底ビーチ", address: "沖縄県国頭郡本部町", latitude: 26.653, longitude: 127.861,
+            mapKitIdentifier: "mapkit-place"
+        )
+
+        let withPlace = try TripPlanEditor.setPlace(in: trip, for: activity.id, place: place)
+        XCTAssertEqual(withPlace.days[0].activities[1].id, activity.id)
+        XCTAssertEqual(withPlace.days[0].activities[1].place, place)
+
+        let withoutPlace = try TripPlanEditor.setPlace(in: withPlace, for: activity.id, place: nil)
+        XCTAssertNil(withoutPlace.days[0].activities[1].place)
+    }
+
+    func testDeletingActivityRenumbersRemainingActivities() throws {
+        let trip = OkinawaSample.trip
+        let day = trip.orderedDays[1]
+        let deleted = day.orderedActivities[1]
+
+        let updated = try TripPlanEditor.deleteActivity(in: trip, activityID: deleted.id)
+        let remaining = try XCTUnwrap(updated.days.first(where: { $0.id == day.id }))
+
+        XCTAssertFalse(remaining.activities.contains(where: { $0.id == deleted.id }))
+        XCTAssertEqual(remaining.orderedActivities.map(\.sequence), Array(1...remaining.activities.count))
+        XCTAssertNoThrow(try StoredTrip(validatingSnapshot: updated))
     }
 
     func testChangingTimeZonePreservesLocalDatesAndActivityTimes() throws {

@@ -3,6 +3,7 @@ import Foundation
 enum TripPlanEditingError: LocalizedError, Equatable {
     case sourceDayNotFound
     case targetDayNotFound
+    case activityNotFound
     case targetIncludesSource
     case sameDay
     case blankActivityTitle
@@ -12,6 +13,7 @@ enum TripPlanEditingError: LocalizedError, Equatable {
         switch self {
         case .sourceDayNotFound: "コピー元のDayが見つかりません。"
         case .targetDayNotFound: "コピー先のDayが見つかりません。"
+        case .activityNotFound: "予定が見つかりません。"
         case .targetIncludesSource: "コピー元と同じDayにはコピーできません。"
         case .sameDay: "同じDay同士は入れ替えできません。"
         case .blankActivityTitle: "予定の名前を入力してください。"
@@ -92,6 +94,70 @@ enum TripPlanEditor {
                 place: nil
             )
         )
+        return copy
+    }
+
+    static func updateActivity(
+        in trip: Trip,
+        activityID: Activity.ID,
+        title: String,
+        startTime: Date?,
+        note: String?,
+        place: PlaceSnapshot?
+    ) throws -> Trip {
+        guard let dayIndex = trip.days.firstIndex(where: { day in
+            day.activities.contains(where: { $0.id == activityID })
+        }), let activityIndex = trip.days[dayIndex].activities.firstIndex(where: { $0.id == activityID }) else {
+            throw TripPlanEditingError.activityNotFound
+        }
+
+        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedTitle.isEmpty else { throw TripPlanEditingError.blankActivityTitle }
+
+        var copy = trip
+        let timeZone = TimeZone(identifier: trip.timeZoneIdentifier) ?? TimeZone(secondsFromGMT: 0)!
+        copy.days[dayIndex].activities[activityIndex].title = trimmedTitle
+        copy.days[dayIndex].activities[activityIndex].startTime = time(
+            on: copy.days[dayIndex].date,
+            matching: startTime,
+            timeZone: timeZone
+        )
+        let trimmedNote = note?.trimmingCharacters(in: .whitespacesAndNewlines)
+        copy.days[dayIndex].activities[activityIndex].note = trimmedNote?.isEmpty == false ? trimmedNote : nil
+        copy.days[dayIndex].activities[activityIndex].place = place
+        return copy
+    }
+
+    static func setPlace(
+        in trip: Trip,
+        for activityID: Activity.ID,
+        place: PlaceSnapshot?
+    ) throws -> Trip {
+        guard let dayIndex = trip.days.firstIndex(where: { day in
+            day.activities.contains(where: { $0.id == activityID })
+        }), let activityIndex = trip.days[dayIndex].activities.firstIndex(where: { $0.id == activityID }) else {
+            throw TripPlanEditingError.activityNotFound
+        }
+
+        var copy = trip
+        copy.days[dayIndex].activities[activityIndex].place = place
+        return copy
+    }
+
+    static func deleteActivity(in trip: Trip, activityID: Activity.ID) throws -> Trip {
+        guard let dayIndex = trip.days.firstIndex(where: { day in
+            day.activities.contains(where: { $0.id == activityID })
+        }) else {
+            throw TripPlanEditingError.activityNotFound
+        }
+
+        var copy = trip
+        copy.days[dayIndex].activities.removeAll { $0.id == activityID }
+        copy.days[dayIndex].activities = copy.days[dayIndex].orderedActivities.enumerated().map { index, activity in
+            var updated = activity
+            updated.sequence = index + 1
+            return updated
+        }
         return copy
     }
 

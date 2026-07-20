@@ -1,6 +1,7 @@
 #if os(macOS)
 import AppKit
 import Foundation
+import MapKit
 import PhotosUI
 import SwiftUI
 
@@ -18,6 +19,9 @@ struct PlanView: View {
     @State private var operation: DayOperation?
     @State private var coverPickerItem: PhotosPickerItem?
     @State private var isActivityCreationPresented = false
+    @State private var activityEditor: ActivityEditorTarget?
+    @State private var pendingActivityDeletion: ActivityEditorTarget?
+    @State private var pendingVenueFocusActivityID: Activity.ID?
     @State private var errorMessage: String?
 
     init(trip: Trip, onApplyPlan: @escaping (Trip) -> String? = { _ in nil }) {
@@ -74,6 +78,17 @@ struct PlanView: View {
                             operation = .swap(selectedDay.id)
                         }
                     }
+
+                    if let selectedActivity {
+                        Button("予定を編集", systemImage: "pencil") {
+                            activityEditor = ActivityEditorTarget(activityID: selectedActivity.id)
+                        }
+                        Menu("予定", systemImage: "ellipsis.circle") {
+                            Button("予定を削除", systemImage: "trash", role: .destructive) {
+                                pendingActivityDeletion = ActivityEditorTarget(activityID: selectedActivity.id)
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -83,6 +98,7 @@ struct PlanView: View {
         .frame(minWidth: isMapVisible ? 1000 : 760, minHeight: 620)
         .onChange(of: trip) { _, trip in
             interaction.reconcile(with: trip)
+            focusPendingVenue(in: trip)
             if case .day(let dayID) = destination,
                !trip.days.contains(where: { $0.id == dayID }) {
                 destination = .overview
@@ -120,6 +136,35 @@ struct PlanView: View {
                     addActivity(to: selectedDay.id, title: title, startTime: startTime)
                 }
             }
+        }
+        .sheet(item: $activityEditor) { target in
+            if let day = trip.days.first(where: { $0.activities.contains(where: { $0.id == target.activityID }) }),
+               let activity = day.activities.first(where: { $0.id == target.activityID }) {
+                ActivityEditorSheet(
+                    activity: activity,
+                    day: day,
+                    timeZoneIdentifier: trip.timeZoneIdentifier,
+                    onSave: updateActivity
+                )
+            }
+        }
+        .confirmationDialog(
+            "この予定を削除しますか？",
+            isPresented: Binding(
+                get: { pendingActivityDeletion != nil },
+                set: { if !$0 { pendingActivityDeletion = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("予定を削除", role: .destructive) {
+                if let activityID = pendingActivityDeletion?.activityID {
+                    deleteActivity(activityID)
+                }
+                pendingActivityDeletion = nil
+            }
+            Button("キャンセル", role: .cancel) { pendingActivityDeletion = nil }
+        } message: {
+            Text("場所と画像も削除されます。この操作は取り消せません。")
         }
         .alert("予定を更新できませんでした", isPresented: Binding(
             get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } }
@@ -279,6 +324,10 @@ struct PlanView: View {
         }
     }
 
+    private var selectedActivity: Activity? {
+        interaction.selectedActivity(in: trip)
+    }
+
     private func mapPanel(day: Day) -> some View {
         ActivityMap(
             day: day,
@@ -360,7 +409,7 @@ struct PlanView: View {
                 title: title,
                 startTime: startTime
             )
-            apply(updated)
+            guard apply(updated) else { return }
             if let activity = updated.days.first(where: { $0.id == dayID })?.orderedActivities.last {
                 interaction.selectActivity(activity.id, source: .list, in: updated)
             }
@@ -369,8 +418,295 @@ struct PlanView: View {
         }
     }
 
-    private func apply(_ updated: Trip) {
+    private func updateActivity(
+        activityID: Activity.ID,
+        title: String,
+        startTime: Date?,
+        note: String?,
+        place: PlaceSnapshot?
+    ) -> Bool {
+        do {
+            let previousPlace = trip.days
+                .flatMap(\.activities)
+                .first(where: { $0.id == activityID })?
+                .place
+            let updated = try TripPlanEditor.updateActivity(
+                in: trip,
+                activityID: activityID,
+                title: title,
+                startTime: startTime,
+                note: note,
+                place: place
+            )
+            let shouldFocusVenue = place != nil && previousPlace != place
+            if shouldFocusVenue {
+                pendingVenueFocusActivityID = activityID
+            }
+            guard apply(updated) else {
+                pendingVenueFocusActivityID = nil
+                return false
+            }
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
+
+    private func deleteActivity(_ activityID: Activity.ID) {
+        do {
+            let updated = try TripPlanEditor.deleteActivity(in: trip, activityID: activityID)
+            if apply(updated) {
+                interaction.reconcile(with: updated)
+            }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    @discardableResult
+    private func apply(_ updated: Trip) -> Bool {
         errorMessage = onApplyPlan(updated)
+        return errorMessage == nil
+    }
+
+    private func focusPendingVenue(in trip: Trip) {
+        guard let activityID = pendingVenueFocusActivityID,
+              let activity = trip.days.flatMap(\.activities).first(where: { $0.id == activityID }),
+              activity.place != nil else {
+            return
+        }
+
+        interaction.focusActivity(activityID, in: trip)
+        pendingVenueFocusActivityID = nil
+    }
+}
+
+private struct ActivityEditorTarget: Identifiable {
+    let activityID: Activity.ID
+    var id: Activity.ID { activityID }
+}
+
+private struct ActivityEditorSheet: View {
+    let activity: Activity
+    let day: Day
+    let timeZoneIdentifier: String
+    let onSave: (Activity.ID, String, Date?, String?, PlaceSnapshot?) -> Bool
+    @Environment(\.dismiss) private var dismiss
+    @State private var title: String
+    @State private var note: String
+    @State private var hasStartTime: Bool
+    @State private var startTime: Date
+    @State private var place: PlaceSnapshot?
+    @State private var isVenueSearchPresented = false
+
+    init(
+        activity: Activity,
+        day: Day,
+        timeZoneIdentifier: String,
+        onSave: @escaping (Activity.ID, String, Date?, String?, PlaceSnapshot?) -> Bool
+    ) {
+        self.activity = activity
+        self.day = day
+        self.timeZoneIdentifier = timeZoneIdentifier
+        self.onSave = onSave
+        _title = State(initialValue: activity.title)
+        _note = State(initialValue: activity.note ?? "")
+        _hasStartTime = State(initialValue: activity.startTime != nil)
+        _startTime = State(initialValue: activity.startTime ?? day.date)
+        _place = State(initialValue: activity.place)
+    }
+
+    private var tripTimeZone: TimeZone {
+        TimeZone(identifier: timeZoneIdentifier) ?? .current
+    }
+
+    private var editedStartTime: Date? {
+        guard hasStartTime else { return nil }
+        let localDay = LocalDate(date: day.date, timeZone: tripTimeZone)
+        return LocalTime(date: startTime, timeZone: tripTimeZone).date(on: localDay, in: tripTimeZone)
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("予定") {
+                    TextField("予定の名前", text: $title)
+                    Toggle("時刻を設定", isOn: $hasStartTime)
+                    if hasStartTime {
+                        DatePicker("開始時刻", selection: $startTime, displayedComponents: .hourAndMinute)
+                            .environment(\.timeZone, tripTimeZone)
+                    }
+                    TextField("メモ", text: $note, axis: .vertical)
+                        .lineLimit(3...6)
+                }
+
+                Section("場所") {
+                    if let place {
+                        LabeledContent("設定済み") {
+                            VStack(alignment: .trailing, spacing: 2) {
+                                Text(place.name)
+                                Text(place.address)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        Button("場所を解除", systemImage: "mappin.slash", role: .destructive) {
+                            self.place = nil
+                        }
+                    } else {
+                        Text("場所は未設定です")
+                            .foregroundStyle(.secondary)
+                    }
+                    Button(place == nil ? "場所を検索" : "場所を変更", systemImage: "magnifyingglass") {
+                        isVenueSearchPresented = true
+                    }
+                }
+            }
+            .navigationTitle("予定を編集")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("キャンセル") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("保存") {
+                        if onSave(activity.id, title, editedStartTime, note, place) {
+                            dismiss()
+                        }
+                    }
+                    .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+        }
+        .frame(minWidth: 420, minHeight: 360)
+        .sheet(isPresented: $isVenueSearchPresented) {
+            VenueSearchSheet { place in
+                self.place = place
+            }
+        }
+    }
+}
+
+private struct VenueSearchSheet: View {
+    let onSelect: (PlaceSnapshot) -> Void
+    @Environment(\.dismiss) private var dismiss
+    @StateObject private var search = VenueSearchModel()
+    @State private var query = ""
+    @State private var selectedResult: VenueSearchResult?
+
+    var body: some View {
+        NavigationStack {
+            HSplitView {
+                List {
+                    if !search.results.isEmpty {
+                        Section("検索結果") {
+                            ForEach(search.results) { result in
+                                resultButton(result)
+                            }
+                        }
+                    } else if !search.completions.isEmpty {
+                        Section("候補") {
+                            ForEach(search.completions, id: \.self) { completion in
+                                Button {
+                                    search.resolve(completion)
+                                } label: {
+                                    completionLabel(completion)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    } else {
+                        ContentUnavailableView(
+                            "場所を検索",
+                            systemImage: "magnifyingglass",
+                            description: Text("施設名または住所を入力してください。")
+                        )
+                    }
+                }
+                .frame(minWidth: 290)
+                .searchable(text: $query, prompt: "施設名または住所")
+                .onChange(of: query) { _, value in
+                    selectedResult = nil
+                    search.update(query: value)
+                }
+
+                venuePreview
+                    .frame(minWidth: 360)
+            }
+            .navigationTitle("場所を検索")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("キャンセル") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("この場所を設定") {
+                        if let selectedResult { onSelect(selectedResult.snapshot) }
+                        dismiss()
+                    }
+                    .disabled(selectedResult == nil)
+                }
+            }
+        }
+        .frame(minWidth: 740, minHeight: 500)
+        .alert("場所を検索できませんでした", isPresented: Binding(
+            get: { search.errorMessage != nil },
+            set: { if !$0 { search.report(error: nil) } }
+        )) {
+            Button("OK") { search.report(error: nil) }
+        } message: {
+            Text(search.errorMessage ?? "不明なエラー")
+        }
+    }
+
+    private func resultButton(_ result: VenueSearchResult) -> some View {
+        Button {
+            selectedResult = result
+        } label: {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(result.name)
+                Text(result.address).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+            }
+        }
+        .buttonStyle(.plain)
+        .listRowBackground(selectedResult?.id == result.id ? Color.accentColor.opacity(0.16) : Color.clear)
+    }
+
+    private func completionLabel(_ completion: MKLocalSearchCompletion) -> some View {
+        let title = completion.title
+        let subtitle = completion.subtitle
+        return VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+            if !subtitle.isEmpty {
+                Text(subtitle).foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var venuePreview: some View {
+        if let selectedResult {
+            VStack(alignment: .leading, spacing: 0) {
+                Map(initialPosition: .region(MKCoordinateRegion(
+                    center: selectedResult.coordinate,
+                    span: MKCoordinateSpan(latitudeDelta: 0.012, longitudeDelta: 0.012)
+                ))) {
+                    Marker(selectedResult.name, coordinate: selectedResult.coordinate)
+                }
+                .mapStyle(.standard(elevation: .realistic))
+                .frame(minHeight: 300)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(selectedResult.name).font(.headline)
+                    Text(selectedResult.address).font(.subheadline).foregroundStyle(.secondary)
+                }
+                .padding()
+            }
+        } else {
+            ContentUnavailableView(
+                "候補を選択してください",
+                systemImage: "mappin.and.ellipse",
+                description: Text("選択した場所を地図で確認できます。")
+            )
+        }
     }
 }
 
