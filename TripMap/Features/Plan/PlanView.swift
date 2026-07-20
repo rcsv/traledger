@@ -113,7 +113,10 @@ struct PlanView: View {
         }
         .sheet(isPresented: $isActivityCreationPresented) {
             if let selectedDay {
-                ActivityCreationSheet(day: selectedDay) { title, startTime in
+                ActivityCreationSheet(
+                    day: selectedDay,
+                    timeZoneIdentifier: trip.timeZoneIdentifier
+                ) { title, startTime in
                     addActivity(to: selectedDay.id, title: title, startTime: startTime)
                 }
             }
@@ -373,11 +376,39 @@ struct PlanView: View {
 
 private struct ActivityCreationSheet: View {
     let day: Day
+    let timeZoneIdentifier: String
     let onCreate: (String, Date?) -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var title = ""
     @State private var hasStartTime = false
-    @State private var startTime = Date()
+    @State private var startTime: Date
+
+    init(
+        day: Day,
+        timeZoneIdentifier: String,
+        onCreate: @escaping (String, Date?) -> Void
+    ) {
+        self.day = day
+        self.timeZoneIdentifier = timeZoneIdentifier
+        self.onCreate = onCreate
+        let tripTimeZone = TimeZone(identifier: timeZoneIdentifier) ?? .current
+        let currentLocalTime = LocalTime(date: Date(), timeZone: .current)
+        let selectedDay = LocalDate(date: day.date, timeZone: tripTimeZone)
+        _startTime = State(
+            initialValue: currentLocalTime.date(on: selectedDay, in: tripTimeZone) ?? day.date
+        )
+    }
+
+    private var tripTimeZone: TimeZone {
+        TimeZone(identifier: timeZoneIdentifier) ?? .current
+    }
+
+    private var selectedDayStartTime: Date? {
+        guard hasStartTime else { return nil }
+        let selectedDay = LocalDate(date: day.date, timeZone: tripTimeZone)
+        let selectedTime = LocalTime(date: startTime, timeZone: tripTimeZone)
+        return selectedTime.date(on: selectedDay, in: tripTimeZone)
+    }
 
     var body: some View {
         NavigationStack {
@@ -387,6 +418,7 @@ private struct ActivityCreationSheet: View {
                     Toggle("時刻を設定", isOn: $hasStartTime)
                     if hasStartTime {
                         DatePicker("開始時刻", selection: $startTime, displayedComponents: .hourAndMinute)
+                            .environment(\.timeZone, tripTimeZone)
                     }
                 }
             }
@@ -397,7 +429,7 @@ private struct ActivityCreationSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("追加") {
-                        onCreate(title, hasStartTime ? startTime : nil)
+                        onCreate(title, selectedDayStartTime)
                         dismiss()
                     }
                     .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)

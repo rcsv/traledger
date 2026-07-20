@@ -269,6 +269,35 @@ final class TripModelTests: XCTestCase {
         XCTAssertNil(added.place)
     }
 
+    @MainActor
+    func testAppendingTimedActivityUsesTheSelectedDayDate() throws {
+        let trip = OkinawaSample.trip
+        let day = trip.orderedDays[2]
+        let timeZone = try XCTUnwrap(TimeZone(identifier: trip.timeZoneIdentifier))
+        var components = DateComponents()
+        components.calendar = Calendar(identifier: .gregorian)
+        components.timeZone = timeZone
+        components.year = 2026
+        components.month = 7
+        components.day = 20
+        components.hour = 18
+        components.minute = 45
+        let pickerValue = try XCTUnwrap(components.date)
+
+        let updated = try TripPlanEditor.appendActivity(
+            in: trip,
+            to: day.id,
+            title: "夕食",
+            startTime: pickerValue
+        )
+
+        let added = try XCTUnwrap(updated.days.first(where: { $0.id == day.id })?.orderedActivities.last)
+        let addedTime = try XCTUnwrap(added.startTime)
+        XCTAssertEqual(LocalDate(date: addedTime, timeZone: timeZone), LocalDate(date: day.date, timeZone: timeZone))
+        XCTAssertEqual(LocalTime(date: addedTime, timeZone: timeZone).minuteOfDay, 18 * 60 + 45)
+        XCTAssertNoThrow(try StoredTrip(validatingSnapshot: updated))
+    }
+
     func testAppendingActivityRejectsBlankTitle() {
         let trip = OkinawaSample.trip
         XCTAssertThrowsError(

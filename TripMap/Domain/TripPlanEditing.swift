@@ -76,8 +76,21 @@ enum TripPlanEditor {
 
         var copy = trip
         let sequence = (copy.days[dayIndex].activities.map(\.sequence).max() ?? 0) + 1
+        let timeZone = TimeZone(identifier: trip.timeZoneIdentifier) ?? TimeZone(secondsFromGMT: 0)!
+        let normalizedStartTime = time(
+            on: copy.days[dayIndex].date,
+            matching: startTime,
+            timeZone: timeZone
+        )
         copy.days[dayIndex].activities.append(
-            Activity(id: UUID(), sequence: sequence, title: trimmedTitle, startTime: startTime, note: nil, place: nil)
+            Activity(
+                id: UUID(),
+                sequence: sequence,
+                title: trimmedTitle,
+                startTime: normalizedStartTime,
+                note: nil,
+                place: nil
+            )
         )
         return copy
     }
