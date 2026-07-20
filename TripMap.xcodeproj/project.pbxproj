@@ -20,6 +20,15 @@
 		A10000000000000000000012 /* PrototypeEdgeCases.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000017 /* PrototypeEdgeCases.swift */; };
 		A10000000000000000000013 /* LocalDateTime.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000018 /* LocalDateTime.swift */; };
 		A10000000000000000000014 /* StoredTrip.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000019 /* StoredTrip.swift */; };
+		A10000000000000000000015 /* TripCreation.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000020 /* TripCreation.swift */; };
+		A10000000000000000000016 /* TripLibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000021 /* TripLibraryView.swift */; };
+		A10000000000000000000017 /* TripTimeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000022 /* TripTimeline.swift */; };
+		A10000000000000000000018 /* TripLibraryHomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000023 /* TripLibraryHomeView.swift */; };
+		A10000000000000000000019 /* ParticipantsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000024 /* ParticipantsView.swift */; };
+		A10000000000000000000020 /* ProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000025 /* ProfileView.swift */; };
+		A10000000000000000000021 /* AppShellViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000026 /* AppShellViews.swift */; };
+		A10000000000000000000022 /* TripPlanEditing.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000027 /* TripPlanEditing.swift */; };
+		A10000000000000000000023 /* TripImageProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000028 /* TripImageProcessor.swift */; };
 		A11000000000000000000001 /* TripMapApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000001 /* TripMapApp.swift */; };
 		A11000000000000000000002 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000002 /* RootView.swift */; };
 		A11000000000000000000003 /* Trip.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000003 /* Trip.swift */; };
@@ -34,6 +43,15 @@
 		A11000000000000000000012 /* PrototypeEdgeCases.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000017 /* PrototypeEdgeCases.swift */; };
 		A11000000000000000000013 /* LocalDateTime.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000018 /* LocalDateTime.swift */; };
 		A11000000000000000000014 /* StoredTrip.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000019 /* StoredTrip.swift */; };
+		A11000000000000000000015 /* TripCreation.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000020 /* TripCreation.swift */; };
+		A11000000000000000000016 /* TripLibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000021 /* TripLibraryView.swift */; };
+		A11000000000000000000017 /* TripTimeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000022 /* TripTimeline.swift */; };
+		A11000000000000000000018 /* TripLibraryHomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000023 /* TripLibraryHomeView.swift */; };
+		A11000000000000000000019 /* ParticipantsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000024 /* ParticipantsView.swift */; };
+		A11000000000000000000020 /* ProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000025 /* ProfileView.swift */; };
+		A11000000000000000000021 /* AppShellViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000026 /* AppShellViews.swift */; };
+		A11000000000000000000022 /* TripPlanEditing.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000027 /* TripPlanEditing.swift */; };
+		A11000000000000000000023 /* TripImageProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000028 /* TripImageProcessor.swift */; };
 		A12000000000000000000001 /* TripModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000010 /* TripModelTests.swift */; };
 		A12000000000000000000002 /* XCTest.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A20000000000000000000014 /* XCTest.framework */; };
 		A12000000000000000000003 /* TripMap.app in Dependencies */ = {isa = PBXBuildFile; fileRef = A20000000000000000000012 /* TripMap.app */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
@@ -69,6 +87,15 @@
 		A20000000000000000000017 /* PrototypeEdgeCases.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Fixtures/PrototypeEdgeCases.swift; sourceTree = "<group>"; };
 		A20000000000000000000018 /* LocalDateTime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Domain/LocalDateTime.swift; sourceTree = "<group>"; };
 		A20000000000000000000019 /* StoredTrip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Persistence/StoredTrip.swift; sourceTree = "<group>"; };
+		A20000000000000000000020 /* TripCreation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Domain/TripCreation.swift; sourceTree = "<group>"; };
+		A20000000000000000000021 /* TripLibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Features/Trips/TripLibraryView.swift; sourceTree = "<group>"; };
+		A20000000000000000000022 /* TripTimeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Domain/TripTimeline.swift; sourceTree = "<group>"; };
+		A20000000000000000000023 /* TripLibraryHomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Features/Trips/TripLibraryHomeView.swift; sourceTree = "<group>"; };
+		A20000000000000000000024 /* ParticipantsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Features/People/ParticipantsView.swift; sourceTree = "<group>"; };
+		A20000000000000000000025 /* ProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Features/Profile/ProfileView.swift; sourceTree = "<group>"; };
+		A20000000000000000000026 /* AppShellViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Features/AppShell/AppShellViews.swift; sourceTree = "<group>"; };
+		A20000000000000000000027 /* TripPlanEditing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Domain/TripPlanEditing.swift; sourceTree = "<group>"; };
+		A20000000000000000000028 /* TripImageProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Persistence/TripImageProcessor.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -95,7 +122,11 @@
 				A20000000000000000000004, A20000000000000000000005, A20000000000000000000006,
 				A20000000000000000000007, A20000000000000000000008, A20000000000000000000009,
 				A20000000000000000000015, A20000000000000000000016, A20000000000000000000017,
-				A20000000000000000000018, A20000000000000000000019,
+				A20000000000000000000018, A20000000000000000000019, A20000000000000000000020,
+				A20000000000000000000021, A20000000000000000000022, A20000000000000000000023,
+				A20000000000000000000024, A20000000000000000000025, A20000000000000000000026,
+				A20000000000000000000027,
+				A20000000000000000000028,
 			);
 			path = TripMap;
 			sourceTree = "<group>";
@@ -174,8 +205,8 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-		A90000000000000000000001 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000001, A10000000000000000000002, A10000000000000000000003, A10000000000000000000004, A10000000000000000000005, A10000000000000000000006, A10000000000000000000007, A10000000000000000000008, A10000000000000000000009, A10000000000000000000010, A10000000000000000000011, A10000000000000000000012, A10000000000000000000013, A10000000000000000000014, ); runOnlyForDeploymentPostprocessing = 0; };
-		A90000000000000000000002 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A11000000000000000000001, A11000000000000000000002, A11000000000000000000003, A11000000000000000000004, A11000000000000000000005, A11000000000000000000006, A11000000000000000000007, A11000000000000000000008, A11000000000000000000009, A11000000000000000000010, A11000000000000000000011, A11000000000000000000012, A11000000000000000000013, A11000000000000000000014, ); runOnlyForDeploymentPostprocessing = 0; };
+		A90000000000000000000001 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000001, A10000000000000000000002, A10000000000000000000003, A10000000000000000000004, A10000000000000000000005, A10000000000000000000006, A10000000000000000000007, A10000000000000000000008, A10000000000000000000009, A10000000000000000000010, A10000000000000000000011, A10000000000000000000012, A10000000000000000000013, A10000000000000000000014, A10000000000000000000015, A10000000000000000000016, A10000000000000000000017, A10000000000000000000018, A10000000000000000000019, A10000000000000000000020, A10000000000000000000021, A10000000000000000000022, A10000000000000000000023, ); runOnlyForDeploymentPostprocessing = 0; };
+		A90000000000000000000002 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A11000000000000000000001, A11000000000000000000002, A11000000000000000000003, A11000000000000000000004, A11000000000000000000005, A11000000000000000000006, A11000000000000000000007, A11000000000000000000008, A11000000000000000000009, A11000000000000000000010, A11000000000000000000011, A11000000000000000000012, A11000000000000000000013, A11000000000000000000014, A11000000000000000000015, A11000000000000000000016, A11000000000000000000017, A11000000000000000000018, A11000000000000000000019, A11000000000000000000020, A11000000000000000000021, A11000000000000000000022, A11000000000000000000023, ); runOnlyForDeploymentPostprocessing = 0; };
 		A90000000000000000000003 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A12000000000000000000001, ); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
 

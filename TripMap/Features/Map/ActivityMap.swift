@@ -1,23 +1,60 @@
 import MapKit
+import PhotosUI
 import SwiftUI
+#if os(macOS)
+import AppKit
+#else
+import UIKit
+#endif
+
+struct ActivityMapPinLabel: Hashable {
+    let primary: String
+    private let representsDay: Bool
+
+    init(activitySequence: Int) {
+        primary = "\(activitySequence)"
+        representsDay = false
+    }
+
+    init(daySequence: Int) {
+        primary = "\(daySequence)"
+        representsDay = true
+    }
+
+    var accessibilityDescription: String {
+        representsDay ? "Day \(primary)" : "予定 \(primary)"
+    }
+}
 
 struct ActivityMap: View {
     let day: Day
     let selectedActivityID: Activity.ID?
     let cameraRequest: MapCameraRequest?
     let onSelectMapActivity: (Activity.ID) -> Void
+    let onUpdatePlaceImage: (Activity.ID, Data?) -> Void
+    let allowsPlaceImageEditing: Bool
+    let showsPlaceDetailOverlay: Bool
+    let pinLabels: [Activity.ID: ActivityMapPinLabel]
     @State private var cameraPosition: MapCameraPosition
 
     init(
         day: Day,
         selectedActivityID: Activity.ID?,
         cameraRequest: MapCameraRequest?,
-        onSelectMapActivity: @escaping (Activity.ID) -> Void
+        onSelectMapActivity: @escaping (Activity.ID) -> Void,
+        onUpdatePlaceImage: @escaping (Activity.ID, Data?) -> Void = { _, _ in },
+        allowsPlaceImageEditing: Bool = false,
+        showsPlaceDetailOverlay: Bool = true,
+        pinLabels: [Activity.ID: ActivityMapPinLabel] = [:]
     ) {
         self.day = day
         self.selectedActivityID = selectedActivityID
         self.cameraRequest = cameraRequest
         self.onSelectMapActivity = onSelectMapActivity
+        self.onUpdatePlaceImage = onUpdatePlaceImage
+        self.allowsPlaceImageEditing = allowsPlaceImageEditing
+        self.showsPlaceDetailOverlay = showsPlaceDetailOverlay
+        self.pinLabels = pinLabels
         _cameraPosition = State(initialValue: Self.region(for: day).map(MapCameraPosition.region) ?? .automatic)
     }
 
@@ -56,8 +93,21 @@ struct ActivityMap: View {
                     Map(position: $cameraPosition, selection: mapSelection) {
                         ForEach(placedActivities) { activity in
                             if let place = activity.place {
-                                Marker(activity.title, coordinate: place.coordinate)
-                                    .tag(activity.id)
+                                let pinLabel = pinLabels[activity.id] ?? ActivityMapPinLabel(activitySequence: activity.sequence)
+                                Annotation(activity.title, coordinate: place.coordinate, anchor: .bottom) {
+                                    Button {
+                                        onSelectMapActivity(activity.id)
+                                    } label: {
+                                        ActivitySequencePin(
+                                            label: pinLabel,
+                                            isSelected: activity.id == selectedActivityID
+                                        )
+                                    }
+                                    .buttonStyle(.plain)
+                                    .frame(width: 44, height: 44, alignment: .bottom)
+                                    .contentShape(Rectangle())
+                                    .accessibilityLabel("\(activity.title)、\(pinLabel.accessibilityDescription)")
+                                }
                             }
                         }
                     }
@@ -77,6 +127,15 @@ struct ActivityMap: View {
                             .background(.regularMaterial, in: Capsule())
                             .padding()
                             .accessibilityIdentifier("activity-without-place")
+                    } else if showsPlaceDetailOverlay, let selectedActivity, let place = selectedActivity.place {
+                        PlaceDetailOverlay(
+                            activity: selectedActivity,
+                            place: place,
+                            onUpdateImage: { imageData in onUpdatePlaceImage(selectedActivity.id, imageData) },
+                            allowsImageEditing: allowsPlaceImageEditing
+                        )
+                        .padding()
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
                     }
                 }
             }
@@ -173,5 +232,157 @@ struct ActivityMap: View {
         if value > 180 { value -= 360 }
         if value < -180 { value += 360 }
         return value
+    }
+}
+
+private struct ActivitySequencePin: View {
+    let label: ActivityMapPinLabel
+    let isSelected: Bool
+
+    private var color: Color {
+        isSelected ? .accentColor : Color(red: 0.82, green: 0.27, blue: 0.33)
+    }
+
+    var body: some View {
+        ZStack(alignment: .top) {
+            MapPinTip()
+                .fill(color)
+                .overlay {
+                    MapPinTip().stroke(.white.opacity(0.92), lineWidth: 1.25)
+                }
+                .frame(width: 9, height: 9)
+                .offset(y: 22)
+
+            ZStack {
+                Text(label.primary)
+                    .font(.system(size: label.primary.count == 1 ? 14 : 12, weight: .bold, design: .rounded))
+            }
+            .monospacedDigit()
+            .foregroundStyle(.white)
+            .frame(width: 28, height: 28)
+            .background(color, in: Circle())
+            .overlay {
+                Circle().stroke(.white.opacity(0.95), lineWidth: isSelected ? 2 : 1.25)
+            }
+        }
+        .frame(width: 28, height: 31, alignment: .top)
+        .shadow(color: .black.opacity(0.28), radius: 3, y: 2)
+        .scaleEffect(isSelected ? 1.12 : 1)
+        .animation(.easeOut(duration: 0.15), value: isSelected)
+    }
+}
+
+private struct MapPinTip: Shape {
+    func path(in rect: CGRect) -> Path {
+        Path { path in
+            path.move(to: CGPoint(x: rect.midX, y: rect.maxY))
+            path.addLine(to: CGPoint(x: rect.minX, y: rect.minY))
+            path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
+            path.closeSubpath()
+        }
+    }
+}
+
+private struct PlaceDetailOverlay: View {
+    let activity: Activity
+    let place: PlaceSnapshot
+    let onUpdateImage: (Data?) -> Void
+    let allowsImageEditing: Bool
+    @State private var pickerItem: PhotosPickerItem?
+    @State private var lookAroundScene: MKLookAroundScene?
+    @State private var imageError: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            PlaceIllustration(data: place.imageData, scene: lookAroundScene)
+                .frame(height: 132)
+                .clipShape(RoundedRectangle(cornerRadius: 14))
+            HStack(alignment: .top, spacing: 8) {
+                Text("\(activity.sequence)")
+                    .font(.caption.bold())
+                    .foregroundStyle(.white)
+                    .frame(width: 24, height: 24)
+                    .background(Color.accentColor, in: Circle())
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(activity.title).font(.headline).lineLimit(2)
+                    if let startTime = activity.startTime {
+                        Text(startTime, format: .dateTime.hour().minute())
+                            .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                    }
+                }
+            }
+            Text(place.name).font(.subheadline.weight(.semibold)).lineLimit(1)
+            Text(place.address).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+            HStack {
+                if allowsImageEditing {
+                    PhotosPicker(selection: $pickerItem, matching: .images) {
+                        Label(place.imageData == nil ? "画像" : "画像を変更", systemImage: "photo")
+                    }
+                }
+                Button("Mapsで開く", systemImage: "map") { place.openInMaps() }
+            }
+            .buttonStyle(.bordered)
+            .font(.caption)
+        }
+        .padding(12)
+        .frame(width: 280, alignment: .leading)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18))
+        .shadow(radius: 12, y: 4)
+        .task(id: place.id) {
+            let request = MKLookAroundSceneRequest(coordinate: place.coordinate)
+            lookAroundScene = try? await request.scene
+        }
+        .task(id: pickerItem) {
+            guard let originalData = try? await pickerItem?.loadTransferable(type: Data.self),
+                  let data = TripImageProcessor.normalizedJPEGData(from: originalData) else {
+                if pickerItem != nil { imageError = "画像を読み込めませんでした。" }
+                return
+            }
+            onUpdateImage(data)
+            pickerItem = nil
+        }
+        .alert("画像を更新できませんでした", isPresented: Binding(
+            get: { imageError != nil }, set: { if !$0 { imageError = nil } }
+        )) {
+            Button("OK") { imageError = nil }
+        } message: {
+            Text(imageError ?? "不明なエラー")
+        }
+    }
+}
+
+private struct PlaceIllustration: View {
+    let data: Data?
+    let scene: MKLookAroundScene?
+
+    var body: some View {
+        if let data {
+            #if os(macOS)
+            if let image = NSImage(data: data) {
+                Image(nsImage: image).resizable().scaledToFill()
+            } else { placeholder }
+            #else
+            if let image = UIImage(data: data) {
+                Image(uiImage: image).resizable().scaledToFill()
+            } else { placeholder }
+            #endif
+        } else if let scene {
+            LookAroundPreview(initialScene: scene)
+        } else {
+            placeholder
+        }
+    }
+
+    private var placeholder: some View {
+        LinearGradient(colors: [.teal.opacity(0.7), .blue.opacity(0.7)], startPoint: .topLeading, endPoint: .bottomTrailing)
+            .overlay(Image(systemName: "mappin.and.ellipse").font(.title).foregroundStyle(.white.opacity(0.9)))
+    }
+}
+
+private extension PlaceSnapshot {
+    func openInMaps() {
+        let item = MKMapItem(placemark: MKPlacemark(coordinate: coordinate))
+        item.name = name
+        item.openInMaps()
     }
 }
