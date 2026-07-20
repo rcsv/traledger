@@ -323,6 +323,7 @@ private struct PlaceDetailOverlay: View {
                         Label(place.imageData == nil ? "画像" : "画像を変更", systemImage: "photo")
                     }
                 }
+                PlaceCardSpikeButton(place: place)
                 Button("Mapsで開く", systemImage: "map") { place.openInMaps() }
             }
             .buttonStyle(.bordered)

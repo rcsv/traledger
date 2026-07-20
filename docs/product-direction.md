@@ -79,6 +79,8 @@ Apple Maps の情報を TripMap の文脈に自然に足せるか、小さな試
 - Place Card を Activity 編集 UI の代替にすること。
 - このスパイクのためだけに最小 OS を引き上げること。
 
+初回の技術検証結果は [Place Card spike](spikes/place-card.md) に記録する。
+
 ### 1 — Activity 入力 UX
 
 - カードのダブルクリックとコンテキストメニューから編集へ入れるようにする。
