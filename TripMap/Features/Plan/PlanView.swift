@@ -3,6 +3,7 @@ import AppKit
 import Foundation
 import MapKit
 import PhotosUI
+import SwiftData
 import SwiftUI
 
 private enum PlanDestination: Hashable {
@@ -11,6 +12,8 @@ private enum PlanDestination: Hashable {
 }
 
 struct PlanView: View {
+    @Query private var participantAssignments: [StoredTripParticipant]
+    @StateObject private var travelLoad = TripTravelLoadModel()
     let trip: Trip
     let onApplyPlan: (Trip) -> String?
     @State private var destination: PlanDestination = .overview
@@ -33,6 +36,18 @@ struct PlanView: View {
     private var selectedDay: Day? {
         guard case .day = destination else { return nil }
         return interaction.selectedDay(in: trip)
+    }
+
+    private var tripParticipantAssignments: [StoredTripParticipant] {
+        participantAssignments.filter { $0.trip?.id == trip.id }
+    }
+
+    private var doctorReport: TripDoctorReport {
+        TripDoctor.inspect(
+            trip,
+            participantNames: tripParticipantAssignments.compactMap { $0.participant?.displayName },
+            travelEstimates: travelLoad.estimates
+        )
     }
 
     private var destinationBinding: Binding<PlanDestination?> {
@@ -104,6 +119,9 @@ struct PlanView: View {
                 destination = .overview
             }
         }
+        .task(id: trip) {
+            travelLoad.refresh(for: trip)
+        }
         .task(id: coverPickerItem) {
             guard let originalData = try? await coverPickerItem?.loadTransferable(type: Data.self),
                   let data = TripImageProcessor.normalizedJPEGData(from: originalData) else {
@@ -132,8 +150,14 @@ struct PlanView: View {
                 ActivityCreationSheet(
                     day: selectedDay,
                     timeZoneIdentifier: trip.timeZoneIdentifier
-                ) { title, startTime in
-                    addActivity(to: selectedDay.id, title: title, startTime: startTime)
+                ) { title, startTime, category, durationMinutes in
+                    addActivity(
+                        to: selectedDay.id,
+                        title: title,
+                        startTime: startTime,
+                        category: category,
+                        durationMinutes: durationMinutes
+                    )
                 }
             }
         }
@@ -190,6 +214,23 @@ struct PlanView: View {
                             Text("Day \(day.sequence)")
                                 .font(.headline)
                             Spacer(minLength: 8)
+                            let dayIssues = doctorReport.issues(forDay: day.id)
+                            if !dayIssues.isEmpty {
+                                Label(
+                                    "\(dayIssues.count)",
+                                    systemImage: dayIssues.contains(where: { $0.severity == .warning })
+                                        ? "exclamationmark.triangle.fill"
+                                        : "info.circle.fill"
+                                )
+                                .labelStyle(.titleAndIcon)
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(
+                                    dayIssues.contains(where: { $0.severity == .warning })
+                                        ? Color.orange
+                                        : Color.secondary
+                                )
+                                .accessibilityLabel("確認事項が\(dayIssues.count)件あります")
+                            }
                             Text("\(day.activities.count)")
                                 .font(.caption.weight(.semibold))
                                 .foregroundStyle(.secondary)
@@ -275,9 +316,11 @@ struct PlanView: View {
     private var overviewPanel: some View {
         TripOverviewView(
             trip: trip,
+            doctorReport: doctorReport,
             coverPickerItem: $coverPickerItem,
             onSelectCurrency: updateTripCurrency,
-            onSelectTimeZone: updateTripTimeZone
+            onSelectTimeZone: updateTripTimeZone,
+            onSelectDoctorIssue: selectDoctorIssue
         )
     }
 
@@ -315,9 +358,15 @@ struct PlanView: View {
         VStack(alignment: .leading, spacing: 0) {
             DayHeader(day: day)
             Divider()
+            let dayIssues = doctorReport.issues(forDay: day.id).filter { $0.target.activityID == nil }
+            if !dayIssues.isEmpty {
+                DayDoctorBanner(issues: dayIssues)
+                Divider()
+            }
             ActivityList(
                 day: day,
                 selectedActivityID: interaction.selectedActivityID,
+                doctorIssues: doctorReport.issues(forDay: day.id),
                 onSelectActivity: selectActivityFromList,
                 onAddActivity: { isActivityCreationPresented = true }
             )
@@ -355,6 +404,20 @@ struct PlanView: View {
         destination = .day(day.id)
         interaction.selectDay(day.id, in: trip)
         interaction.selectActivity(activityID, source: .map, in: trip)
+    }
+
+    private func selectDoctorIssue(_ issue: TripDoctorIssue) {
+        switch issue.target {
+        case .day(let dayID):
+            destination = .day(dayID)
+            interaction.selectDay(dayID, in: trip)
+        case .activity(let activityID, let dayID):
+            destination = .day(dayID)
+            interaction.selectDay(dayID, in: trip)
+            interaction.selectActivity(activityID, source: .list, in: trip)
+        case .trip, .participants:
+            destination = .overview
+        }
     }
 
     private func applyReplication(from sourceDayID: Day.ID, to targetDayIDs: Set<Day.ID>) {
@@ -401,13 +464,21 @@ struct PlanView: View {
         }
     }
 
-    private func addActivity(to dayID: Day.ID, title: String, startTime: Date?) {
+    private func addActivity(
+        to dayID: Day.ID,
+        title: String,
+        startTime: Date?,
+        category: ActivityCategory?,
+        durationMinutes: Int?
+    ) {
         do {
             let updated = try TripPlanEditor.appendActivity(
                 in: trip,
                 to: dayID,
                 title: title,
-                startTime: startTime
+                startTime: startTime,
+                category: category,
+                durationMinutes: durationMinutes
             )
             guard apply(updated) else { return }
             if let activity = updated.days.first(where: { $0.id == dayID })?.orderedActivities.last {
@@ -422,6 +493,8 @@ struct PlanView: View {
         activityID: Activity.ID,
         title: String,
         startTime: Date?,
+        category: ActivityCategory?,
+        durationMinutes: Int?,
         note: String?,
         place: PlaceSnapshot?
     ) -> Bool {
@@ -435,6 +508,8 @@ struct PlanView: View {
                 activityID: activityID,
                 title: title,
                 startTime: startTime,
+                category: category,
+                durationMinutes: durationMinutes,
                 note: note,
                 place: place
             )
@@ -491,12 +566,15 @@ private struct ActivityEditorSheet: View {
     let activity: Activity
     let day: Day
     let timeZoneIdentifier: String
-    let onSave: (Activity.ID, String, Date?, String?, PlaceSnapshot?) -> Bool
+    let onSave: (Activity.ID, String, Date?, ActivityCategory?, Int?, String?, PlaceSnapshot?) -> Bool
     @Environment(\.dismiss) private var dismiss
     @State private var title: String
     @State private var note: String
     @State private var hasStartTime: Bool
     @State private var startTime: Date
+    @State private var category: ActivityCategory?
+    @State private var hasDuration: Bool
+    @State private var durationMinutes: Int
     @State private var place: PlaceSnapshot?
     @State private var isVenueSearchPresented = false
 
@@ -504,7 +582,7 @@ private struct ActivityEditorSheet: View {
         activity: Activity,
         day: Day,
         timeZoneIdentifier: String,
-        onSave: @escaping (Activity.ID, String, Date?, String?, PlaceSnapshot?) -> Bool
+        onSave: @escaping (Activity.ID, String, Date?, ActivityCategory?, Int?, String?, PlaceSnapshot?) -> Bool
     ) {
         self.activity = activity
         self.day = day
@@ -514,6 +592,9 @@ private struct ActivityEditorSheet: View {
         _note = State(initialValue: activity.note ?? "")
         _hasStartTime = State(initialValue: activity.startTime != nil)
         _startTime = State(initialValue: activity.startTime ?? day.date)
+        _category = State(initialValue: activity.category)
+        _hasDuration = State(initialValue: activity.durationMinutes != nil)
+        _durationMinutes = State(initialValue: activity.durationMinutes ?? 60)
         _place = State(initialValue: activity.place)
     }
 
@@ -539,6 +620,22 @@ private struct ActivityEditorSheet: View {
                     }
                     TextField("メモ", text: $note, axis: .vertical)
                         .lineLimit(3...6)
+                }
+
+                Section("種類と所要時間") {
+                    Picker("カテゴリ", selection: $category) {
+                        Text("未設定").tag(nil as ActivityCategory?)
+                        ForEach(ActivityCategory.allCases) { category in
+                            Label(category.displayName, systemImage: category.systemImage)
+                                .tag(Optional(category))
+                        }
+                    }
+                    Toggle("所要時間を設定", isOn: $hasDuration)
+                    if hasDuration {
+                        Stepper(value: $durationMinutes, in: 5...1_440, step: 5) {
+                            Text("所要時間 \(formattedDuration(durationMinutes))")
+                        }
+                    }
                 }
 
                 Section("場所") {
@@ -570,7 +667,15 @@ private struct ActivityEditorSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("保存") {
-                        if onSave(activity.id, title, editedStartTime, note, place) {
+                        if onSave(
+                            activity.id,
+                            title,
+                            editedStartTime,
+                            category,
+                            hasDuration ? durationMinutes : nil,
+                            note,
+                            place
+                        ) {
                             dismiss()
                         }
                     }
@@ -584,6 +689,14 @@ private struct ActivityEditorSheet: View {
                 self.place = place
             }
         }
+    }
+
+    private func formattedDuration(_ minutes: Int) -> String {
+        let hours = minutes / 60
+        let remainder = minutes % 60
+        if hours == 0 { return "\(minutes)分" }
+        if remainder == 0 { return "\(hours)時間" }
+        return "\(hours)時間\(remainder)分"
     }
 }
 
@@ -713,16 +826,19 @@ private struct VenueSearchSheet: View {
 private struct ActivityCreationSheet: View {
     let day: Day
     let timeZoneIdentifier: String
-    let onCreate: (String, Date?) -> Void
+    let onCreate: (String, Date?, ActivityCategory?, Int?) -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var title = ""
     @State private var hasStartTime = false
     @State private var startTime: Date
+    @State private var category: ActivityCategory?
+    @State private var hasDuration = false
+    @State private var durationMinutes = 60
 
     init(
         day: Day,
         timeZoneIdentifier: String,
-        onCreate: @escaping (String, Date?) -> Void
+        onCreate: @escaping (String, Date?, ActivityCategory?, Int?) -> Void
     ) {
         self.day = day
         self.timeZoneIdentifier = timeZoneIdentifier
@@ -757,6 +873,22 @@ private struct ActivityCreationSheet: View {
                             .environment(\.timeZone, tripTimeZone)
                     }
                 }
+
+                Section("種類と所要時間") {
+                    Picker("カテゴリ", selection: $category) {
+                        Text("未設定").tag(nil as ActivityCategory?)
+                        ForEach(ActivityCategory.allCases) { category in
+                            Label(category.displayName, systemImage: category.systemImage)
+                                .tag(Optional(category))
+                        }
+                    }
+                    Toggle("所要時間を設定", isOn: $hasDuration)
+                    if hasDuration {
+                        Stepper(value: $durationMinutes, in: 5...1_440, step: 5) {
+                            Text("所要時間 \(formattedDuration(durationMinutes))")
+                        }
+                    }
+                }
             }
             .navigationTitle("Day \(day.sequence)に追加")
             .toolbar {
@@ -765,22 +897,146 @@ private struct ActivityCreationSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("追加") {
-                        onCreate(title, selectedDayStartTime)
+                        onCreate(
+                            title,
+                            selectedDayStartTime,
+                            category,
+                            hasDuration ? durationMinutes : nil
+                        )
                         dismiss()
                     }
                     .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
             }
         }
-        .frame(minWidth: 360, minHeight: 240)
+        .frame(minWidth: 360, minHeight: 340)
+    }
+
+    private func formattedDuration(_ minutes: Int) -> String {
+        let hours = minutes / 60
+        let remainder = minutes % 60
+        if hours == 0 { return "\(minutes)分" }
+        if remainder == 0 { return "\(hours)時間" }
+        return "\(hours)時間\(remainder)分"
+    }
+}
+
+private struct TripDoctorSummary: View {
+    let report: TripDoctorReport
+    let onSelectIssue: (TripDoctorIssue) -> Void
+
+    var body: some View {
+        GroupBox {
+            if report.issues.isEmpty {
+                Label("現在の計画に確認事項はありません。", systemImage: "checkmark.circle.fill")
+                    .foregroundStyle(.green)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, 4)
+            } else {
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(spacing: 14) {
+                        if report.warningCount > 0 {
+                            Label("Warning \(report.warningCount)", systemImage: "exclamationmark.triangle.fill")
+                                .foregroundStyle(.orange)
+                        }
+                        if report.infoCount > 0 {
+                            Label("Info \(report.infoCount)", systemImage: "info.circle.fill")
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .font(.subheadline.weight(.semibold))
+
+                    Divider()
+
+                    ForEach(report.issues) { issue in
+                        Button {
+                            onSelectIssue(issue)
+                        } label: {
+                            HStack(alignment: .top, spacing: 10) {
+                                Image(systemName: issue.severity == .warning ? "exclamationmark.triangle.fill" : "info.circle.fill")
+                                    .foregroundStyle(issue.severity == .warning ? Color.orange : Color.secondary)
+                                    .frame(width: 18)
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(issue.message)
+                                        .foregroundStyle(.primary)
+                                    if let suggestion = issue.suggestion {
+                                        Text(suggestion)
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                }
+                                Spacer(minLength: 8)
+                                if issue.target.dayID != nil {
+                                    Image(systemName: "chevron.right")
+                                        .font(.caption.weight(.semibold))
+                                        .foregroundStyle(.tertiary)
+                                }
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityHint(issue.target.dayID == nil ? "" : "該当する予定を表示します")
+                    }
+                }
+                .padding(.vertical, 4)
+            }
+        } label: {
+            Label("旅程チェック", systemImage: "stethoscope")
+        }
+        .accessibilityIdentifier("trip-doctor-summary")
+    }
+}
+
+private struct DayDoctorBanner: View {
+    let issues: [TripDoctorIssue]
+
+    private var containsWarning: Bool {
+        issues.contains(where: { $0.severity == .warning })
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            ForEach(issues) { issue in
+                DoctorIssueLabel(issue: issue)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background((containsWarning ? Color.orange : Color.blue).opacity(0.09))
+        .accessibilityIdentifier("day-doctor-banner")
+    }
+}
+
+private struct DoctorIssueLabel: View {
+    let issue: TripDoctorIssue
+
+    var body: some View {
+        Label(
+            issue.message,
+            systemImage: issue.severity == .warning ? "exclamationmark.triangle.fill" : "info.circle.fill"
+        )
+        .font(.caption)
+        .foregroundStyle(issue.severity == .warning ? Color.orange : Color.secondary)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
 private struct TripOverviewView: View {
+    @Environment(\.modelContext) private var modelContext
+    @Query(sort: \StoredParticipant.displayName) private var participants: [StoredParticipant]
+    @Query private var storedTrips: [StoredTrip]
+    @Query private var participantAssignments: [StoredTripParticipant]
+    @Query private var checklistItems: [StoredChecklistItem]
     let trip: Trip
+    let doctorReport: TripDoctorReport
     @Binding var coverPickerItem: PhotosPickerItem?
     let onSelectCurrency: (String) -> Void
     let onSelectTimeZone: (String) -> Void
+    let onSelectDoctorIssue: (TripDoctorIssue) -> Void
+    @State private var isParticipantPickerPresented = false
+    @State private var isChecklistEditorPresented = false
+    @State private var checklistTitle = ""
 
     private let timeZones = [
         "Asia/Tokyo", "Asia/Singapore", "Australia/Sydney", "Pacific/Auckland",
@@ -803,6 +1059,11 @@ private struct TripOverviewView: View {
                 }
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
+
+                TripDoctorSummary(
+                    report: doctorReport,
+                    onSelectIssue: onSelectDoctorIssue
+                )
 
                 ZStack(alignment: .bottomTrailing) {
                     TripCoverArtwork(data: trip.coverImageData)
@@ -861,12 +1122,45 @@ private struct TripOverviewView: View {
 
                     GroupBox("People & checklist") {
                         VStack(spacing: 12) {
-                            LabeledContent("Participants", value: "0")
+                            LabeledContent("Participants", value: "\(tripAssignments.count)")
+                            ForEach(doctorReport.participantIssues) { issue in
+                                DoctorIssueLabel(issue: issue)
+                            }
+                            if tripAssignments.isEmpty {
+                                Text("同行者を割り当てると、ここに表示されます。")
+                                    .font(.caption).foregroundStyle(.secondary)
+                            } else {
+                                ForEach(tripAssignments) { assignment in
+                                    HStack {
+                                        Text(assignment.participant?.displayName ?? "削除されたParticipant")
+                                        Spacer()
+                                        Button("解除", systemImage: "xmark", role: .destructive) {
+                                            remove(assignment)
+                                        }
+                                        .labelStyle(.iconOnly)
+                                    }
+                                }
+                            }
+                            Button("Participantを追加", systemImage: "person.badge.plus") {
+                                isParticipantPickerPresented = true
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
                             Divider()
-                            LabeledContent("Checklist", value: "0 / 0")
-                            Divider()
-                            Label("Participantを追加（準備中）", systemImage: "person.badge.plus")
-                                .foregroundStyle(.secondary)
+                            LabeledContent("Checklist", value: "\(completedChecklistCount) / \(tripChecklistItems.count)")
+                            ForEach(tripChecklistItems) { item in
+                                Button {
+                                    item.isCompleted.toggle()
+                                    save()
+                                } label: {
+                                    Label(item.title, systemImage: item.isCompleted ? "checkmark.circle.fill" : "circle")
+                                        .foregroundStyle(item.isCompleted ? .secondary : .primary)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                            Button("Checklistを追加", systemImage: "checklist") {
+                                checklistTitle = ""
+                                isChecklistEditorPresented = true
+                            }
                                 .frame(maxWidth: .infinity, alignment: .leading)
                         }
                         .padding(.top, 6)
@@ -890,6 +1184,28 @@ private struct TripOverviewView: View {
         }
         .background(Color(nsColor: .windowBackgroundColor))
         .accessibilityIdentifier("trip-overview-content")
+        .sheet(isPresented: $isParticipantPickerPresented) {
+            ParticipantPickerSheet(
+                participants: participants.filter { participant in
+                    !tripAssignments.contains(where: { $0.participant?.id == participant.id })
+                },
+                onSelect: assign
+            )
+        }
+        .sheet(isPresented: $isChecklistEditorPresented) {
+            NavigationStack {
+                Form { TextField("項目", text: $checklistTitle) }
+                    .navigationTitle("Checklistを追加")
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) { Button("キャンセル") { isChecklistEditorPresented = false } }
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("追加") { addChecklistItem() }
+                                .disabled(checklistTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        }
+                    }
+            }
+            .frame(minWidth: 360, minHeight: 180)
+        }
     }
 
     private var activityCount: Int {
@@ -900,6 +1216,64 @@ private struct TripOverviewView: View {
         trip.days.reduce(0) { count, day in
             count + day.activities.filter { $0.place != nil }.count
         }
+    }
+
+    private var storedTrip: StoredTrip? {
+        participantAssignments.first(where: { $0.trip?.id == trip.id })?.trip
+            ?? checklistItems.first(where: { $0.trip?.id == trip.id })?.trip
+            ?? storedTrips.first(where: { $0.id == trip.id })
+    }
+
+    private var tripAssignments: [StoredTripParticipant] {
+        participantAssignments.filter { $0.trip?.id == trip.id }
+    }
+
+    private var tripChecklistItems: [StoredChecklistItem] {
+        checklistItems.filter { $0.trip?.id == trip.id }
+    }
+
+    private var completedChecklistCount: Int { tripChecklistItems.filter(\.isCompleted).count }
+
+    private func assign(_ participant: StoredParticipant) {
+        guard let storedTrip else { return }
+        modelContext.insert(StoredTripParticipant(trip: storedTrip, participant: participant))
+        save()
+    }
+
+    private func remove(_ assignment: StoredTripParticipant) {
+        modelContext.delete(assignment)
+        save()
+    }
+
+    private func addChecklistItem() {
+        guard let storedTrip else { return }
+        let title = checklistTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !title.isEmpty else { return }
+        modelContext.insert(StoredChecklistItem(title: title, trip: storedTrip))
+        save()
+        isChecklistEditorPresented = false
+    }
+
+    private func save() { try? modelContext.save() }
+}
+
+private struct ParticipantPickerSheet: View {
+    let participants: [StoredParticipant]
+    let onSelect: (StoredParticipant) -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            List(participants) { participant in
+                Button(participant.displayName) { onSelect(participant); dismiss() }
+            }
+            .overlay {
+                if participants.isEmpty { ContentUnavailableView("追加できるParticipantがいません", systemImage: "person.2") }
+            }
+            .navigationTitle("Participantを追加")
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("キャンセル") { dismiss() } } }
+        }
+        .frame(minWidth: 360, minHeight: 280)
     }
 }
 

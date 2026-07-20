@@ -3,17 +3,20 @@ import SwiftUI
 struct ActivityList: View {
     let day: Day
     let selectedActivityID: Activity.ID?
+    let doctorIssues: [TripDoctorIssue]
     let onSelectActivity: (Activity.ID) -> Void
     let onAddActivity: (() -> Void)?
 
     init(
         day: Day,
         selectedActivityID: Activity.ID?,
+        doctorIssues: [TripDoctorIssue] = [],
         onSelectActivity: @escaping (Activity.ID) -> Void,
         onAddActivity: (() -> Void)? = nil
     ) {
         self.day = day
         self.selectedActivityID = selectedActivityID
+        self.doctorIssues = doctorIssues
         self.onSelectActivity = onSelectActivity
         self.onAddActivity = onAddActivity
     }
@@ -39,7 +42,8 @@ struct ActivityList: View {
                         ForEach(day.orderedActivities) { activity in
                             ActivityCard(
                                 activity: activity,
-                                isSelected: selectedActivityID == activity.id
+                                isSelected: selectedActivityID == activity.id,
+                                doctorIssues: doctorIssues.filter { $0.target.activityID == activity.id }
                             ) {
                                 withAnimation(.snappy) {
                                     onSelectActivity(activity.id)
@@ -65,6 +69,7 @@ struct ActivityList: View {
 private struct ActivityCard: View {
     let activity: Activity
     let isSelected: Bool
+    let doctorIssues: [TripDoctorIssue]
     let action: () -> Void
 
     var body: some View {
@@ -92,6 +97,19 @@ private struct ActivityCard: View {
                         .foregroundStyle(.primary)
                         .multilineTextAlignment(.leading)
 
+                    if activity.category != nil || activity.durationMinutes != nil {
+                        HStack(spacing: 10) {
+                            if let category = activity.category {
+                                Label(category.displayName, systemImage: category.systemImage)
+                            }
+                            if let durationMinutes = activity.durationMinutes {
+                                Label(formattedDuration(durationMinutes), systemImage: "clock")
+                            }
+                        }
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    }
+
                     if let place = activity.place {
                         Label(place.name, systemImage: "mappin.and.ellipse")
                             .font(.subheadline)
@@ -103,6 +121,13 @@ private struct ActivityCard: View {
                         Text(note)
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.leading)
+                    }
+
+                    ForEach(doctorIssues) { issue in
+                        Label(issue.message, systemImage: issue.severity == .warning ? "exclamationmark.triangle.fill" : "info.circle.fill")
+                            .font(.caption)
+                            .foregroundStyle(issue.severity == .warning ? Color.orange : Color.secondary)
                             .multilineTextAlignment(.leading)
                     }
                 }
@@ -123,5 +148,13 @@ private struct ActivityCard: View {
         .buttonStyle(.plain)
         .accessibilityIdentifier("activity-\(activity.sequence)")
         .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    private func formattedDuration(_ minutes: Int) -> String {
+        let hours = minutes / 60
+        let remainder = minutes % 60
+        if hours == 0 { return "\(minutes)分" }
+        if remainder == 0 { return "\(hours)時間" }
+        return "\(hours)時間\(remainder)分"
     }
 }

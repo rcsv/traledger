@@ -19,11 +19,49 @@ struct Day: Identifiable, Hashable, Sendable {
     var activities: [Activity]
 }
 
+enum ActivityCategory: String, CaseIterable, Identifiable, Codable, Sendable {
+    case transport
+    case restaurant
+    case accommodation
+    case sightseeing
+    case activity
+    case shopping
+    case other
+
+    var id: Self { self }
+
+    var displayName: String {
+        switch self {
+        case .transport: "移動"
+        case .restaurant: "食事"
+        case .accommodation: "宿泊"
+        case .sightseeing: "観光"
+        case .activity: "体験"
+        case .shopping: "買い物"
+        case .other: "その他"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .transport: "car"
+        case .restaurant: "fork.knife"
+        case .accommodation: "bed.double"
+        case .sightseeing: "camera"
+        case .activity: "figure.hiking"
+        case .shopping: "bag"
+        case .other: "ellipsis.circle"
+        }
+    }
+}
+
 struct Activity: Identifiable, Hashable, Sendable {
     let id: UUID
     var sequence: Int
     var title: String
     var startTime: Date?
+    var category: ActivityCategory? = nil
+    var durationMinutes: Int? = nil
     var note: String?
     var place: PlaceSnapshot?
 }

@@ -6,6 +6,7 @@ enum TripValidationIssue: Equatable, Sendable {
     case dayOutsideTripRange(Day.ID)
     case duplicateDayDate(Day.ID)
     case invalidActivitySequence(Day.ID)
+    case invalidActivityDuration(Activity.ID)
     case invalidCoordinate(Activity.ID)
 }
 
@@ -44,6 +45,10 @@ extension Trip {
                 issues.append(.invalidActivitySequence(day.id))
             }
             for activity in day.activities {
+                if let durationMinutes = activity.durationMinutes,
+                   !(1...1_440).contains(durationMinutes) {
+                    issues.append(.invalidActivityDuration(activity.id))
+                }
                 guard let place = activity.place else { continue }
                 if !place.latitude.isFinite
                     || !place.longitude.isFinite

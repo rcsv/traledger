@@ -24,6 +24,11 @@ The app opens the fixed “沖縄・瀬底 4日間” sample on Day 2. Selecting
 
 See [docs/known-issues.md](docs/known-issues.md) for the Xcode 27 beta 3 / iOS 17 Simulator launch incompatibility observed during M1 verification.
 
+Product decisions and the default implementation order are recorded in
+[Product direction](docs/product-direction.md). Update that document whenever
+the order or the central product concept changes, so subsequent work starts
+from the same assumptions.
+
 ## Scope
 
 This repository starts a new `0.x` product line. `travel-ledger-cli` remains a reference implementation and the future schema-v8 exchange boundary; its Rust code, SQLite schema, and CLI architecture are not application dependencies.

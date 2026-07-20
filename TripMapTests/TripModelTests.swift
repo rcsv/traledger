@@ -211,6 +211,148 @@ final class TripModelTests: XCTestCase {
         XCTAssertTrue(trip.validationIssues.contains(.invalidCoordinate(activity.id)))
     }
 
+    func testDoctorReportsAnEmptyItineraryWithoutFlaggingEveryDay() {
+        let trip = PrototypeEdgeCases.emptyDayTrip
+
+        let report = TripDoctor.inspect(trip)
+
+        XCTAssertEqual(report.issues.map(\.code), [.emptyItinerary, .participantsNotAssigned])
+        XCTAssertFalse(report.issues.contains(where: { $0.code == .emptyDay }))
+        XCTAssertEqual(report.warningCount, 0)
+        XCTAssertEqual(report.infoCount, 2)
+    }
+
+    func testDoctorFlagsOnlyAnEmptyDayWhenOtherDaysHaveActivities() {
+        var trip = OkinawaSample.trip
+        let emptyDayID = trip.days[1].id
+        trip.days[1].activities = []
+
+        let report = TripDoctor.inspect(trip, participantNames: ["John"])
+
+        let issue = report.issues.first(where: { $0.code == .emptyDay })
+        XCTAssertEqual(issue?.target, .day(emptyDayID))
+        XCTAssertFalse(report.issues.contains(where: { $0.code == .emptyItinerary }))
+    }
+
+    func testDoctorUsesSevenActivitiesAsTheOverloadedDayThreshold() {
+        var trip = OkinawaSample.trip
+        let dayID = trip.days[0].id
+        trip.days[0].activities = (1...7).map {
+            Activity(id: UUID(), sequence: $0, title: "予定\($0)", startTime: nil, note: nil, place: nil)
+        }
+
+        let report = TripDoctor.inspect(trip, participantNames: ["John"])
+
+        let issue = report.issues.first(where: { $0.code == .overloadedDay })
+        XCTAssertEqual(issue?.severity, .warning)
+        XCTAssertEqual(issue?.target, .day(dayID))
+    }
+
+    func testDoctorTargetsTheActivityWhoseTimeIsOutOfOrder() throws {
+        var trip = OkinawaSample.trip
+        let firstStartTime = try XCTUnwrap(trip.days[0].activities[0].startTime)
+        let activityID = trip.days[0].activities[1].id
+        let dayID = trip.days[0].id
+        trip.days[0].activities[1].startTime = firstStartTime.addingTimeInterval(-3_600)
+
+        let report = TripDoctor.inspect(trip, participantNames: ["John"])
+
+        let issue = try XCTUnwrap(report.issues.first(where: { $0.code == .activityTimeOutOfOrder }))
+        XCTAssertEqual(issue.target, .activity(activityID, dayID: dayID))
+        XCTAssertEqual(report.issues(forActivity: activityID), [issue])
+    }
+
+    func testDoctorTargetsEveryActivityWithTheSameStartTime() throws {
+        var trip = OkinawaSample.trip
+        let first = trip.days[0].activities[0]
+        let secondID = trip.days[0].activities[1].id
+        trip.days[0].activities[1].startTime = try XCTUnwrap(first.startTime)
+
+        let report = TripDoctor.inspect(trip, participantNames: ["John"])
+        let duplicateIssues = report.issues.filter { $0.code == .duplicateActivityStartTime }
+
+        XCTAssertEqual(Set(duplicateIssues.compactMap(\.target.activityID)), Set([first.id, secondID]))
+        XCTAssertFalse(report.issues.contains(where: { $0.code == .activityTimeOutOfOrder }))
+    }
+
+    func testDoctorNormalizesParticipantNamesBeforeFindingDuplicates() {
+        let report = TripDoctor.inspect(
+            OkinawaSample.trip,
+            participantNames: [" Aiko ", "aiko"]
+        )
+
+        XCTAssertEqual(report.participantIssues.map(\.code), [.duplicateParticipantNames])
+        XCTAssertEqual(report.participantIssues.first?.severity, .warning)
+    }
+
+    func testDoctorChecksForRestaurantsAfterCategoriesAreUsed() {
+        var trip = OkinawaSample.trip
+        let day = trip.days[0]
+        trip.days[0].activities[0].category = .transport
+        trip.days[0].activities[0].durationMinutes = 30
+
+        var report = TripDoctor.inspect(trip, participantNames: ["John"])
+        XCTAssertTrue(report.issues.contains(where: {
+            $0.code == .noRestaurant && $0.target == .day(day.id)
+        }))
+
+        trip.days[0].activities[1].category = .restaurant
+        trip.days[0].activities[1].durationMinutes = 60
+        report = TripDoctor.inspect(trip, participantNames: ["John"])
+        XCTAssertFalse(report.issues.contains(where: {
+            $0.code == .noRestaurant && $0.target == .day(day.id)
+        }))
+    }
+
+    func testDoctorTargetsCategorizedActivityMissingDuration() {
+        var trip = OkinawaSample.trip
+        let day = trip.days[1]
+        let activity = trip.days[1].activities[0]
+        trip.days[1].activities[0].category = .sightseeing
+
+        let report = TripDoctor.inspect(trip, participantNames: ["John"])
+
+        XCTAssertTrue(report.issues.contains(where: {
+            $0.code == .missingActivityDuration && $0.target == .activity(activity.id, dayID: day.id)
+        }))
+    }
+
+    func testDoctorChecksCompleteMapKitTravelEstimatesPerDay() {
+        let trip = OkinawaSample.trip
+        let day = trip.days[1]
+        let activities = day.orderedActivities
+        let estimates = [
+            TripTravelEstimate(
+                dayID: day.id,
+                fromActivityID: activities[0].id,
+                toActivityID: activities[1].id,
+                expectedTravelMinutes: 100
+            ),
+            TripTravelEstimate(
+                dayID: day.id,
+                fromActivityID: activities[1].id,
+                toActivityID: activities[2].id,
+                expectedTravelMinutes: 85
+            )
+        ]
+
+        var report = TripDoctor.inspect(
+            trip,
+            participantNames: ["John"],
+            travelEstimates: estimates
+        )
+        XCTAssertTrue(report.issues.contains(where: {
+            $0.code == .highTravelTime && $0.target == .day(day.id)
+        }))
+
+        report = TripDoctor.inspect(
+            trip,
+            participantNames: ["John"],
+            travelEstimates: Array(estimates.dropLast())
+        )
+        XCTAssertFalse(report.issues.contains(where: { $0.code == .highTravelTime }))
+    }
+
     func testAdversarialFixturesCoverEmptyOverlapAndDensity() {
         XCTAssertTrue(PrototypeEdgeCases.emptyDayTrip.days[0].activities.isEmpty)
         XCTAssertTrue(PrototypeEdgeCases.noPlaceTrip.days[0].activities.allSatisfy { $0.place == nil })
@@ -399,12 +541,16 @@ final class TripModelTests: XCTestCase {
             activityID: activity.id,
             title: "  夕食  ",
             startTime: input,
+            category: .restaurant,
+            durationMinutes: 90,
             note: "  海が見える席を予約  ",
             place: activity.place
         )
         let edited = try XCTUnwrap(updated.days.first(where: { $0.id == day.id })?.activities.first(where: { $0.id == activity.id }))
 
         XCTAssertEqual(edited.title, "夕食")
+        XCTAssertEqual(edited.category, .restaurant)
+        XCTAssertEqual(edited.durationMinutes, 90)
         XCTAssertEqual(edited.note, "海が見える席を予約")
         let editedStartTime = try XCTUnwrap(edited.startTime)
         XCTAssertEqual(LocalDate(date: editedStartTime, timeZone: timeZone), LocalDate(date: day.date, timeZone: timeZone))
@@ -598,7 +744,10 @@ final class TripModelTests: XCTestCase {
     func testSwiftDataRoundTripPreservesLocalCalendarSemantics() throws {
         let container = try TripMapStore.makeContainer(inMemoryOnly: true)
         let context = container.mainContext
-        let storedTrip = try StoredTrip(validatingSnapshot: OkinawaSample.trip)
+        var trip = OkinawaSample.trip
+        trip.days[0].activities[0].category = .transport
+        trip.days[0].activities[0].durationMinutes = 45
+        let storedTrip = try StoredTrip(validatingSnapshot: trip)
         context.insert(storedTrip)
         try context.save()
 
@@ -615,6 +764,8 @@ final class TripModelTests: XCTestCase {
         XCTAssertEqual(snapshot.timeZoneIdentifier, "Asia/Tokyo")
         XCTAssertEqual(snapshot.days.count, 4)
         XCTAssertEqual(snapshot.orderedDays[0].orderedActivities[0].title, "那覇空港に到着")
+        XCTAssertEqual(snapshot.orderedDays[0].orderedActivities[0].category, .transport)
+        XCTAssertEqual(snapshot.orderedDays[0].orderedActivities[0].durationMinutes, 45)
     }
 
     @MainActor

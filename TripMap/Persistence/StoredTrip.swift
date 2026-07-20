@@ -12,6 +12,10 @@ final class StoredTrip {
     @Attribute(.externalStorage) var coverImageData: Data?
     @Relationship(deleteRule: .cascade, inverse: \StoredDay.trip)
     var days: [StoredDay] = []
+    @Relationship(deleteRule: .cascade, inverse: \StoredTripParticipant.trip)
+    var participantAssignments: [StoredTripParticipant] = []
+    @Relationship(deleteRule: .cascade, inverse: \StoredChecklistItem.trip)
+    var checklistItems: [StoredChecklistItem] = []
 
     init(
         id: UUID,
@@ -59,6 +63,8 @@ final class StoredActivity {
     var sequence: Int = 0
     var title: String = ""
     var startMinuteOfDay: Int?
+    var categoryRawValue: String?
+    var durationMinutes: Int?
     var note: String?
     var day: StoredDay?
     @Relationship(deleteRule: .cascade, inverse: \StoredPlaceSnapshot.activity)
@@ -69,6 +75,8 @@ final class StoredActivity {
         sequence: Int,
         title: String,
         startMinuteOfDay: Int?,
+        categoryRawValue: String?,
+        durationMinutes: Int?,
         note: String?,
         place: StoredPlaceSnapshot?
     ) {
@@ -76,6 +84,8 @@ final class StoredActivity {
         self.sequence = sequence
         self.title = title
         self.startMinuteOfDay = startMinuteOfDay
+        self.categoryRawValue = categoryRawValue
+        self.durationMinutes = durationMinutes
         self.note = note
         self.place = place
     }
@@ -126,13 +136,43 @@ final class StoredParticipant {
     }
 }
 
+@Model
+final class StoredTripParticipant {
+    var id: UUID = UUID()
+    var trip: StoredTrip?
+    var participant: StoredParticipant?
+
+    init(id: UUID = UUID(), trip: StoredTrip? = nil, participant: StoredParticipant? = nil) {
+        self.id = id
+        self.trip = trip
+        self.participant = participant
+    }
+}
+
+@Model
+final class StoredChecklistItem {
+    var id: UUID = UUID()
+    var title: String = ""
+    var isCompleted: Bool = false
+    var trip: StoredTrip?
+
+    init(id: UUID = UUID(), title: String, isCompleted: Bool = false, trip: StoredTrip? = nil) {
+        self.id = id
+        self.title = title
+        self.isCompleted = isCompleted
+        self.trip = trip
+    }
+}
+
 enum TripMapStore {
     static let schema = Schema([
         StoredTrip.self,
         StoredDay.self,
         StoredActivity.self,
         StoredPlaceSnapshot.self,
-        StoredParticipant.self
+        StoredParticipant.self,
+        StoredTripParticipant.self,
+        StoredChecklistItem.self
     ])
 
     static func makeContainer(inMemoryOnly: Bool = false, url: URL? = nil) throws -> ModelContainer {
@@ -259,6 +299,8 @@ extension StoredTrip {
                     storedActivity.startMinuteOfDay = domainActivity.startTime.map {
                         LocalTime(date: $0, timeZone: timeZone).minuteOfDay
                     }
+                    storedActivity.categoryRawValue = domainActivity.category?.rawValue
+                    storedActivity.durationMinutes = domainActivity.durationMinutes
                     switch (domainActivity.place, storedActivity.place) {
                     case let (domainPlace?, storedPlace?) where domainPlace.id == storedPlace.id:
                         storedPlace.apply(domainPlace)
@@ -359,6 +401,8 @@ private extension StoredActivity {
             sequence: activity.sequence,
             title: activity.title,
             startMinuteOfDay: activity.startTime.map { LocalTime(date: $0, timeZone: timeZone).minuteOfDay },
+            categoryRawValue: activity.category?.rawValue,
+            durationMinutes: activity.durationMinutes,
             note: activity.note,
             place: activity.place.map(StoredPlaceSnapshot.init(snapshot:))
         )
@@ -378,6 +422,8 @@ private extension StoredActivity {
             sequence: sequence,
             title: title,
             startTime: startTime,
+            category: categoryRawValue.flatMap(ActivityCategory.init(rawValue:)),
+            durationMinutes: durationMinutes,
             note: note,
             place: place?.snapshot
         )

@@ -7,6 +7,7 @@ enum TripPlanEditingError: LocalizedError, Equatable {
     case targetIncludesSource
     case sameDay
     case blankActivityTitle
+    case invalidActivityDuration
     case invalidTimeZone
 
     var errorDescription: String? {
@@ -17,6 +18,7 @@ enum TripPlanEditingError: LocalizedError, Equatable {
         case .targetIncludesSource: "コピー元と同じDayにはコピーできません。"
         case .sameDay: "同じDay同士は入れ替えできません。"
         case .blankActivityTitle: "予定の名前を入力してください。"
+        case .invalidActivityDuration: "所要時間は1分から24時間の範囲で入力してください。"
         case .invalidTimeZone: "タイムゾーンを確認してください。"
         }
     }
@@ -68,7 +70,9 @@ enum TripPlanEditor {
         in trip: Trip,
         to dayID: Day.ID,
         title: String,
-        startTime: Date?
+        startTime: Date?,
+        category: ActivityCategory? = nil,
+        durationMinutes: Int? = nil
     ) throws -> Trip {
         guard let dayIndex = trip.days.firstIndex(where: { $0.id == dayID }) else {
             throw TripPlanEditingError.targetDayNotFound
@@ -84,12 +88,15 @@ enum TripPlanEditor {
             matching: startTime,
             timeZone: timeZone
         )
+        try validate(durationMinutes: durationMinutes)
         copy.days[dayIndex].activities.append(
             Activity(
                 id: UUID(),
                 sequence: sequence,
                 title: trimmedTitle,
                 startTime: normalizedStartTime,
+                category: category,
+                durationMinutes: durationMinutes,
                 note: nil,
                 place: nil
             )
@@ -102,6 +109,8 @@ enum TripPlanEditor {
         activityID: Activity.ID,
         title: String,
         startTime: Date?,
+        category: ActivityCategory? = nil,
+        durationMinutes: Int? = nil,
         note: String?,
         place: PlaceSnapshot?
     ) throws -> Trip {
@@ -113,6 +122,7 @@ enum TripPlanEditor {
 
         let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedTitle.isEmpty else { throw TripPlanEditingError.blankActivityTitle }
+        try validate(durationMinutes: durationMinutes)
 
         var copy = trip
         let timeZone = TimeZone(identifier: trip.timeZoneIdentifier) ?? TimeZone(secondsFromGMT: 0)!
@@ -122,6 +132,8 @@ enum TripPlanEditor {
             matching: startTime,
             timeZone: timeZone
         )
+        copy.days[dayIndex].activities[activityIndex].category = category
+        copy.days[dayIndex].activities[activityIndex].durationMinutes = durationMinutes
         let trimmedNote = note?.trimmingCharacters(in: .whitespacesAndNewlines)
         copy.days[dayIndex].activities[activityIndex].note = trimmedNote?.isEmpty == false ? trimmedNote : nil
         copy.days[dayIndex].activities[activityIndex].place = place
@@ -186,6 +198,8 @@ enum TripPlanEditor {
                     sequence: firstSequence + offset,
                     title: activity.title,
                     startTime: time(on: copy.days[index].date, matching: activity.startTime, timeZone: timeZone),
+                    category: activity.category,
+                    durationMinutes: activity.durationMinutes,
                     note: activity.note,
                     place: activity.place.map {
                         PlaceSnapshot(
@@ -238,5 +252,11 @@ enum TripPlanEditor {
         let localDate = LocalDate(date: dayDate, timeZone: timeZone)
         let localTime = LocalTime(date: sourceTime, timeZone: timeZone)
         return localTime.date(on: localDate, in: timeZone)
+    }
+
+    private static func validate(durationMinutes: Int?) throws {
+        guard durationMinutes.map({ (1...1_440).contains($0) }) ?? true else {
+            throw TripPlanEditingError.invalidActivityDuration
+        }
     }
 }
