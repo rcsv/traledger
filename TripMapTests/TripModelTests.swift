@@ -1,3 +1,4 @@
+import MapKit
 import SwiftData
 import XCTest
 @testable import TripMap
@@ -28,6 +29,37 @@ final class TripModelTests: XCTestCase {
         XCTAssertFalse(place.address.isEmpty)
         XCTAssertEqual(place.coordinate.latitude, place.latitude)
         XCTAssertEqual(place.coordinate.longitude, place.longitude)
+    }
+
+    @MainActor
+    func testPlaceResolverPrefersTheMatchingAppleMapsPOI() throws {
+        let place = try XCTUnwrap(OkinawaSample.trip.days[1].activities[0].place)
+        let nearbyUnrelated = MKMapItem(placemark: MKPlacemark(coordinate: CLLocationCoordinate2D(
+            latitude: place.latitude + 0.0001,
+            longitude: place.longitude
+        )))
+        nearbyUnrelated.name = "海洋博公園"
+        let matchingPOI = MKMapItem(placemark: MKPlacemark(coordinate: CLLocationCoordinate2D(
+            latitude: place.latitude + 0.0003,
+            longitude: place.longitude
+        )))
+        matchingPOI.name = "沖縄美ら海水族館"
+
+        let match = PlaceMapItemResolver.bestMatch(in: [nearbyUnrelated, matchingPOI], for: place)
+
+        XCTAssertTrue(match === matchingPOI)
+    }
+
+    @MainActor
+    func testPlaceResolverRejectsAnUnrelatedDistantResult() throws {
+        let place = try XCTUnwrap(OkinawaSample.trip.days[1].activities[0].place)
+        let unrelated = MKMapItem(placemark: MKPlacemark(coordinate: CLLocationCoordinate2D(
+            latitude: place.latitude + 0.2,
+            longitude: place.longitude
+        )))
+        unrelated.name = "別の観光施設"
+
+        XCTAssertNil(PlaceMapItemResolver.bestMatch(in: [unrelated], for: place))
     }
 
     func testEmptyTripIsReportedWithoutCreatingASelection() {

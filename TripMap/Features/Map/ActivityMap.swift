@@ -317,20 +317,23 @@ private struct PlaceDetailOverlay: View {
             }
             Text(place.name).font(.subheadline.weight(.semibold)).lineLimit(1)
             Text(place.address).font(.caption).foregroundStyle(.secondary).lineLimit(2)
-            HStack {
+            HStack(spacing: 8) {
                 if allowsImageEditing {
                     PhotosPicker(selection: $pickerItem, matching: .images) {
-                        Label(place.imageData == nil ? "画像" : "画像を変更", systemImage: "photo")
+                        Label(place.imageData == nil ? "画像を選択" : "画像を変更", systemImage: "photo")
+                            .lineLimit(1)
+                            .frame(maxWidth: .infinity)
                     }
+                    .frame(maxWidth: .infinity)
                 }
                 PlaceCardSpikeButton(place: place)
-                Button("Mapsで開く", systemImage: "map") { place.openInMaps() }
+                ResolvedMapsButton(place: place)
             }
             .buttonStyle(.bordered)
             .font(.caption)
         }
         .padding(12)
-        .frame(width: 280, alignment: .leading)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18))
         .shadow(radius: 12, y: 4)
         .task(id: place.id) {
@@ -381,13 +384,5 @@ private struct PlaceIllustration: View {
     private var placeholder: some View {
         LinearGradient(colors: [.teal.opacity(0.7), .blue.opacity(0.7)], startPoint: .topLeading, endPoint: .bottomTrailing)
             .overlay(Image(systemName: "mappin.and.ellipse").font(.title).foregroundStyle(.white.opacity(0.9)))
-    }
-}
-
-private extension PlaceSnapshot {
-    func openInMaps() {
-        let item = MKMapItem(placemark: MKPlacemark(coordinate: coordinate))
-        item.name = name
-        item.openInMaps()
     }
 }
