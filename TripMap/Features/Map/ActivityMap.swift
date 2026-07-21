@@ -295,6 +295,7 @@ private struct PlaceDetailOverlay: View {
     @State private var pickerItem: PhotosPickerItem?
     @State private var lookAroundScene: MKLookAroundScene?
     @State private var imageError: String?
+    @StateObject private var venueResolution = PlaceResolutionModel()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -315,6 +316,7 @@ private struct PlaceDetailOverlay: View {
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18))
         .shadow(radius: 12, y: 4)
         .task(id: place.id) {
+            venueResolution.load(place)
             let request = MKLookAroundSceneRequest(coordinate: place.coordinate)
             lookAroundScene = try? await request.scene
         }
@@ -333,6 +335,9 @@ private struct PlaceDetailOverlay: View {
             Button("OK") { imageError = nil }
         } message: {
             Text(imageError ?? "不明なエラー")
+        }
+        .onDisappear {
+            venueResolution.cancel()
         }
     }
 
@@ -363,6 +368,12 @@ private struct PlaceDetailOverlay: View {
                     .font(.headline.weight(.semibold))
                     .lineLimit(2)
 
+                if let category = venueCategory {
+                    Label(category, systemImage: "tag")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
                 Text(place.address)
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -377,33 +388,26 @@ private struct PlaceDetailOverlay: View {
             if allowsImageEditing {
                 imagePicker
             }
-            PlaceCardSpikeButton(place: place)
-            ResolvedMapsButton(place: place)
+            ResolvedMapsButton(place: place, resolvedMapItem: venueResolution.mapItem)
         }
         .buttonStyle(.bordered)
         .font(.caption)
     }
 
     private var compactActions: some View {
-        VStack(spacing: 8) {
-            HStack(spacing: 8) {
-                if allowsImageEditing {
-                    imagePicker
-                }
-                PlaceCardSpikeButton(place: place)
+        HStack(spacing: 8) {
+            if allowsImageEditing {
+                imagePicker
             }
-            .buttonStyle(.bordered)
-            .font(.caption)
-
-            ResolvedMapsButton(place: place)
-                .buttonStyle(.bordered)
-                .font(.caption)
+            ResolvedMapsButton(place: place, resolvedMapItem: venueResolution.mapItem)
         }
+        .buttonStyle(.bordered)
+        .font(.caption)
     }
 
     private var imagePicker: some View {
         PhotosPicker(selection: $pickerItem, matching: .images) {
-            Label(place.imageData == nil ? "画像を選択" : "画像を変更", systemImage: "photo")
+            Label("画像を変更", systemImage: "photo")
                 .lineLimit(1)
                 .frame(maxWidth: .infinity)
         }
@@ -418,6 +422,28 @@ private struct PlaceDetailOverlay: View {
             return "\(place.name) 周辺の Look Around 画像"
         }
         return "\(place.name) の場所を示す画像"
+    }
+
+    private var venueCategory: String? {
+        guard let category = venueResolution.mapItem?.pointOfInterestCategory else { return nil }
+
+        switch category {
+        case .aquarium: return "水族館"
+        case .amusementPark: return "テーマパーク"
+        case .bakery: return "ベーカリー"
+        case .beach: return "ビーチ"
+        case .cafe: return "カフェ"
+        case .campground: return "キャンプ場"
+        case .hotel: return "ホテル"
+        case .marina: return "マリーナ"
+        case .museum: return "博物館"
+        case .nationalPark: return "国立公園"
+        case .park: return "公園"
+        case .restaurant: return "レストラン"
+        case .theater: return "劇場"
+        case .zoo: return "動物園"
+        default: return nil
+        }
     }
 }
 

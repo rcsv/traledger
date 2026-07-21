@@ -110,10 +110,7 @@ struct PlanView: View {
         // Keep the map-control in the window toolbar while allowing the map to
         // continue behind it instead of reserving a separate white strip.
         .toolbarBackground(.hidden, for: .windowToolbar)
-        // When the map is visible, preserve enough horizontal room for the
-        // map and its place card. The sidebar and schedule remain readable,
-        // but should not consume the map's usable width.
-        .frame(minWidth: isMapVisible ? 1_140 : 760, minHeight: 620)
+        .frame(minWidth: isMapVisible ? 1000 : 760, minHeight: 620)
         .onChange(of: trip) { _, trip in
             interaction.reconcile(with: trip)
             focusPendingVenue(in: trip)
@@ -283,9 +280,9 @@ struct PlanView: View {
         if isMapVisible {
             HSplitView {
                 overviewPanel
-                    .frame(minWidth: 400, idealWidth: 500, maxWidth: 620)
+                    .frame(minWidth: 440, idealWidth: 560, maxWidth: 760)
                 overviewMap
-                    .frame(minWidth: 480, idealWidth: 620)
+                    .frame(minWidth: 320, idealWidth: 520)
             }
         } else {
             overviewPanel
@@ -299,9 +296,9 @@ struct PlanView: View {
             if isMapVisible {
                 HSplitView {
                     schedulePanel(day: selectedDay)
-                        .frame(minWidth: 340, idealWidth: 440, maxWidth: 560)
+                        .frame(minWidth: 360, idealWidth: 480, maxWidth: 680)
                     mapPanel(day: selectedDay)
-                        .frame(minWidth: 480, idealWidth: 620)
+                        .frame(minWidth: 320, idealWidth: 520)
                 }
             } else {
                 schedulePanel(day: selectedDay)

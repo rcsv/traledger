@@ -29,10 +29,20 @@ struct PlaceCardSpikeButton: View {
 
 struct ResolvedMapsButton: View {
     let place: PlaceSnapshot
+    let resolvedMapItem: MKMapItem?
     @StateObject private var resolution = PlaceResolutionModel()
+
+    init(place: PlaceSnapshot, resolvedMapItem: MKMapItem? = nil) {
+        self.place = place
+        self.resolvedMapItem = resolvedMapItem
+    }
 
     var body: some View {
         Button {
+            if let resolvedMapItem {
+                resolvedMapItem.openInMaps()
+                return
+            }
             resolution.load(place) { mapItem in
                 mapItem.openInMaps()
             }
