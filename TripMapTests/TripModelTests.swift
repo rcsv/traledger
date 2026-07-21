@@ -826,6 +826,41 @@ final class TripModelTests: XCTestCase {
     }
 
     @MainActor
+    func testStoredTripPersistsWikimediaPlaceImageAttribution() throws {
+        let container = try TripMapStore.makeContainer(inMemoryOnly: true)
+        let context = container.mainContext
+        let storedTrip = try StoredTrip(validatingSnapshot: OkinawaSample.trip)
+        context.insert(storedTrip)
+        try context.save()
+
+        var updated = OkinawaSample.trip
+        updated.days[1].activities[0].place?.externalImage = ExternalPlaceImage(
+            provider: .wikimediaCommons,
+            providerImageID: "Churaumi_Aquarium.jpg",
+            imageURL: try XCTUnwrap(URL(string: "https://upload.wikimedia.org/example.jpg")),
+            sourcePageURL: try XCTUnwrap(URL(string: "https://commons.wikimedia.org/wiki/File:Churaumi_Aquarium.jpg")),
+            authorName: "Example photographer",
+            authorURL: try XCTUnwrap(URL(string: "https://commons.wikimedia.org/wiki/User:Example")),
+            licenseName: "CC BY-SA 4.0",
+            licenseURL: try XCTUnwrap(URL(string: "https://creativecommons.org/licenses/by-sa/4.0/")),
+            kind: .exactVenue,
+            fetchedAt: Date(timeIntervalSince1970: 1_000)
+        )
+        try storedTrip.applyPlan(updated, in: context)
+        try context.save()
+
+        let reloaded = try XCTUnwrap(try ModelContext(container).fetch(FetchDescriptor<StoredTrip>()).first?.snapshot)
+        let place = try XCTUnwrap(reloaded.days.first(where: { $0.sequence == 2 })?.activities.first(where: { $0.sequence == 1 })?.place)
+        let image = try XCTUnwrap(place.externalImage)
+        XCTAssertEqual(image.provider, .wikimediaCommons)
+        XCTAssertEqual(image.providerImageID, "Churaumi_Aquarium.jpg")
+        XCTAssertEqual(image.authorName, "Example photographer")
+        XCTAssertEqual(image.licenseName, "CC BY-SA 4.0")
+        XCTAssertEqual(image.kind, .exactVenue)
+        XCTAssertEqual(image.fetchedAt, Date(timeIntervalSince1970: 1_000))
+    }
+
+    @MainActor
     func testStoredTripApplyPlanSynchronizesActivityAndPlaceChanges() throws {
         let container = try TripMapStore.makeContainer(inMemoryOnly: true)
         let context = container.mainContext

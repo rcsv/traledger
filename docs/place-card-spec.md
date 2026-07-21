@@ -58,8 +58,10 @@ Activity タイトル、所要時間、メモ、警告は原則として重複�
 通常幅では次のラベルを省略せず表示する。
 
 1. `画像を選択` または `画像を変更`
-2. `場所の詳細`
-3. `Mapsで開く`
+2. `Mapsで開く`
+
+Venue の詳細はカード内のカテゴリ・所在地でまず伝える。純正 Apple Maps の詳細は `Mapsで開く` の
+遷移先で確認するため、独立した `場所の詳細` アクションは置かない。
 
 `場所の詳細` は Apple の純正 Place Card を開く。`Mapsで開く` は座標だけの独自ピンではなく、
 Place ID または名称・座標検索で解決した `MKMapItem` を Apple Maps で開く。
@@ -114,11 +116,12 @@ Apple の純正 Place Card に表示される写真は、公開 `MKMapItem` API 
 
 ### Wikimedia Commons — first exact-image provider
 
-- 緯度経度による GeoSearch と Venue 名検索を組み合わせる。
+- 初回実装では日本語 Wikipedia の記事タイトルが Venue 名と完全一致する場合だけ、記事の page image を
+  Commons ファイルへ解決する。近隣検索や曖昧な候補の自動採用は行わない。
 - 無料利用を前提にできるが、ファイルごとのライセンス、作者、帰属表示を必ず保持する。
 - 構造化データの取得結果だけでなく、実際の画像ライセンスを確認してから表示する。
 
-参考: [MediaWiki GeoSearch](https://www.mediawiki.org/wiki/API%3AGeosearch/en)
+参照: [MediaWiki Imageinfo](https://www.mediawiki.org/wiki/API%3AImageinfo)
 
 ### Pexels — first regional-image provider
 
@@ -206,11 +209,11 @@ Apple の純正 Place Card に表示される写真は、公開 `MKMapItem` API 
 - 帰属、ライセンス、exact / regional、取得日時を保持する。
 - プロバイダーに依存しない resolver interface とフォールバック順を実装する。
 
-### Phase 3 — Wikimedia spike
+### Phase 3 — Wikimedia exact-venue resolver — implemented
 
-- 沖縄サンプルの Venue を名称・座標で検索する。
-- 10件程度で正答率、誤一致、画像品質、帰属表示を記録する。
-- 自動採用できない結果は候補選択 UI または取得不能へ落とす。
+- Wikipedia 記事タイトルの完全一致から page image を解決する。
+- Commons の URL・作者・ライセンス・出典がそろう場合だけ表示し、メタデータは保存する。
+- 曖昧な候補、近隣写真、帰属不明の画像は取得不能として Look Around 以降へフォールバックする。
 
 ### Phase 4 — Pexels regional-image spike
 
@@ -230,7 +233,7 @@ Apple の純正 Place Card に表示される写真は、公開 `MKMapItem` API 
 - Regular 幅では 16:9、Compact 幅では 1:1 の画像領域になる。
 - Venue 名、カテゴリ、所在地が Activity の詳細より強く表示される。
 - Activity 情報はシーケンス番号と時刻だけで文脈を維持する。
-- `画像を選択 / 画像を変更`、`場所の詳細`、`Mapsで開く` の意味が省略されない。
+- `画像を選択 / 画像を変更` と `Mapsで開く` の意味が省略されない。
 - ユーザー画像は自動取得画像より常に優先される。
 - Exact Venue image と地域イメージを画面とアクセシビリティの両方で区別できる。
 - すべての外部画像で必要な帰属情報へ到達できる。

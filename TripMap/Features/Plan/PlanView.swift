@@ -384,6 +384,7 @@ struct PlanView: View {
             cameraRequest: interaction.cameraRequest,
             onSelectMapActivity: selectActivityFromMap,
             onUpdatePlaceImage: updatePlaceImage,
+            onUpdateExternalPlaceImage: updateExternalPlaceImage,
             allowsPlaceImageEditing: true
         )
         .ignoresSafeArea(edges: [.top, .bottom])
@@ -447,6 +448,19 @@ struct PlanView: View {
             return
         }
         errorMessage = "画像を更新するActivityが見つかりませんでした。"
+    }
+
+    private func updateExternalPlaceImage(activityID: Activity.ID, image: ExternalPlaceImage?) {
+        var updated = trip
+        for dayIndex in updated.days.indices {
+            guard let activityIndex = updated.days[dayIndex].activities.firstIndex(where: { $0.id == activityID }) else {
+                continue
+            }
+            updated.days[dayIndex].activities[activityIndex].place?.externalImage = image
+            apply(updated)
+            return
+        }
+        errorMessage = "外部画像を更新するActivityが見つかりませんでした。"
     }
 
     private func updateTripCurrency(_ currencyCode: String) {

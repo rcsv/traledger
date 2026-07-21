@@ -32,6 +32,7 @@ struct ActivityMap: View {
     let cameraRequest: MapCameraRequest?
     let onSelectMapActivity: (Activity.ID) -> Void
     let onUpdatePlaceImage: (Activity.ID, Data?) -> Void
+    let onUpdateExternalPlaceImage: (Activity.ID, ExternalPlaceImage?) -> Void
     let allowsPlaceImageEditing: Bool
     let showsPlaceDetailOverlay: Bool
     let pinLabels: [Activity.ID: ActivityMapPinLabel]
@@ -43,6 +44,7 @@ struct ActivityMap: View {
         cameraRequest: MapCameraRequest?,
         onSelectMapActivity: @escaping (Activity.ID) -> Void,
         onUpdatePlaceImage: @escaping (Activity.ID, Data?) -> Void = { _, _ in },
+        onUpdateExternalPlaceImage: @escaping (Activity.ID, ExternalPlaceImage?) -> Void = { _, _ in },
         allowsPlaceImageEditing: Bool = false,
         showsPlaceDetailOverlay: Bool = true,
         pinLabels: [Activity.ID: ActivityMapPinLabel] = [:]
@@ -52,6 +54,7 @@ struct ActivityMap: View {
         self.cameraRequest = cameraRequest
         self.onSelectMapActivity = onSelectMapActivity
         self.onUpdatePlaceImage = onUpdatePlaceImage
+        self.onUpdateExternalPlaceImage = onUpdateExternalPlaceImage
         self.allowsPlaceImageEditing = allowsPlaceImageEditing
         self.showsPlaceDetailOverlay = showsPlaceDetailOverlay
         self.pinLabels = pinLabels
@@ -132,6 +135,7 @@ struct ActivityMap: View {
                             activity: selectedActivity,
                             place: place,
                             onUpdateImage: { imageData in onUpdatePlaceImage(selectedActivity.id, imageData) },
+                            onUpdateExternalImage: { image in onUpdateExternalPlaceImage(selectedActivity.id, image) },
                             allowsImageEditing: allowsPlaceImageEditing
                         )
                         .padding()
@@ -291,6 +295,7 @@ private struct PlaceDetailOverlay: View {
     let activity: Activity
     let place: PlaceSnapshot
     let onUpdateImage: (Data?) -> Void
+    let onUpdateExternalImage: (ExternalPlaceImage?) -> Void
     let allowsImageEditing: Bool
     @State private var pickerItem: PhotosPickerItem?
     @State private var lookAroundScene: MKLookAroundScene?
@@ -305,6 +310,8 @@ private struct PlaceDetailOverlay: View {
                 venueSummary(imageSize: CGSize(width: 88, height: 88))
             }
 
+            imageAttribution
+
             ViewThatFits(in: .horizontal) {
                 regularActions
                     .frame(minWidth: allowsImageEditing ? 400 : 270)
@@ -317,6 +324,10 @@ private struct PlaceDetailOverlay: View {
         .shadow(radius: 12, y: 4)
         .task(id: place.id) {
             venueResolution.load(place)
+            if place.imageData == nil, place.externalImage == nil,
+               let image = await WikimediaImageResolver.resolveExactVenueImage(for: place) {
+                onUpdateExternalImage(image)
+            }
             let request = MKLookAroundSceneRequest(coordinate: place.coordinate)
             lookAroundScene = try? await request.scene
         }
@@ -343,7 +354,7 @@ private struct PlaceDetailOverlay: View {
 
     private func venueSummary(imageSize: CGSize) -> some View {
         HStack(alignment: .top, spacing: 12) {
-            PlaceIllustration(data: place.imageData, scene: lookAroundScene)
+            PlaceIllustration(data: place.imageData, externalImage: place.externalImage, scene: lookAroundScene)
                 .frame(width: imageSize.width, height: imageSize.height)
                 .clipShape(RoundedRectangle(cornerRadius: 12))
                 .accessibilityLabel(imageAccessibilityLabel)
@@ -383,6 +394,18 @@ private struct PlaceDetailOverlay: View {
         }
     }
 
+    @ViewBuilder
+    private var imageAttribution: some View {
+        if let image = place.externalImage {
+            Link(destination: image.sourcePageURL) {
+                Text("Wikimedia Commons · \(image.authorName) · \(image.licenseName)")
+                    .font(.caption2)
+                    .lineLimit(1)
+            }
+            .accessibilityLabel("Wikimedia Commons の画像。作者 \(image.authorName)、ライセンス \(image.licenseName)")
+        }
+    }
+
     private var regularActions: some View {
         HStack(spacing: 8) {
             if allowsImageEditing {
@@ -418,6 +441,9 @@ private struct PlaceDetailOverlay: View {
         if place.imageData != nil {
             return "\(place.name) の選択された画像"
         }
+        if place.externalImage != nil {
+            return "\(place.name) の Wikimedia Commons 画像"
+        }
         if lookAroundScene != nil {
             return "\(place.name) 周辺の Look Around 画像"
         }
@@ -449,6 +475,7 @@ private struct PlaceDetailOverlay: View {
 
 private struct PlaceIllustration: View {
     let data: Data?
+    let externalImage: ExternalPlaceImage?
     let scene: MKLookAroundScene?
 
     var body: some View {
@@ -462,6 +489,17 @@ private struct PlaceIllustration: View {
                 Image(uiImage: image).resizable().scaledToFill()
             } else { placeholder }
             #endif
+        } else if let externalImage {
+            AsyncImage(url: externalImage.imageURL) { phase in
+                switch phase {
+                case let .success(image):
+                    image.resizable().scaledToFill()
+                case .failure:
+                    placeholder
+                default:
+                    placeholder.overlay { ProgressView().controlSize(.small) }
+                }
+            }
         } else if let scene {
             LookAroundPreview(initialScene: scene)
         } else {

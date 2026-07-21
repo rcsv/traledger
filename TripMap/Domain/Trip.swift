@@ -66,6 +66,28 @@ struct Activity: Identifiable, Hashable, Sendable {
     var place: PlaceSnapshot?
 }
 
+struct ExternalPlaceImage: Hashable, Sendable {
+    enum Provider: String, Sendable {
+        case wikimediaCommons
+    }
+
+    enum Kind: String, Sendable {
+        case exactVenue
+        case regional
+    }
+
+    var provider: Provider
+    var providerImageID: String
+    var imageURL: URL
+    var sourcePageURL: URL
+    var authorName: String
+    var authorURL: URL?
+    var licenseName: String
+    var licenseURL: URL
+    var kind: Kind
+    var fetchedAt: Date
+}
+
 struct PlaceSnapshot: Identifiable, Hashable, Sendable {
     let id: UUID
     var name: String
@@ -74,6 +96,7 @@ struct PlaceSnapshot: Identifiable, Hashable, Sendable {
     var longitude: Double
     var mapKitIdentifier: String?
     var imageData: Data? = nil
+    var externalImage: ExternalPlaceImage? = nil
 
     var coordinate: CLLocationCoordinate2D {
         CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
@@ -87,6 +110,7 @@ struct PlaceSnapshot: Identifiable, Hashable, Sendable {
             && lhs.longitude == rhs.longitude
             && lhs.mapKitIdentifier == rhs.mapKitIdentifier
             && lhs.imageData == rhs.imageData
+            && lhs.externalImage == rhs.externalImage
     }
 
     func hash(into hasher: inout Hasher) {
@@ -97,6 +121,7 @@ struct PlaceSnapshot: Identifiable, Hashable, Sendable {
         hasher.combine(longitude)
         hasher.combine(mapKitIdentifier)
         hasher.combine(imageData)
+        hasher.combine(externalImage)
     }
 }
 

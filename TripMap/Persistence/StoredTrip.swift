@@ -100,6 +100,16 @@ final class StoredPlaceSnapshot {
     var longitude: Double = 0
     var mapKitIdentifier: String?
     @Attribute(.externalStorage) var imageData: Data?
+    var externalImageProvider: String?
+    var externalImageID: String?
+    var externalImageURL: String?
+    var externalImageSourcePageURL: String?
+    var externalImageAuthorName: String?
+    var externalImageAuthorURL: String?
+    var externalImageLicenseName: String?
+    var externalImageLicenseURL: String?
+    var externalImageKind: String?
+    var externalImageFetchedAt: Date?
     var activity: StoredActivity?
 
     init(
@@ -441,6 +451,7 @@ private extension StoredPlaceSnapshot {
             mapKitIdentifier: place.mapKitIdentifier,
             imageData: place.imageData
         )
+        applyExternalImage(place.externalImage)
     }
 
     var snapshot: PlaceSnapshot {
@@ -451,7 +462,8 @@ private extension StoredPlaceSnapshot {
             latitude: latitude,
             longitude: longitude,
             mapKitIdentifier: mapKitIdentifier,
-            imageData: imageData
+            imageData: imageData,
+            externalImage: externalImageSnapshot
         )
     }
 
@@ -462,5 +474,51 @@ private extension StoredPlaceSnapshot {
         longitude = place.longitude
         mapKitIdentifier = place.mapKitIdentifier
         imageData = place.imageData
+        applyExternalImage(place.externalImage)
+    }
+
+    var externalImageSnapshot: ExternalPlaceImage? {
+        guard let providerRawValue = externalImageProvider,
+              let provider = ExternalPlaceImage.Provider(rawValue: providerRawValue),
+              let imageID = externalImageID,
+              let imageURLString = externalImageURL,
+              let imageURL = URL(string: imageURLString),
+              let sourcePageURLString = externalImageSourcePageURL,
+              let sourcePageURL = URL(string: sourcePageURLString),
+              let authorName = externalImageAuthorName,
+              let licenseName = externalImageLicenseName,
+              let licenseURLString = externalImageLicenseURL,
+              let licenseURL = URL(string: licenseURLString),
+              let kindRawValue = externalImageKind,
+              let kind = ExternalPlaceImage.Kind(rawValue: kindRawValue),
+              let fetchedAt = externalImageFetchedAt else {
+            return nil
+        }
+
+        return ExternalPlaceImage(
+            provider: provider,
+            providerImageID: imageID,
+            imageURL: imageURL,
+            sourcePageURL: sourcePageURL,
+            authorName: authorName,
+            authorURL: externalImageAuthorURL.flatMap(URL.init(string:)),
+            licenseName: licenseName,
+            licenseURL: licenseURL,
+            kind: kind,
+            fetchedAt: fetchedAt
+        )
+    }
+
+    func applyExternalImage(_ image: ExternalPlaceImage?) {
+        externalImageProvider = image?.provider.rawValue
+        externalImageID = image?.providerImageID
+        externalImageURL = image?.imageURL.absoluteString
+        externalImageSourcePageURL = image?.sourcePageURL.absoluteString
+        externalImageAuthorName = image?.authorName
+        externalImageAuthorURL = image?.authorURL?.absoluteString
+        externalImageLicenseName = image?.licenseName
+        externalImageLicenseURL = image?.licenseURL.absoluteString
+        externalImageKind = image?.kind.rawValue
+        externalImageFetchedAt = image?.fetchedAt
     }
 }
