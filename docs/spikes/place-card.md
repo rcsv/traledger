@@ -4,6 +4,8 @@ Date: 2026-07-21
 
 Status: Limited adoption recommended
 
+Product specification: [Place Card specification](../place-card-spec.md)
+
 ## Question
 
 Apple Maps の Place Card を使い、TripMap の Activity 文脈を失わずに Venue の情報量を

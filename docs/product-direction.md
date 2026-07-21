@@ -80,6 +80,8 @@ Apple Maps の情報を TripMap の文脈に自然に足せるか、小さな試
 - このスパイクのためだけに最小 OS を引き上げること。
 
 初回の技術検証結果は [Place Card spike](spikes/place-card.md) に記録する。
+採用する情報設計、画像方針、外部プロバイダーの境界は
+[Place Card specification](place-card-spec.md) を実装時の基準とする。
 
 ### 1 — Activity 入力 UX
 
