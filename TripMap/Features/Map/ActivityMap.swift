@@ -298,39 +298,17 @@ private struct PlaceDetailOverlay: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            PlaceIllustration(data: place.imageData, scene: lookAroundScene)
-                .frame(height: 132)
-                .clipShape(RoundedRectangle(cornerRadius: 14))
-            HStack(alignment: .top, spacing: 8) {
-                Text("\(activity.sequence)")
-                    .font(.caption.bold())
-                    .foregroundStyle(.white)
-                    .frame(width: 24, height: 24)
-                    .background(Color.accentColor, in: Circle())
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(activity.title).font(.headline).lineLimit(2)
-                    if let startTime = activity.startTime {
-                        Text(startTime, format: .dateTime.hour().minute())
-                            .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
-                    }
-                }
+            ViewThatFits(in: .horizontal) {
+                venueSummary(imageSize: CGSize(width: 176, height: 99))
+                    .frame(minWidth: 400, alignment: .leading)
+                venueSummary(imageSize: CGSize(width: 88, height: 88))
             }
-            Text(place.name).font(.subheadline.weight(.semibold)).lineLimit(1)
-            Text(place.address).font(.caption).foregroundStyle(.secondary).lineLimit(2)
-            HStack(spacing: 8) {
-                if allowsImageEditing {
-                    PhotosPicker(selection: $pickerItem, matching: .images) {
-                        Label(place.imageData == nil ? "画像を選択" : "画像を変更", systemImage: "photo")
-                            .lineLimit(1)
-                            .frame(maxWidth: .infinity)
-                    }
-                    .frame(maxWidth: .infinity)
-                }
-                PlaceCardSpikeButton(place: place)
-                ResolvedMapsButton(place: place)
+
+            ViewThatFits(in: .horizontal) {
+                regularActions
+                    .frame(minWidth: allowsImageEditing ? 400 : 270)
+                compactActions
             }
-            .buttonStyle(.bordered)
-            .font(.caption)
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -356,6 +334,90 @@ private struct PlaceDetailOverlay: View {
         } message: {
             Text(imageError ?? "不明なエラー")
         }
+    }
+
+    private func venueSummary(imageSize: CGSize) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            PlaceIllustration(data: place.imageData, scene: lookAroundScene)
+                .frame(width: imageSize.width, height: imageSize.height)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .accessibilityLabel(imageAccessibilityLabel)
+
+            VStack(alignment: .leading, spacing: 5) {
+                HStack(spacing: 6) {
+                    Text("\(activity.sequence)")
+                        .font(.caption.bold())
+                        .foregroundStyle(.white)
+                        .frame(width: 22, height: 22)
+                        .background(Color.accentColor, in: Circle())
+                        .accessibilityLabel("予定 \(activity.sequence)")
+
+                    if let startTime = activity.startTime {
+                        Text(startTime, format: .dateTime.hour().minute())
+                            .font(.caption.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                Text(place.name)
+                    .font(.headline.weight(.semibold))
+                    .lineLimit(2)
+
+                Text(place.address)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private var regularActions: some View {
+        HStack(spacing: 8) {
+            if allowsImageEditing {
+                imagePicker
+            }
+            PlaceCardSpikeButton(place: place)
+            ResolvedMapsButton(place: place)
+        }
+        .buttonStyle(.bordered)
+        .font(.caption)
+    }
+
+    private var compactActions: some View {
+        VStack(spacing: 8) {
+            HStack(spacing: 8) {
+                if allowsImageEditing {
+                    imagePicker
+                }
+                PlaceCardSpikeButton(place: place)
+            }
+            .buttonStyle(.bordered)
+            .font(.caption)
+
+            ResolvedMapsButton(place: place)
+                .buttonStyle(.bordered)
+                .font(.caption)
+        }
+    }
+
+    private var imagePicker: some View {
+        PhotosPicker(selection: $pickerItem, matching: .images) {
+            Label(place.imageData == nil ? "画像を選択" : "画像を変更", systemImage: "photo")
+                .lineLimit(1)
+                .frame(maxWidth: .infinity)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private var imageAccessibilityLabel: String {
+        if place.imageData != nil {
+            return "\(place.name) の選択された画像"
+        }
+        if lookAroundScene != nil {
+            return "\(place.name) 周辺の Look Around 画像"
+        }
+        return "\(place.name) の場所を示す画像"
     }
 }
 
