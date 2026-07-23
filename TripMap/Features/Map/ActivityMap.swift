@@ -298,9 +298,9 @@ private struct PlaceDetailOverlay: View {
     let onUpdateExternalImage: (ExternalPlaceImage?) -> Void
     let allowsImageEditing: Bool
     @State private var pickerItem: PhotosPickerItem?
-    @State private var lookAroundScene: MKLookAroundScene?
     @State private var imageError: String?
     @StateObject private var venueResolution = PlaceResolutionModel()
+    @StateObject private var imageResolution = VenueImageResolutionModel()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -324,12 +324,11 @@ private struct PlaceDetailOverlay: View {
         .shadow(radius: 12, y: 4)
         .task(id: place.id) {
             venueResolution.load(place)
-            if place.imageData == nil, place.externalImage == nil,
-               let image = await WikimediaImageResolver.resolveExactVenueImage(for: place) {
+        }
+        .task(id: VenueImageResolutionRequestID(placeID: place.id, hasUserImage: place.imageData != nil)) {
+            imageResolution.load(place) { image in
                 onUpdateExternalImage(image)
             }
-            let request = MKLookAroundSceneRequest(coordinate: place.coordinate)
-            lookAroundScene = try? await request.scene
         }
         .task(id: pickerItem) {
             guard let originalData = try? await pickerItem?.loadTransferable(type: Data.self),
@@ -349,12 +348,18 @@ private struct PlaceDetailOverlay: View {
         }
         .onDisappear {
             venueResolution.cancel()
+            imageResolution.cancel()
         }
     }
 
     private func venueSummary(imageSize: CGSize) -> some View {
         HStack(alignment: .top, spacing: 12) {
-            PlaceIllustration(data: place.imageData, externalImage: place.externalImage, scene: lookAroundScene)
+            PlaceIllustration(
+                data: place.imageData,
+                externalImage: imageResolution.externalImage,
+                scene: imageResolution.lookAroundScene,
+                source: imageResolution.source
+            )
                 .frame(width: imageSize.width, height: imageSize.height)
                 .clipShape(RoundedRectangle(cornerRadius: 12))
                 .accessibilityLabel(imageAccessibilityLabel)
@@ -396,7 +401,7 @@ private struct PlaceDetailOverlay: View {
 
     @ViewBuilder
     private var imageAttribution: some View {
-        if let image = place.externalImage {
+        if imageResolution.source == .wikimedia, let image = imageResolution.externalImage {
             Link(destination: image.sourcePageURL) {
                 Text("Wikimedia Commons · \(image.authorName) · \(image.licenseName)")
                     .font(.caption2)
@@ -438,16 +443,16 @@ private struct PlaceDetailOverlay: View {
     }
 
     private var imageAccessibilityLabel: String {
-        if place.imageData != nil {
+        switch imageResolution.source {
+        case .user:
             return "\(place.name) の選択された画像"
-        }
-        if place.externalImage != nil {
-            return "\(place.name) の Wikimedia Commons 画像"
-        }
-        if lookAroundScene != nil {
+        case .lookAround:
             return "\(place.name) 周辺の Look Around 画像"
+        case .wikimedia:
+            return "\(place.name) の Wikimedia Commons 画像"
+        case .loading, .placeholder:
+            return "\(place.name) の場所を示す画像"
         }
-        return "\(place.name) の場所を示す画像"
     }
 
     private var venueCategory: String? {
@@ -477,8 +482,29 @@ private struct PlaceIllustration: View {
     let data: Data?
     let externalImage: ExternalPlaceImage?
     let scene: MKLookAroundScene?
+    let source: VenueImageSource
 
     var body: some View {
+        switch source {
+        case .user:
+            userImage
+        case .lookAround:
+            if let scene {
+                LookAroundPreview(initialScene: scene)
+            } else {
+                placeholder
+            }
+        case .wikimedia:
+            wikimediaImage
+        case .loading:
+            placeholder.overlay { ProgressView().controlSize(.small) }
+        case .placeholder:
+            placeholder
+        }
+    }
+
+    @ViewBuilder
+    private var userImage: some View {
         if let data {
             #if os(macOS)
             if let image = NSImage(data: data) {
@@ -489,7 +515,14 @@ private struct PlaceIllustration: View {
                 Image(uiImage: image).resizable().scaledToFill()
             } else { placeholder }
             #endif
-        } else if let externalImage {
+        } else {
+            placeholder
+        }
+    }
+
+    @ViewBuilder
+    private var wikimediaImage: some View {
+        if let externalImage {
             AsyncImage(url: externalImage.imageURL) { phase in
                 switch phase {
                 case let .success(image):
@@ -500,8 +533,6 @@ private struct PlaceIllustration: View {
                     placeholder.overlay { ProgressView().controlSize(.small) }
                 }
             }
-        } else if let scene {
-            LookAroundPreview(initialScene: scene)
         } else {
             placeholder
         }

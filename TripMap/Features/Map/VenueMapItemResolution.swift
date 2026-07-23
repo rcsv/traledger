@@ -3,30 +3,6 @@ import CoreLocation
 import MapKit
 import SwiftUI
 
-/// Research Gate 0: keep TripMap's activity context and open Apple's native
-/// place details only on the OS versions that provide them.
-struct PlaceCardSpikeButton: View {
-    let place: PlaceSnapshot
-    @State private var isPresented = false
-
-    var body: some View {
-        if #available(macOS 15.0, iOS 18.0, *) {
-            Button {
-                isPresented = true
-            } label: {
-                Label("場所の詳細", systemImage: "info.circle")
-                    .lineLimit(1)
-                    .frame(maxWidth: .infinity)
-            }
-            .frame(maxWidth: .infinity)
-            .sheet(isPresented: $isPresented) {
-                NativePlaceCardSheet(place: place, isPresented: $isPresented)
-            }
-            .accessibilityIdentifier("native-place-card-button")
-        }
-    }
-}
-
 struct ResolvedMapsButton: View {
     let place: PlaceSnapshot
     let resolvedMapItem: MKMapItem?
@@ -79,54 +55,6 @@ struct ResolvedMapsButton: View {
     }
 }
 
-@available(macOS 15.0, iOS 18.0, *)
-private struct NativePlaceCardSheet: View {
-    let place: PlaceSnapshot
-    @Binding var isPresented: Bool
-    @StateObject private var resolution = PlaceResolutionModel()
-
-    var body: some View {
-        Group {
-            switch resolution.phase {
-            case .idle, .loading:
-                VStack(spacing: 14) {
-                    ProgressView()
-                    Text("Apple Mapsから場所を取得中…")
-                        .foregroundStyle(.secondary)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .accessibilityIdentifier("native-place-card-loading")
-
-            case .loaded:
-                if let mapItem = resolution.mapItem {
-                    NativePlaceCard(mapItem: mapItem, isPresented: $isPresented)
-                }
-
-            case .failed:
-                ContentUnavailableView {
-                    Label("場所の詳細を取得できません", systemImage: "mappin.slash")
-                } description: {
-                    Text(resolution.errorMessage ?? "Apple Mapsで一致する場所が見つかりませんでした。")
-                } actions: {
-                    Button("閉じる") {
-                        isPresented = false
-                    }
-                }
-                .padding()
-            }
-        }
-        #if os(macOS)
-        .frame(minWidth: 440, idealWidth: 520, minHeight: 520, idealHeight: 640)
-        #endif
-        .task(id: place.id) {
-            resolution.load(place)
-        }
-        .onDisappear {
-            resolution.cancel()
-        }
-    }
-}
-
 @MainActor
 final class PlaceResolutionModel: ObservableObject {
     enum Phase: Equatable {
@@ -174,7 +102,7 @@ final class PlaceResolutionModel: ObservableObject {
             }
             guard let self, self.phase == .loading else { return }
             self.resolutionTask?.cancel()
-            self.errorMessage = PlaceCardError.timedOut.localizedDescription
+            self.errorMessage = PlaceResolutionError.timedOut.localizedDescription
             self.phase = .failed
         }
     }
@@ -253,7 +181,7 @@ enum PlaceMapItemResolver {
 
         let response = try await MKLocalSearch(request: request).start()
         guard let match = bestMatch(in: response.mapItems, for: place) else {
-            throw PlaceCardError.placeNotFound
+            throw PlaceResolutionError.placeNotFound
         }
         return match
     }
@@ -266,7 +194,7 @@ enum PlaceMapItemResolver {
     }
 }
 
-enum PlaceCardError: LocalizedError {
+enum PlaceResolutionError: LocalizedError {
     case placeNotFound
     case timedOut
 
@@ -279,69 +207,3 @@ enum PlaceCardError: LocalizedError {
         }
     }
 }
-
-#if os(macOS)
-@available(macOS 15.0, iOS 18.0, *)
-private struct NativePlaceCard: NSViewControllerRepresentable {
-    let mapItem: MKMapItem
-    @Binding var isPresented: Bool
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator(isPresented: $isPresented)
-    }
-
-    func makeNSViewController(context: Context) -> MKMapItemDetailViewController {
-        let controller = MKMapItemDetailViewController(mapItem: mapItem, displaysMap: false)
-        controller.delegate = context.coordinator
-        return controller
-    }
-
-    func updateNSViewController(_ controller: MKMapItemDetailViewController, context: Context) {
-        controller.mapItem = mapItem
-    }
-
-    final class Coordinator: NSObject, MKMapItemDetailViewControllerDelegate {
-        @Binding private var isPresented: Bool
-
-        init(isPresented: Binding<Bool>) {
-            _isPresented = isPresented
-        }
-
-        func mapItemDetailViewControllerDidFinish(_ detailViewController: MKMapItemDetailViewController) {
-            isPresented = false
-        }
-    }
-}
-#else
-@available(macOS 15.0, iOS 18.0, *)
-private struct NativePlaceCard: UIViewControllerRepresentable {
-    let mapItem: MKMapItem
-    @Binding var isPresented: Bool
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator(isPresented: $isPresented)
-    }
-
-    func makeUIViewController(context: Context) -> MKMapItemDetailViewController {
-        let controller = MKMapItemDetailViewController(mapItem: mapItem, displaysMap: false)
-        controller.delegate = context.coordinator
-        return controller
-    }
-
-    func updateUIViewController(_ controller: MKMapItemDetailViewController, context: Context) {
-        controller.mapItem = mapItem
-    }
-
-    final class Coordinator: NSObject, MKMapItemDetailViewControllerDelegate {
-        @Binding private var isPresented: Bool
-
-        init(isPresented: Binding<Bool>) {
-            _isPresented = isPresented
-        }
-
-        func mapItemDetailViewControllerDidFinish(_ detailViewController: MKMapItemDetailViewController) {
-            isPresented = false
-        }
-    }
-}
-#endif

@@ -77,3 +77,100 @@ enum OkinawaSample {
         )
     }()
 }
+
+#if TRIPMAP_QA
+enum VenueImageQAFixture {
+    static let trip: Trip = {
+        let calendar = Calendar(identifier: .gregorian)
+        let timeZone = TimeZone(identifier: "Asia/Tokyo")!
+
+        func date(_ year: Int, _ month: Int, _ day: Int, _ hour: Int = 0, _ minute: Int = 0) -> Date {
+            var components = DateComponents()
+            components.calendar = calendar
+            components.timeZone = timeZone
+            components.year = year
+            components.month = month
+            components.day = day
+            components.hour = hour
+            components.minute = minute
+            return components.date!
+        }
+
+        func place(
+            id: String,
+            name: String,
+            address: String,
+            latitude: Double,
+            longitude: Double
+        ) -> PlaceSnapshot {
+            PlaceSnapshot(
+                id: UUID(uuidString: id)!,
+                name: name,
+                address: address,
+                latitude: latitude,
+                longitude: longitude,
+                mapKitIdentifier: nil
+            )
+        }
+
+        let day = Day(
+            id: UUID(uuidString: "A11E0000-0000-4000-8000-000000000001")!,
+            sequence: 1,
+            date: date(2026, 11, 1),
+            title: "Venue image QA",
+            activities: [
+                Activity(
+                    id: UUID(uuidString: "A11E0000-0000-4000-8000-000000000011")!,
+                    sequence: 1,
+                    title: "Look Aroundを確認",
+                    startTime: date(2026, 11, 1, 9, 0),
+                    note: nil,
+                    place: place(
+                        id: "A11E0000-0000-4000-8000-000000000021",
+                        name: "渋谷スクランブル交差点",
+                        address: "東京都渋谷区道玄坂2丁目",
+                        latitude: 35.6595,
+                        longitude: 139.7005
+                    )
+                ),
+                Activity(
+                    id: UUID(uuidString: "A11E0000-0000-4000-8000-000000000012")!,
+                    sequence: 2,
+                    title: "Wikimediaを確認",
+                    startTime: date(2026, 11, 1, 11, 0),
+                    note: nil,
+                    place: place(
+                        id: "A11E0000-0000-4000-8000-000000000022",
+                        name: "那覇空港",
+                        address: "沖縄県那覇市鏡水150",
+                        latitude: 26.2064,
+                        longitude: 127.6460
+                    )
+                ),
+                Activity(
+                    id: UUID(uuidString: "A11E0000-0000-4000-8000-000000000013")!,
+                    sequence: 3,
+                    title: "ユーザー画像を確認",
+                    startTime: date(2026, 11, 1, 13, 0),
+                    note: nil,
+                    place: place(
+                        id: "A11E0000-0000-4000-8000-000000000023",
+                        name: "沖縄美ら海水族館",
+                        address: "沖縄県国頭郡本部町石川424",
+                        latitude: 26.6943,
+                        longitude: 127.8779
+                    )
+                )
+            ]
+        )
+
+        return Trip(
+            id: UUID(uuidString: "A11E0000-0000-4000-8000-000000000000")!,
+            title: "Venue Image QA",
+            dateRange: date(2026, 11, 1)...date(2026, 11, 1),
+            timeZoneIdentifier: timeZone.identifier,
+            days: [day]
+        )
+    }()
+}
+#endif

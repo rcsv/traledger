@@ -1,16 +1,26 @@
 # TripMap
 
-TripMap is a native Apple trip-planning experiment built with SwiftUI and MapKit.
+TripMap is a local-first Apple-platform trip workspace built with SwiftUI,
+SwiftData, and MapKit.
 
-- macOS is the **Plan** surface: itinerary and map side by side.
-- iPhone is the **Guide** surface: switch between map and list.
-- The first vertical slice is intentionally source-only: no persistence, accounts, or legacy import.
+- macOS is the primary **Planner** surface.
+- iPhone is the primary **Guide** surface.
+- iPadOS will adapt between Planner and Guide according to the available width.
+- The same Trip, Day, Activity, Venue, and participant data grows into a
+  post-trip **Memory** surface.
 
-## Requirements
+The current implementation includes a SwiftData-backed Trip library, Trip and
+Activity editing, Venue search, MapKit maps and travel estimates, participants,
+checklists, Trip Doctor diagnostics, user-selected images, Look Around, and a
+Wikimedia exact-venue image fallback.
 
-- macOS 27
-- Xcode 27 beta 3 or later
-- iOS 27 Simulator runtime for simulator testing
+## Development environment
+
+- The project currently deploys to macOS 14 and iOS 17 or later.
+- The repository is being developed with Xcode 27 beta.
+- Use the iOS 27 Simulator runtime with the current beta toolchain. The installed
+  iOS 17 runtime has a known binary compatibility problem described in
+  [Known issues](docs/known-issues.md).
 
 ## Build
 
@@ -20,15 +30,26 @@ xcodebuild -project TripMap.xcodeproj -scheme TripMap-iOS -destination 'generic/
 xcodebuild -project TripMap.xcodeproj -scheme TripMap-macOS -destination 'platform=macOS' test
 ```
 
-The app opens the fixed “沖縄・瀬底 4日間” sample on Day 2. Selecting an activity selects its map marker; selecting a marker scrolls the activity list to the same item. M1.1 adds explicit empty and no-place states plus shared selection and camera rules documented in [ADR 0002](docs/adr/0002-model-invariants.md).
+The app opens a Trip library. macOS opens each Trip in its own Planner window;
+iPhone opens the selected Trip in the Guide. Development fixtures include the
+“沖縄・瀬底 4日間” sample and adversarial model cases.
 
-See [docs/known-issues.md](docs/known-issues.md) for the Xcode 27 beta 3 / iOS 17 Simulator launch incompatibility observed during M1 verification.
+## Product and implementation direction
 
-Product decisions and the default implementation order are recorded in
-[Product direction](docs/product-direction.md). Update that document whenever
-the order or the central product concept changes, so subsequent work starts
-from the same assumptions.
+- [Apple Platform Product Master Plan](docs/apple-platform-product-master-plan.md)
+  is the cross-platform implementation directive.
+- [Product direction](docs/product-direction.md) defines the Planner / Guide /
+  Memory concept and the current product sequence.
+- [Venue Card specification](docs/place-card-spec.md) defines the Activity /
+  Venue boundary and image-source policy.
+- [ADR 0002](docs/adr/0002-model-invariants.md) defines shared selection and
+  model invariants.
+
+Update the relevant specification and acceptance criteria in the same change
+that alters a product decision.
 
 ## Scope
 
-This repository starts a new `0.x` product line. `travel-ledger-cli` remains a reference implementation and the future schema-v8 exchange boundary; its Rust code, SQLite schema, and CLI architecture are not application dependencies.
+This repository is the native `0.x` product line. `travel-ledger-cli` remains a
+reference implementation and the future schema-v8 exchange boundary; its Rust
+code, SQLite schema, and CLI architecture are not application dependencies.

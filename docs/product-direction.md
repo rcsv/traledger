@@ -1,6 +1,9 @@
 # Product direction: 旅の時間軸に合わせて UI が育つ
 
-Last updated: 2026-07-21
+Last updated: 2026-07-24
+
+全プラットフォームの機能配置、技術採否、品質 Gate、実装ロードマップの詳細は
+[Apple Platform Product Master Plan](apple-platform-product-master-plan.md) を実装指示の基準とする。
 
 ## 一本のコンセプト
 
@@ -47,14 +50,18 @@ TripMap は、同じ旅程データを「計画中」「旅行中」「旅行後
 - Doctor の Overview 集約、Day / Activity の該当箇所表示
 - 食事予定、所要時間、MapKit による移動負荷のチェック
 
-現在は機能を広げる前の **使い勝手の統合フェーズ**。まず Place Card の実現可能性を確認し、
-その結果を Activity の情報設計に反映する。
+Research Gate 0 は限定採用で完了した。地図上のカードは Activity Card の複製ではなく、
+画像、Venue 名、カテゴリ、所在地を示す **Venue Card** とする。電話、Web、営業時間などの
+詳細はカードへ追加せず、`Mapsで開く` から Apple Maps に委譲する。
+
+現在は機能を広げる前の **使い勝手の統合フェーズ**。次は Activity 入力 UX を整え、
+Venue Card と Activity 編集の役割分担を一連の操作として完成させる。
 
 ## 作業順序
 
 この順序を、別の判断が文書化されるまでのデフォルトとする。
 
-### Research Gate 0 — Place Card スパイク
+### Research Gate 0 — Place Card スパイク — 完了
 
 Apple Maps の情報を TripMap の文脈に自然に足せるか、小さな試作で判断する。
 
@@ -81,13 +88,19 @@ Apple Maps の情報を TripMap の文脈に自然に足せるか、小さな試
 
 初回の技術検証結果は [Place Card spike](spikes/place-card.md) に記録する。
 採用する情報設計、画像方針、外部プロバイダーの境界は
-[Place Card specification](place-card-spec.md) を実装時の基準とする。
+[Venue Card specification](place-card-spec.md) を実装時の基準とする。
+
+結論は限定採用。Apple のネイティブ Place Card は Activity Card と情報が重複するため
+製品 UI へ採用しない。TripMap 内には必要最小限の Venue 情報を直接表示し、それ以上の
+確認は Apple Maps へ移動する。ユーザー評価や投票数は有用な将来候補だが、MapKit の
+公開 API から安定取得できないため、別データプロバイダーの規約、帰属、費用を含めて
+独立した Research Gate で判断する。
 
 ### 1 — Activity 入力 UX
 
 - カードのダブルクリックとコンテキストメニューから編集へ入れるようにする。
 - カテゴリ別の標準所要時間と、よく使う所要時間のクイック選択を検証する。
-- Place Card スパイクで得た Venue 情報への導線を Activity 詳細へ統合する。
+- Activity 編集と Venue Card の境界が一連の操作で理解できることを確認する。
 
 ### 2 — Doctor の情報整理
 

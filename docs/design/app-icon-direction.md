@@ -184,6 +184,43 @@ Before production integration, decide whether the priority is:
 Do not mix an Icon Composer app icon with a separate asset-catalog app icon in the same
 target without verifying the supported Xcode configuration.
 
+## Current color and implementation baseline
+
+The first buildable baseline uses the selected Dusty Blue / Signal Red palette:
+
+- **Background:** Dusty Blue `#6E86A8`
+- **Activity Cards:** Warm Ivory `#F4F1E8`
+- **Thread:** Signal Red `#D92D20`
+
+The repository now includes `TripMap/Assets.xcassets/AppIcon.appiconset/` with iOS and macOS
+slots generated from the B geometry family. The renderer at
+`docs/design/render_app_icon_assets.swift` applies optical correction: B-Large at 128px and
+above, B-Medium around 80–128px, and B-Small at 64px and below. The iOS and macOS targets
+reference the catalog through `ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon`.
+
+This is an implementation baseline for device/build validation, not a final Liquid Glass
+layer authoring decision. Appearance variants and Icon Composer migration remain follow-up
+work after the raster silhouette is reviewed in actual system contexts.
+
+## Liquid Glass structure study
+
+The first layered source is now staged at `TripMap/AppIcon.icon/`. Its full-canvas layer
+images live in the Icon Composer-managed `Assets/` subfolder. Four groups preserve the
+weave in the actual layer structure: Thread Bed; Top Activity (Top Thread Front + Top Card);
+Middle Activity; and Bottom Activity (Bottom Thread Front + Bottom Card). This keeps the
+Thread's depth relationship explicit: the middle card occludes the rear Thread, while the
+outer-card segments sit above their respective cards. Liquid Glass is enabled only on the
+two front Thread crossings; the cards and Thread Bed remain solid.
+
+`AppIcon.icon` is registered as a resource of both the iOS and macOS targets. The App Icon
+build setting remains `AppIcon`, matching the Icon Composer filename. Xcode 27 therefore
+selects the Icon Composer source over the legacy `AppIcon.appiconset`; the catalog remains
+as a documented fallback/reference for the optical-size raster studies. A clean iOS
+Simulator and macOS build confirmed that the compiled `Assets.car` contains the layered
+`AppIcon.iconstack`, all four groups, and lighting effects on only the two front Thread
+crossings. The next review should compare Default, Dark, Clear, and Tinted renditions and
+check that refraction does not make the Thread look broken or overly glossy.
+
 ## Validation checklist before implementation
 
 1. Inspect individual raster output at 128, 64, 32, and 24 pixels; do not infer this from a
@@ -207,3 +244,9 @@ target without verifying the supported Xcode configuration.
 - **2026-07-21:** Rejected literal route, hairpin Fold, and overlapping-card Weave directions.
 - **2026-07-21:** Chose the B geometry family and added B-Large / B-Medium / B-Small optical
   variants for validation.
+- **2026-07-22:** Selected Dusty Blue background with Signal Red Thread and generated a
+  buildable iOS/macOS AppIcon asset catalog with optical-size variants.
+- **2026-07-22:** Added an Icon Composer layer study separating background, rear Thread,
+  Activity Cards, and front Thread for constrained Liquid Glass treatment.
+- **2026-07-22:** Registered `AppIcon.icon` with the iOS and macOS targets and verified the
+  compiled layered icon stack in successful Xcode 27 builds.

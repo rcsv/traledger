@@ -2,9 +2,9 @@
 
 Date: 2026-07-21
 
-Status: Limited adoption recommended
+Status: Closed — native Place Card not adopted; Venue Card and Maps handoff adopted
 
-Product specification: [Place Card specification](../place-card-spec.md)
+Product specification: [Venue Card specification](../place-card-spec.md)
 
 ## Question
 
@@ -28,9 +28,9 @@ iOS 17 / macOS 14 のため availability 境界が必須になる。
 - [Unlock the power of places with MapKit (WWDC24)](https://developer.apple.com/videos/play/wwdc2024/10097/)
 - [Identifying unique locations with Place IDs](https://developer.apple.com/documentation/mapkit/identifying-unique-locations-with-place-ids)
 
-## Prototype
+## Prototype history
 
-`PlaceCardSpikeButton` を選択中 Activity の既存 Venue カードへ追加した。
+初期試作では `PlaceCardSpikeButton` を選択中 Activity の既存 Venue カードへ追加した。
 
 1. iOS 18 / macOS 15 以降だけ「場所の詳細」を表示する。
 2. `mapKitIdentifier` があれば `MKMapItemRequest` で最新の Place を取得する。
@@ -71,9 +71,9 @@ Place Card、という役割分担にした。
 - OS 14 / iOS 17 では純正 Place Card を出せないため、既存の Venue カードが製品として
   成立している必要がある。
 
-## Decision
+## Initial decision
 
-**限定採用**とする。
+当初は **限定採用**として、ネイティブ Place Card を二次アクションに残した。
 
 - Activity / Venue の独自カードを一次情報として維持する。
 - 「場所の詳細」を二次アクションとして提供する。
@@ -81,15 +81,20 @@ Place Card、という役割分担にした。
 - シーケンスピンは置き換えない。
 - 最低 OS はこの機能のためだけには引き上げない。
 
-## Before promotion from spike
+## Final product decision
 
-- 沖縄サンプルの複数 Venue で、名称検索が正しい場所を選ぶか目視確認する。
-- 電話、Web、営業時間がある場所とない場所を比較する。
-- 地図ペインと同じ幅の Activity カードで、三つのアクションと長い日本語ラベルを確認する。
-- iPhone の sheet 高さ、閉じる操作、Dynamic Type を確認する。
-- ID 検索失敗から名称検索へ落ちたことをログまたはデバッグ表示で判別できるようにする。
+レビューの結果、ネイティブ Place Card と Activity Card は情報が重複し、Activity と Venue の
+境界を曖昧にすると判断した。最終的には次の限定採用とする。
 
-この目視確認が終わるまでは、コード名どおり Research Gate 0 のスパイクとして扱う。
+- Apple のネイティブ Place Card と `場所の詳細` ボタンは採用しない。
+- TripMap の地図上には画像、Venue 名、MapKitカテゴリ、所在地を直接表示する。
+- Activity の文脈はDay内の順番と開始時刻だけを残す。
+- 電話、Web、営業時間、レビューは表示せず、解決済みPOIを使う `Mapsで開く` に委譲する。
+- 評価と投票数は価値のある将来候補だが、別プロバイダー検討のResearch Gateまで実装しない。
+
+これにより、ネイティブ Place Card のsheetに関する確認項目は不要になった。名称一致と遠い
+検索結果の棄却はユニットテストで維持し、カードのビューポート確認結果は現行の
+[Venue Card specification](../place-card-spec.md) に記録する。
 
 ## Visual review follow-up (2026-07-21)
 
@@ -101,10 +106,10 @@ Place Card、という役割分担にした。
 - 「Mapsで開く」は保存座標から新しい `MKMapItem` を作っていたため、Apple Maps では
   POI ではなく座標ピンのカードになっていた。
 
-対策として、カードを地図ペイン幅へ広げ、ボタンを均等幅にして「画像を選択」
-「場所の詳細」「Mapsで開く」を省略せず表示する。Place Card と Maps の両方は、保存済み
+対策として、カードを地図ペイン幅へ広げた。その後の製品レビューで `場所の詳細` を削除し、
+アクションは「画像を選択 / 変更」と「Mapsで開く」の二つに整理した。Mapsは、保存済み
 Place ID、または名称・座標による `MKLocalSearch` から取得した Apple の POI を使う。
 検索には 10 秒の上限を設け、失敗時は座標ピンへ暗黙にフォールバックせず理由を表示する。
 
 名称一致を距離より優先することと、遠い無関係な検索結果を棄却することはユニットテストで
-確認済み。macOS の実画面での最終確認は、上記 Before promotion の確認項目として残す。
+確認済み。Research Gate 0 は上記の製品判断をもって完了とする。

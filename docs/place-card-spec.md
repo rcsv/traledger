@@ -1,18 +1,65 @@
-# Place Card specification
+# Venue Card specification
 
-Date: 2026-07-21
+Date: 2026-07-24
 
-Status: Approved for the next implementation phase; external-image implementation has not started
+Status: Product direction adopted and implemented; live source verification passed, final visual Gate pending
 
 Related documents:
 
 - [Product direction](product-direction.md)
+- [Apple Platform Product Master Plan](apple-platform-product-master-plan.md)
 - [Place Card technical spike](spikes/place-card.md)
+
+Research Gate 0 の製品判断は限定採用で完了している。一方、画像実装の最終 Gate は別に管理する。
+2026-07-24 に実サービスを使う smoke test で Look Around 成功と Wikimedia fallback を確認し、
+ユーザー画像優先と非同期ライフサイクルは決定的テストで確認した。最終 Gate は、Venue Card 上の
+三経路を視覚・VoiceOver・画像選択操作まで実画面で確認するまで未完了とする。
+
+## 2026-07-24 verification evidence
+
+| Check | Result | Evidence |
+| --- | --- | --- |
+| ユーザー画像がある場合に自動取得しない | Pass | 注入した Look Around / Wikimedia resolver の呼び出しがともに0回になるモデルテスト |
+| Look Around を Wikimedia より優先する | Pass | 渋谷スクランブル交差点で実 MapKit scene を取得し、Wikimedia 呼び出し0回を確認 |
+| Look Around 取得不能時の Wikimedia fallback | Pass | 那覇空港で Look Around が `nil`、Commons exact-venue image の取得・保存コールバックを確認 |
+| 同一 request の再実行防止 | Pass | 同一 Venue の連続 `load` で各 resolver が1回だけ呼ばれるモデルテスト |
+| Venue 変更後の古い結果を棄却 | Pass | 遅延した旧 Wikimedia 結果が表示・保存されないモデルテスト |
+| 通常 macOS regression | Pass | `TripMap-macOS` の60テストが成功 |
+| 通常 iOS Simulator build | Pass | arm64 / x86_64 の generic Simulator build が成功 |
+| QA fixture の Library 表示 | Pass | `TRIPMAP_QA` 専用ビルドで `Venue Image QA` Trip を実画面確認 |
+| Venue Card 三経路の最終視覚確認 | Blocked | 詳細ウインドウ表示後は画面取得ツールの native pipe が終了し、XCUITest Runner も automation mode 有効化で timeout |
+| iPhone / iPad の再実画面確認 | Blocked | CoreSimulatorService / simdiskimaged が不安定で、再起動後も画面取得を維持できない |
+
+live smoke test は通常テストへ外部通信依存を持ち込まないよう、
+`OTHER_SWIFT_FLAGS='$(inherited) -D TRIPMAP_LIVE_VENUE_IMAGE_QA'` を指定した場合だけ
+コンパイルされる。画面用 fixture も `TRIPMAP_QA` の場合だけ製品へ含まれ、通常ビルドには含めない。
+
+最終視覚確認用に `TripMapUITests` target と `TripMap-VenueImage-QA` scheme を用意した。
+UI automation 基盤が利用可能な環境では次を実行する。
+
+```sh
+xcodebuild -project TripMap.xcodeproj \
+  -scheme TripMap-VenueImage-QA \
+  -destination 'platform=macOS' \
+  OTHER_SWIFT_FLAGS='$(inherited) -D TRIPMAP_QA' \
+  test
+```
+
+この UI test は QA Trip を開き、渋谷の Look Around 画像ラベル、那覇の Wikimedia 画像ラベル、
+作者・license の帰属リンクを実アプリの Accessibility tree で確認する。通常
+`TripMap-macOS` scheme では UI test を skip し、60件の deterministic test だけを実行する。
+2026-07-24 の現環境では Runner 起動後に `Timed out while enabling automation mode` となり、
+test method へ到達しなかった。これは assertion failure と区別して環境 blocker として扱う。
+
+Look Around の可用性は地点単位で変化する。今回の probe では東京駅と東京タワーは取得不能、
+渋谷スクランブル交差点は取得可能だったため、QA fixture は渋谷を採用した。地名の知名度だけで
+成功 fixture を固定せず、Gate 実行時に実サービス結果を再確認する。
 
 ## Purpose
 
-地図上の Place Card は、選択中 Activity の情報を繰り返すカードではなく、Activity に登録された
-**Venue を理解し、次の操作へ進むためのカード**とする。
+地図上の Venue Card は、選択中 Activity の情報を繰り返すカードではなく、Activity に登録された
+**Venue を理解し、次の操作へ進むためのカード**とする。初期調査では Place Card と呼んでいたが、
+Apple のネイティブ Place Card と区別するため、製品 UI と現行仕様では Venue Card と呼ぶ。
 
 Activity のタイトル、カテゴリ、所要時間、メモ、Doctor 警告は左側の Activity 一覧と編集画面を
 一次表示とする。地図上では Venue の写真、名称、種類、所在地を優先し、Activity の文脈は
@@ -26,7 +73,6 @@ Activity のタイトル、カテゴリ、所要時間、メモ、Doctor 警告�
 - Venue 名
 - Apple Maps から解決できた POI カテゴリ
 - 住所または市区町村・地域名
-- 画像が地域イメージの場合、そのことを示すラベル
 
 ### Secondary: Activity context
 
@@ -63,18 +109,28 @@ Activity タイトル、所要時間、メモ、警告は原則として重複�
 Venue の詳細はカード内のカテゴリ・所在地でまず伝える。純正 Apple Maps の詳細は `Mapsで開く` の
 遷移先で確認するため、独立した `場所の詳細` アクションは置かない。
 
-`場所の詳細` は Apple の純正 Place Card を開く。`Mapsで開く` は座標だけの独自ピンではなく、
-Place ID または名称・座標検索で解決した `MKMapItem` を Apple Maps で開く。
+`Mapsで開く` は座標だけの独自ピンではなく、Place ID または名称・座標検索で解決した
+`MKMapItem` を Apple Maps で開く。
+
+### Deliberately delegated information
+
+電話番号、Webサイト、営業時間、レビュー本文は Venue Card に表示しない。これらは計画の
+時間軸より施設ディレクトリとしての性格が強く、カードの情報密度を上げるため、Apple Maps や
+旅行情報サービスで確認する。
+
+評価、投票数、人気度は旅行者の判断材料として価値があるため、将来候補として明示的に残す。
+ただし公開 `MKMapItem` API からアプリ独自 UI 用に安定取得できる情報ではない。導入する場合は、
+別プロバイダーのデータ品質、対象地域、帰属表示、利用規約、キャッシュ条件、費用を比較する
+独立した Research Gate を先に行う。現段階でカードの空き領域を推測値や無出典データで埋めない。
 
 ## Primary image policy
 
 画像は次の優先順位で一枚だけ表示する。
 
 1. ユーザーが選択した画像
-2. Wikimedia Commons で Venue と一致した画像
-3. Pexels で取得した地域イメージ
-4. Apple Look Around のスナップショット
-5. Apple Maps の地図スナップショットまたは現在のプレースホルダー
+2. Apple Look Around の周辺画像
+3. Wikimedia Commons で Venue と一致した画像
+4. 現在のプレースホルダー
 
 上位の画像が利用可能になっても、ユーザーが選択した画像を自動で置き換えない。
 
@@ -83,15 +139,6 @@ Place ID または名称・座標検索で解決した `MKMapItem` を Apple Map
 Venue 名、座標、Wikidata ID などから対象施設と同一と判断できる画像を指す。Wikimedia
 Commons を最初の候補とし、座標だけで近隣画像を取得した場合は名称または関連エンティティで
 追加照合する。
-
-### Regional image
-
-Pexels などで市区町村、地域、国、Venue カテゴリを組み合わせて取得した雰囲気画像を指す。
-施設そのものの写真とはみなさない。
-
-- `沖縄・本部町のイメージ` のようなラベルを常時表示する。
-- Venue の正確な外観や内部であると誤認させる説明を付けない。
-- 検索語は保存済み Venue 情報から作り、ユーザーの現在地は送信しない。
 
 ## Apple Place Card boundary
 
@@ -104,7 +151,8 @@ Apple の純正 Place Card に表示される写真は、公開 `MKMapItem` API 
 - Place Card のスクリーンショットや非公開 API を使って写真を再利用すること
 - Apple Maps の写真を TripMap の保存画像として扱うこと
 
-純正 Place Card は最新の詳細情報を見る二次画面としてのみ利用する。
+純正 Place Card は製品 UI に組み込まない。詳細確認は、解決済み `MKMapItem` を使う
+`Mapsで開く` に一本化する。
 
 参考:
 
@@ -123,17 +171,10 @@ Apple の純正 Place Card に表示される写真は、公開 `MKMapItem` API 
 
 参照: [MediaWiki Imageinfo](https://www.mediawiki.org/wiki/API%3AImageinfo)
 
-### Pexels — first regional-image provider
-
-- Exact Venue image ではなく、地域イメージのフォールバックとして使う。
-- 提供元と写真家へのリンクを画像付近または画像詳細から確認できるようにする。
-- API キーをアプリバイナリへ直接埋め込まない。製品化時は小さなプロキシサービスを使う。
-- 無料枠、レート制限、利用規約を実装開始時とリリース前に再確認する。
-
-参考: [Pexels API](https://www.pexels.com/api/documentation/)
-
 ### Providers not selected for the first implementation
 
+- **Pexels:** 地域イメージのためだけに API キー保護用のプロキシと運用を追加する必要があり、
+  Venue そのものの画像である保証もないため採用しない。既存バックエンドを持つ場合だけ再検討する。
 - **Unsplash:** 画像品質は高いが、ホットリンク、ダウンロード通知、帰属表示、Production 審査の
   条件が増えるため、最初のプロバイダーにはしない。
 - **Google Places Photo:** 施設写真の精度は期待できるが、従量課金と Google Maps 表示・帰属の
@@ -175,12 +216,11 @@ Apple の純正 Place Card に表示される写真は、公開 `MKMapItem` API 
 - 取得要求は選択 Activity が変わったらキャンセルする。
 - 待機表示には上限を設け、無期限の ProgressView を残さない。
 - ネットワーク障害、検索結果なし、利用規約上表示不可を通常のフォールバックとして扱う。
-- 地域画像を Exact Venue image に昇格させない。
 
 ## Accessibility
 
 - 画像には Venue 名と画像区分を含む説明を付ける。
-- 地域画像は VoiceOver でも `本部町の地域イメージ` と分かるようにする。
+- Look Around は周辺画像、Wikimedia は Venue の外部画像であることを VoiceOver でも区別する。
 - 帰属情報と画像提供元へのリンクはキーボードで到達可能にする。
 - ボタンのアクセシブル名称は画面上の完全なラベルと一致させる。
 - Dynamic Type または文字拡大時は、画像を縮めるより情報列とアクションを折り返す。
@@ -196,36 +236,35 @@ Apple の純正 Place Card に表示される写真は、公開 `MKMapItem` API 
 
 この順序で進め、各段階で目視確認してから次へ進む。
 
-### Phase 1 — Venue-first layout
+### Phase 1 — Venue-first layout — implemented
 
 - 現在のユーザー画像とプレースホルダーだけを使い、通信なしで新レイアウトを実装する。
 - Regular は 16:9、Compact は 1:1 のサムネイルを使う。
 - Activity 情報をシーケンス番号と時刻まで減らす。
-- 三つのアクションラベルとキーボード操作を確認する。
+- `画像を選択 / 変更` と `Mapsで開く` のラベルとキーボード操作を確認する。
 
-### Phase 2 — Image source model
+### Phase 2 — Image source model — implemented
 
 - ユーザー画像と外部画像を区別する画像ソース型を追加する。
 - 帰属、ライセンス、exact / regional、取得日時を保持する。
-- プロバイダーに依存しない resolver interface とフォールバック順を実装する。
+- 表示側で画像ソースの優先順位と帰属表示を制御する。
 
-### Phase 3 — Wikimedia exact-venue resolver — implemented
+### Phase 3 — Look Around automatic image — implemented
+
+- ユーザー画像がない場合、最初に Look Around を問い合わせる。
+- Look Around 対応地域では周辺外観として表示し、外部画像より優先する。
+- Look Around が利用できない場合だけ Wikimedia へフォールバックする。
+
+### Phase 4 — Wikimedia exact-venue fallback — implemented
 
 - Wikipedia 記事タイトルの完全一致から page image を解決する。
 - Commons の URL・作者・ライセンス・出典がそろう場合だけ表示し、メタデータは保存する。
-- 曖昧な候補、近隣写真、帰属不明の画像は取得不能として Look Around 以降へフォールバックする。
+- 曖昧な候補、近隣写真、帰属不明の画像は取得不能としてプレースホルダーへフォールバックする。
 
-### Phase 4 — Pexels regional-image spike
+### Phase 5 — Regional-image provider — not selected
 
-- Wikimedia で取得できない Venue に限定して地域画像を検索する。
-- `地域イメージ` 表示、提供元リンク、レート制限を確認する。
-- 製品化には API キーを保護するプロキシを必須とする。
-
-### Phase 5 — Look Around fallback
-
-- Look Around 対応地域だけ 16:9 スナップショットを生成する。
-- 施設写真ではなく周辺外観として表示する。
-- 画像なし、通信なし、Look Around なしの最終フォールバックを確認する。
+- Pexels は採用せず、画像のためだけのプロキシサービスを追加しない。
+- 将来、別用途ですでにバックエンドを運用している場合に限り Research Gate を開き直す。
 
 ## Acceptance criteria
 
@@ -235,16 +274,34 @@ Apple の純正 Place Card に表示される写真は、公開 `MKMapItem` API 
 - Activity 情報はシーケンス番号と時刻だけで文脈を維持する。
 - `画像を選択 / 画像を変更` と `Mapsで開く` の意味が省略されない。
 - ユーザー画像は自動取得画像より常に優先される。
-- Exact Venue image と地域イメージを画面とアクセシビリティの両方で区別できる。
+- Look Around と Exact Venue image を画面とアクセシビリティの両方で区別できる。
 - すべての外部画像で必要な帰属情報へ到達できる。
-- 画像取得に失敗しても Venue 情報、Place Card、Maps は利用できる。
+- 画像取得に失敗しても Venue 情報と `Mapsで開く` は利用できる。
 - Apple Place Card の写真取得、非公開 API、スクレイピングを使用しない。
 - 最初の製品実装に Google Places Photo を含めない。
 
 ## Non-goals
 
-- Apple Place Card や Wanderlog のレビュー・写真ギャラリーを複製すること
+- Apple Place Card や旅行情報サービスのレビュー・写真ギャラリーを複製すること
 - 外部画像をユーザー所有の写真として保存すること
 - 自動検索だけで全 Venue に正確な写真を保証すること
 - 画像取得のために最小 OS を引き上げること
 - この仕様段階で外部 API キーやバックエンドを導入すること
+
+## Viewport review
+
+2026-07-22 に現行の二段階レイアウトを確認した。
+
+| Viewport | Layout | Result |
+| --- | --- | --- |
+| macOS、カード本文幅 400 pt 以上 | 16:9、`176 × 99 pt` の画像 | 2026-07-21の実画面レビューでVenue情報と二つのアクションを横方向に維持することを確認 |
+| macOS、カード本文幅 400 pt 未満 | `88 × 88 pt` の画像 | `ViewThatFits` がCompact表示へ切り替わることをレイアウト条件で確認 |
+| iPhone 17 Pro、標準文字サイズ | Compact | iOS 27 Simulatorで沖縄サンプルを直接表示して確認。Venue名、住所、順番、時刻、`Mapsで開く` が省略されない |
+| iPhone 17 Pro、Accessibility XXL | Compact | 住所が二行へ折り返され、カードが縦へ拡張する。`Mapsで開く` は完全表示を維持する |
+
+iOSターゲットは現在iPhoneのみであり、iPadはサポート対象に含めない。iPhone上では画像編集を
+許可していないためアクションは `Mapsで開く` の一つ、macOS Plannerでは画像変更を加えた二つになる。
+
+ネイティブ Place Card の sheet 高さ、閉じる操作、Dynamic Type は、該当 UI を採用しない決定により
+Research Gate の完了条件から除外した。Venue Card は電話、Web、営業時間と `場所の詳細` ボタンを
+持たず、二つのアクションだけなので、初期スパイクで発生した三ボタンの省略問題は再発しない。

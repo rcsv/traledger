@@ -8,7 +8,13 @@ struct TripMapApp: App {
 
     init() {
         do {
-            modelContainer = try TripMapStore.makeContainer()
+            let container = try TripMapStore.makeContainer()
+            #if TRIPMAP_QA
+            if ProcessInfo.processInfo.arguments.contains("-tripmap-seed-venue-image-qa") {
+                try DebugFixtureSeeder.seedVenueImageTripIfNeeded(in: container)
+            }
+            #endif
+            modelContainer = container
             storeErrorMessage = nil
         } catch {
             modelContainer = nil
@@ -56,6 +62,22 @@ struct TripMapApp: App {
         #endif
     }
 }
+
+#if TRIPMAP_QA
+@MainActor
+private enum DebugFixtureSeeder {
+    static func seedVenueImageTripIfNeeded(in container: ModelContainer) throws {
+        let fixtureID = VenueImageQAFixture.trip.id
+        let descriptor = FetchDescriptor<StoredTrip>(
+            predicate: #Predicate<StoredTrip> { $0.id == fixtureID }
+        )
+        guard try container.mainContext.fetchCount(descriptor) == 0 else { return }
+
+        container.mainContext.insert(try StoredTrip(validatingSnapshot: VenueImageQAFixture.trip))
+        try container.mainContext.save()
+    }
+}
+#endif
 
 private struct StoreUnavailableView: View {
     let message: String?

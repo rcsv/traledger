@@ -4,6 +4,244 @@ import XCTest
 @testable import TripMap
 
 final class TripModelTests: XCTestCase {
+    @MainActor
+    func testVenueImageResolutionUsesUserImageWithoutAutomaticRequests() async {
+        var lookAroundCalls = 0
+        var wikimediaCalls = 0
+
+        let result: VenueImageResolution<String> = await VenueImageResolutionCoordinator.resolve(
+            hasUserImage: true,
+            existingExternalImage: nil,
+            resolveLookAround: {
+                lookAroundCalls += 1
+                return "look around"
+            },
+            resolveWikimedia: {
+                wikimediaCalls += 1
+                return self.externalPlaceImage()
+            }
+        )
+
+        XCTAssertEqual(result.source, .user)
+        XCTAssertEqual(lookAroundCalls, 0)
+        XCTAssertEqual(wikimediaCalls, 0)
+    }
+
+    @MainActor
+    func testVenueImageResolutionPrefersLookAroundOverWikimedia() async {
+        var lookAroundCalls = 0
+        var wikimediaCalls = 0
+
+        let result: VenueImageResolution<String> = await VenueImageResolutionCoordinator.resolve(
+            hasUserImage: false,
+            existingExternalImage: externalPlaceImage(),
+            resolveLookAround: {
+                lookAroundCalls += 1
+                return "look around"
+            },
+            resolveWikimedia: {
+                wikimediaCalls += 1
+                return self.externalPlaceImage()
+            }
+        )
+
+        XCTAssertEqual(result.source, .lookAround)
+        XCTAssertEqual(lookAroundCalls, 1)
+        XCTAssertEqual(wikimediaCalls, 0)
+    }
+
+    @MainActor
+    func testVenueImageResolutionUsesStoredWikimediaImageWhenLookAroundIsUnavailable() async {
+        var wikimediaCalls = 0
+        let storedImage = externalPlaceImage()
+
+        let result: VenueImageResolution<String> = await VenueImageResolutionCoordinator.resolve(
+            hasUserImage: false,
+            existingExternalImage: storedImage,
+            resolveLookAround: { nil },
+            resolveWikimedia: {
+                wikimediaCalls += 1
+                return nil
+            }
+        )
+
+        XCTAssertEqual(result.source, .wikimedia)
+        XCTAssertEqual(wikimediaCalls, 0)
+    }
+
+    @MainActor
+    func testVenueImageResolutionFallsBackToWikimediaWhenLookAroundIsUnavailable() async {
+        var wikimediaCalls = 0
+        let image = externalPlaceImage()
+
+        let result: VenueImageResolution<String> = await VenueImageResolutionCoordinator.resolve(
+            hasUserImage: false,
+            existingExternalImage: nil,
+            resolveLookAround: { nil },
+            resolveWikimedia: {
+                wikimediaCalls += 1
+                return image
+            }
+        )
+
+        XCTAssertEqual(result.source, .wikimedia)
+        XCTAssertEqual(wikimediaCalls, 1)
+    }
+
+    @MainActor
+    func testVenueImageResolutionUsesPlaceholderWhenAllAutomaticSourcesFail() async {
+        let result: VenueImageResolution<String> = await VenueImageResolutionCoordinator.resolve(
+            hasUserImage: false,
+            existingExternalImage: nil,
+            resolveLookAround: { nil },
+            resolveWikimedia: { nil }
+        )
+
+        XCTAssertEqual(result.source, .placeholder)
+    }
+
+    func testVenueImageResolutionRequestIDChangesWhenUserImageIsSet() throws {
+        let place = try XCTUnwrap(OkinawaSample.trip.days[1].activities[0].place)
+        XCTAssertNotEqual(
+            VenueImageResolutionRequestID(placeID: place.id, hasUserImage: false),
+            VenueImageResolutionRequestID(placeID: place.id, hasUserImage: true)
+        )
+    }
+
+    @MainActor
+    func testVenueImageResolutionModelDoesNotRestartTheSameRequest() async throws {
+        let place = try XCTUnwrap(OkinawaSample.trip.days[0].activities[0].place)
+        let image = externalPlaceImage()
+        var lookAroundCalls = 0
+        var wikimediaCalls = 0
+        var storedImages: [ExternalPlaceImage] = []
+        let model = VenueImageResolutionModel(dependencies: VenueImageResolutionDependencies(
+            resolveLookAround: { _ in
+                lookAroundCalls += 1
+                return nil
+            },
+            resolveWikimedia: { _ in
+                wikimediaCalls += 1
+                return image
+            }
+        ))
+
+        model.load(place) { storedImages.append($0) }
+        model.load(place) { storedImages.append($0) }
+        await model.awaitCurrentResolution()
+
+        XCTAssertEqual(model.source, .wikimedia)
+        XCTAssertEqual(model.externalImage, image)
+        XCTAssertEqual(lookAroundCalls, 1)
+        XCTAssertEqual(wikimediaCalls, 1)
+        XCTAssertEqual(storedImages, [image])
+    }
+
+    @MainActor
+    func testVenueImageResolutionModelSkipsAutomaticRequestsForUserImage() async throws {
+        var place = try XCTUnwrap(OkinawaSample.trip.days[0].activities[0].place)
+        place.imageData = Data([0x01])
+        var lookAroundCalls = 0
+        var wikimediaCalls = 0
+        let model = VenueImageResolutionModel(dependencies: VenueImageResolutionDependencies(
+            resolveLookAround: { _ in
+                lookAroundCalls += 1
+                return nil
+            },
+            resolveWikimedia: { _ in
+                wikimediaCalls += 1
+                return nil
+            }
+        ))
+
+        model.load(place) { _ in
+            XCTFail("User images must not persist an automatic image.")
+        }
+        await model.awaitCurrentResolution()
+
+        XCTAssertEqual(model.source, .user)
+        XCTAssertEqual(lookAroundCalls, 0)
+        XCTAssertEqual(wikimediaCalls, 0)
+    }
+
+    @MainActor
+    func testVenueImageResolutionModelRejectsAStaleResultAfterPlaceChanges() async throws {
+        let firstPlace = try XCTUnwrap(OkinawaSample.trip.days[0].activities[0].place)
+        let secondPlace = try XCTUnwrap(OkinawaSample.trip.days[1].activities[0].place)
+        let staleImage = externalPlaceImage(providerImageID: "stale")
+        let currentImage = externalPlaceImage(providerImageID: "current")
+        var storedImages: [ExternalPlaceImage] = []
+        let model = VenueImageResolutionModel(dependencies: VenueImageResolutionDependencies(
+            resolveLookAround: { _ in nil },
+            resolveWikimedia: { place in
+                if place.id == firstPlace.id {
+                    try? await Task.sleep(for: .milliseconds(100))
+                    return staleImage
+                }
+                return currentImage
+            }
+        ))
+
+        model.load(firstPlace) { storedImages.append($0) }
+        model.load(secondPlace) { storedImages.append($0) }
+        await model.awaitCurrentResolution()
+        try? await Task.sleep(for: .milliseconds(150))
+
+        XCTAssertEqual(model.source, .wikimedia)
+        XCTAssertEqual(model.externalImage, currentImage)
+        XCTAssertEqual(storedImages, [currentImage])
+    }
+
+    #if TRIPMAP_LIVE_VENUE_IMAGE_QA
+    @MainActor
+    func testLiveShibuyaCrossingResolvesLookAroundBeforeWikimedia() async throws {
+        let place = livePlace(
+            name: "渋谷スクランブル交差点",
+            address: "東京都渋谷区道玄坂2丁目",
+            latitude: 35.6595,
+            longitude: 139.7005
+        )
+        var wikimediaCalls = 0
+        let model = VenueImageResolutionModel(dependencies: VenueImageResolutionDependencies(
+            resolveLookAround: VenueImageResolutionDependencies.live.resolveLookAround,
+            resolveWikimedia: { place in
+                wikimediaCalls += 1
+                return await VenueImageResolutionDependencies.live.resolveWikimedia(place)
+            }
+        ))
+
+        model.load(place) { _ in
+            XCTFail("Look Around success must not persist a Wikimedia image.")
+        }
+        await model.awaitCurrentResolution()
+
+        XCTAssertEqual(model.source, .lookAround)
+        XCTAssertNotNil(model.lookAroundScene)
+        XCTAssertNil(model.externalImage)
+        XCTAssertEqual(wikimediaCalls, 0)
+    }
+
+    @MainActor
+    func testLiveNahaAirportFallsBackToWikimedia() async throws {
+        let place = livePlace(
+            name: "那覇空港",
+            address: "沖縄県那覇市鏡水150",
+            latitude: 26.2064,
+            longitude: 127.6460
+        )
+        var storedImages: [ExternalPlaceImage] = []
+        let model = VenueImageResolutionModel()
+
+        model.load(place) { storedImages.append($0) }
+        await model.awaitCurrentResolution()
+
+        XCTAssertEqual(model.source, .wikimedia)
+        XCTAssertNil(model.lookAroundScene)
+        XCTAssertNotNil(model.externalImage)
+        XCTAssertEqual(storedImages, model.externalImage.map { [$0] } ?? [])
+    }
+    #endif
+
     func testOkinawaSamplePreservesSequenceFirstOrdering() {
         let trip = OkinawaSample.trip
 
@@ -927,4 +1165,37 @@ final class TripModelTests: XCTestCase {
         XCTAssertEqual(reloaded.id, OkinawaSample.trip.id)
         XCTAssertEqual(reloaded.days.count, OkinawaSample.trip.days.count)
     }
+
+    private func externalPlaceImage(providerImageID: String = "Example.jpg") -> ExternalPlaceImage {
+        ExternalPlaceImage(
+            provider: .wikimediaCommons,
+            providerImageID: providerImageID,
+            imageURL: URL(string: "https://upload.wikimedia.org/example.jpg")!,
+            sourcePageURL: URL(string: "https://commons.wikimedia.org/wiki/File:Example.jpg")!,
+            authorName: "Example photographer",
+            authorURL: nil,
+            licenseName: "CC BY-SA 4.0",
+            licenseURL: URL(string: "https://creativecommons.org/licenses/by-sa/4.0/")!,
+            kind: .exactVenue,
+            fetchedAt: Date(timeIntervalSince1970: 1_000)
+        )
+    }
+
+    #if TRIPMAP_LIVE_VENUE_IMAGE_QA
+    private func livePlace(
+        name: String,
+        address: String,
+        latitude: Double,
+        longitude: Double
+    ) -> PlaceSnapshot {
+        PlaceSnapshot(
+            id: UUID(),
+            name: name,
+            address: address,
+            latitude: latitude,
+            longitude: longitude,
+            mapKitIdentifier: nil
+        )
+    }
+    #endif
 }
