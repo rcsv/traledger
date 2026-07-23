@@ -1,6 +1,10 @@
 import SwiftData
 import SwiftUI
 
+#if os(macOS)
+import AppKit
+#endif
+
 #if os(iOS)
 struct MobileAppShellView: View {
     var body: some View {
@@ -76,6 +80,9 @@ struct MacLibraryRootView: View {
     @Environment(\.openWindow) private var openWindow
     @Environment(\.dismissWindow) private var dismissWindow
     @State private var destination: MacLibraryDestination? = .trips(.upcoming)
+    #if TRIPMAP_QA
+    @State private var didOpenVenueImageQA = false
+    #endif
 
     var body: some View {
         NavigationSplitView {
@@ -103,6 +110,16 @@ struct MacLibraryRootView: View {
             detailView
         }
         .frame(minWidth: 900, minHeight: 620)
+        #if TRIPMAP_QA
+        .task {
+            guard !didOpenVenueImageQA,
+                  ProcessInfo.processInfo.arguments.contains("-tripmap-open-venue-image-qa") else {
+                return
+            }
+            didOpenVenueImageQA = true
+            openWindow(id: "trip", value: VenueImageQAFixture.trip.id)
+        }
+        #endif
     }
 
     @ViewBuilder
@@ -149,18 +166,26 @@ struct MacTripWorkspaceView: View {
 
     var body: some View {
         if let trip = storedTrips.first?.snapshot {
-            PlanView(trip: trip, onApplyPlan: { updated in
-                guard let storedTrip = storedTrips.first else { return "旅行データを読み込めませんでした。" }
-                do {
-                    try storedTrip.applyPlan(updated, in: modelContext)
-                    try modelContext.save()
-                    return nil
-                } catch {
-                    modelContext.rollback()
-                    return error.localizedDescription
+            PlanView(
+                trip: trip,
+                initialDayID: venueImageQAInitialDayID,
+                initialActivityID: venueImageQAInitialActivityID,
+                onApplyPlan: { updated in
+                    guard let storedTrip = storedTrips.first else { return "旅行データを読み込めませんでした。" }
+                    do {
+                        try storedTrip.applyPlan(updated, in: modelContext)
+                        try modelContext.save()
+                        return nil
+                    } catch {
+                        modelContext.rollback()
+                        return error.localizedDescription
+                    }
                 }
-            })
-                .id(trip.id)
+            )
+            .id(trip.id)
+            .task {
+                await foregroundVenueImageQAWindowIfNeeded()
+            }
         } else {
             ContentUnavailableView(
                 "旅行を開けません",
@@ -168,6 +193,50 @@ struct MacTripWorkspaceView: View {
                 description: Text("Libraryウィンドウから旅行を選んでください。")
             )
         }
+    }
+
+    private var venueImageQAInitialDayID: Day.ID? {
+        #if TRIPMAP_QA
+        guard ProcessInfo.processInfo.arguments.contains("-tripmap-open-venue-image-qa") else {
+            return nil
+        }
+        return VenueImageQAFixture.trip.orderedDays.first?.id
+        #else
+        return nil
+        #endif
+    }
+
+    private var venueImageQAInitialActivityID: Activity.ID? {
+        #if TRIPMAP_QA
+        let arguments = ProcessInfo.processInfo.arguments
+        guard arguments.contains("-tripmap-open-venue-image-qa") else {
+            return nil
+        }
+        if arguments.contains("-tripmap-venue-image-qa-wikimedia") {
+            return UUID(uuidString: "A11E0000-0000-4000-8000-000000000012")
+        }
+        if arguments.contains("-tripmap-venue-image-qa-user") {
+            return UUID(uuidString: "A11E0000-0000-4000-8000-000000000013")
+        }
+        return UUID(uuidString: "A11E0000-0000-4000-8000-000000000011")
+        #else
+        return nil
+        #endif
+    }
+
+    @MainActor
+    private func foregroundVenueImageQAWindowIfNeeded() async {
+        #if TRIPMAP_QA
+        guard ProcessInfo.processInfo.arguments.contains("-tripmap-open-venue-image-qa") else {
+            return
+        }
+        await Task.yield()
+        NSApplication.shared.activate()
+        for window in NSApplication.shared.windows where window.title == VenueImageQAFixture.trip.title {
+            window.level = .floating
+            window.makeKeyAndOrderFront(nil)
+        }
+        #endif
     }
 }
 

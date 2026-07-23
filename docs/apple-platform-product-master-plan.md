@@ -986,16 +986,16 @@ Gate 文書には次を記載する。
   実サービス smoke test で成功
 - QA Trip の Library 表示は実画面確認済み
 - macOS UI test target と専用 QA scheme は追加済み
-- 詳細ウインドウ取得時の画面制御 native pipe 終了、XCUITest automation mode timeout、
-  CoreSimulatorService 障害により、最終視覚・VoiceOver 確認は未完
+- 残留 TripMap / `testmanagerd` の終了と全 Simulator shutdown により macOS UI automation mode は復旧済み
+- 専用 QA scheme の3テストが成功し、渋谷 Look Around、那覇 Wikimedia と帰属リンク、
+  native PhotosPicker でのユーザー画像選択、seed なし再起動後の永続化を確認済み
+- CoreSimulator は復旧し、iOS generic Simulator build は成功
 
 残作業:
 
-- ユーザー画像を PhotosPicker で設定する実操作
-- 実画面 3 経路の画像区分・帰属表示確認
 - narrow / regular viewport
-- VoiceOver attribution
-- iPhone Simulator の安定化
+- 明示的な VoiceOver 読み上げ順と keyboard による attribution link 操作
+- iPhone Simulator での同一代表経路の実画面確認
 - iPadOS target と adaptive workspace の追加後、iPad viewport を確認
 
 完了条件:
@@ -1124,16 +1124,15 @@ Gate 文書には次を記載する。
 
 次の実装担当者は、この順序で作業する。
 
-1. macOS の UI automation mode を復旧し、追加済み `TripMap-VenueImage-QA` scheme を実行する。
-2. 渋谷 Look Around、那覇 Wikimedia、PhotosPicker user image の三経路を Venue Card 上で確認する。
-3. Regular / narrow、VoiceOver、帰属リンク、ユーザー画像設定後の再起動を確認する。
-4. iPhone Simulator の CoreSimulatorService / simdiskimaged を復旧して同じ代表経路を確認する。
-5. `docs/place-card-spec.md` に最終証跡を追加し、Venue Image Gate を閉じる。
-6. Venue Card Gate が閉じた後、Activity Card の double-click / Return / Context Menu を実装する。
-7. Activity Editor の duration suggestion を実装する。
-8. Doctor issue から対象 Activity Editor へ移動する。
-9. Travel Leg の Domain 仕様を ADR として先に確定する。
-10. iPadOS adaptive workspace を追加する。
+1. macOS で Venue Card の regular / narrow viewport を確認する。
+2. VoiceOver の読み上げ順と keyboard による Wikimedia attribution link 操作を確認する。
+3. iPhone Simulator で Look Around、Wikimedia、ユーザー画像の代表経路を実画面確認する。
+4. `Docs/place-card-spec.md` に残る証跡を追加し、Venue Image Gate を閉じる。
+5. Venue Card Gate が閉じた後、Activity Card の double-click / Return / Context Menu を実装する。
+6. Activity Editor の duration suggestion を実装する。
+7. Doctor issue から対象 Activity Editor へ移動する。
+8. Travel Leg の Domain 仕様を ADR として先に確定する。
+9. iPadOS adaptive workspace を追加し、iPad viewport を確認する。
 
 P0 が閉じる前に新しい外部画像 provider、評価データ、独自サーバー、AI、CloudKit を始めない。
 

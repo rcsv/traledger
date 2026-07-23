@@ -362,6 +362,8 @@ private struct PlaceDetailOverlay: View {
             )
                 .frame(width: imageSize.width, height: imageSize.height)
                 .clipShape(RoundedRectangle(cornerRadius: 12))
+                .accessibilityElement(children: .ignore)
+                .accessibilityIdentifier("venue-image")
                 .accessibilityLabel(imageAccessibilityLabel)
 
             VStack(alignment: .leading, spacing: 5) {

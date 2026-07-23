@@ -2,7 +2,7 @@
 
 Date: 2026-07-24
 
-Status: Product direction adopted and implemented; live source verification passed, final visual Gate pending
+Status: Product direction adopted and implemented; macOS three-source UI verification passed, cross-device Gate pending
 
 Related documents:
 
@@ -12,8 +12,9 @@ Related documents:
 
 Research Gate 0 の製品判断は限定採用で完了している。一方、画像実装の最終 Gate は別に管理する。
 2026-07-24 に実サービスを使う smoke test で Look Around 成功と Wikimedia fallback を確認し、
-ユーザー画像優先と非同期ライフサイクルは決定的テストで確認した。最終 Gate は、Venue Card 上の
-三経路を視覚・VoiceOver・画像選択操作まで実画面で確認するまで未完了とする。
+ユーザー画像優先と非同期ライフサイクルは決定的テストで確認した。さらに macOS の専用 QA scheme で、
+Venue Card 上の Look Around、Wikimedia fallback、PhotosPicker ユーザー画像の三経路を実画面確認した。
+最終 Gate は、regular / narrow、明示的な VoiceOver 操作、iPhone 実画面の確認まで未完了とする。
 
 ## 2026-07-24 verification evidence
 
@@ -27,8 +28,13 @@ Research Gate 0 の製品判断は限定採用で完了している。一方、�
 | 通常 macOS regression | Pass | `TripMap-macOS` の60テストが成功 |
 | 通常 iOS Simulator build | Pass | arm64 / x86_64 の generic Simulator build が成功 |
 | QA fixture の Library 表示 | Pass | `TRIPMAP_QA` 専用ビルドで `Venue Image QA` Trip を実画面確認 |
-| Venue Card 三経路の最終視覚確認 | Blocked | 詳細ウインドウ表示後は画面取得ツールの native pipe が終了し、XCUITest Runner も automation mode 有効化で timeout |
-| iPhone / iPad の再実画面確認 | Blocked | CoreSimulatorService / simdiskimaged が不安定で、再起動後も画面取得を維持できない |
+| macOS UI automation mode | Pass | 残留 TripMap / `testmanagerd` を終了し、全 Simulator を shutdown して再生成した後、専用 QA scheme が test method まで到達 |
+| 渋谷 Look Around の Venue Card | Pass | `venue-image` が「渋谷スクランブル交差点 周辺の Look Around 画像」として表示 |
+| 那覇 Wikimedia fallback の Venue Card | Pass | `venue-image` が「那覇空港 の Wikimedia Commons 画像」として表示され、作者・license の帰属リンクも存在 |
+| PhotosPicker ユーザー画像 | Pass | native PhotosPicker で既存ライブラリ画像を選択し、「沖縄美ら海水族館 の選択された画像」へ更新 |
+| ユーザー画像の再起動後優先 | Pass | seed なしでアプリを再起動しても選択画像が復元され、外部画像へ戻らないことを確認 |
+| macOS regular / narrow と明示的 VoiceOver 操作 | Pending | 三経路の source label と帰属リンクは Accessibility tree で確認済み。幅別レイアウトと VoiceOver 読み上げ順は未確認 |
+| iPhone / iPad の再実画面確認 | Pending | CoreSimulator は復旧し generic iOS Simulator build は成功。iPhone の同一実画面 matrix は未実行、iPad は target 追加後に実施 |
 
 live smoke test は通常テストへ外部通信依存を持ち込まないよう、
 `OTHER_SWIFT_FLAGS='$(inherited) -D TRIPMAP_LIVE_VENUE_IMAGE_QA'` を指定した場合だけ
@@ -45,11 +51,14 @@ xcodebuild -project TripMap.xcodeproj \
   test
 ```
 
-この UI test は QA Trip を開き、渋谷の Look Around 画像ラベル、那覇の Wikimedia 画像ラベル、
-作者・license の帰属リンクを実アプリの Accessibility tree で確認する。通常
+この UI test は QA Trip を直接開き、渋谷の Look Around 画像ラベル、那覇の Wikimedia 画像ラベル、
+作者・license の帰属リンクを実アプリの Accessibility tree で確認する。さらに native PhotosPicker
+から既存ライブラリ画像を選び、ユーザー画像への更新と seed なしの再起動後の永続化を確認する。
+PhotosPicker の実操作には、QA 実行環境の写真ライブラリに選択可能な画像が1枚以上必要である。通常
 `TripMap-macOS` scheme では UI test を skip し、60件の deterministic test だけを実行する。
-2026-07-24 の現環境では Runner 起動後に `Timed out while enabling automation mode` となり、
-test method へ到達しなかった。これは assertion failure と区別して環境 blocker として扱う。
+2026-07-24 は残留プロセスと Simulator 状態をリセットして automation mode を復旧し、専用 scheme の
+3 test が failure 0 で成功した。最終再実行の結果 bundle は
+`DerivedData-VenueImageUITest/Logs/Test/Test-TripMap-VenueImage-QA-2026.07.24_08-02-15-+0900.xcresult`。
 
 Look Around の可用性は地点単位で変化する。今回の probe では東京駅と東京タワーは取得不能、
 渋谷スクランブル交差点は取得可能だったため、QA fixture は渋谷を採用した。地名の知名度だけで

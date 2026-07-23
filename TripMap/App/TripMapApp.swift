@@ -71,9 +71,13 @@ private enum DebugFixtureSeeder {
         let descriptor = FetchDescriptor<StoredTrip>(
             predicate: #Predicate<StoredTrip> { $0.id == fixtureID }
         )
-        guard try container.mainContext.fetchCount(descriptor) == 0 else { return }
-
-        container.mainContext.insert(try StoredTrip(validatingSnapshot: VenueImageQAFixture.trip))
+        if let storedTrip = try container.mainContext.fetch(descriptor).first {
+            try storedTrip.applyPlan(VenueImageQAFixture.trip, in: container.mainContext)
+        } else {
+            container.mainContext.insert(
+                try StoredTrip(validatingSnapshot: VenueImageQAFixture.trip)
+            )
+        }
         try container.mainContext.save()
     }
 }

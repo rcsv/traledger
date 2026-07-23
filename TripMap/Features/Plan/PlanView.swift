@@ -16,7 +16,7 @@ struct PlanView: View {
     @StateObject private var travelLoad = TripTravelLoadModel()
     let trip: Trip
     let onApplyPlan: (Trip) -> String?
-    @State private var destination: PlanDestination = .overview
+    @State private var destination: PlanDestination
     @State private var isMapVisible = true
     @State private var interaction: TripInteractionState
     @State private var operation: DayOperation?
@@ -27,10 +27,25 @@ struct PlanView: View {
     @State private var pendingVenueFocusActivityID: Activity.ID?
     @State private var errorMessage: String?
 
-    init(trip: Trip, onApplyPlan: @escaping (Trip) -> String? = { _ in nil }) {
+    init(
+        trip: Trip,
+        initialDayID: Day.ID? = nil,
+        initialActivityID: Activity.ID? = nil,
+        onApplyPlan: @escaping (Trip) -> String? = { _ in nil }
+    ) {
         self.trip = trip
         self.onApplyPlan = onApplyPlan
-        _interaction = State(initialValue: TripInteractionState(trip: trip))
+        var initialInteraction = TripInteractionState(trip: trip)
+        if let initialDayID {
+            initialInteraction.selectDay(initialDayID, in: trip)
+        }
+        if let initialActivityID {
+            initialInteraction.selectActivity(initialActivityID, source: .list, in: trip)
+        }
+        _destination = State(
+            initialValue: initialDayID.map(PlanDestination.day) ?? .overview
+        )
+        _interaction = State(initialValue: initialInteraction)
     }
 
     private var selectedDay: Day? {
