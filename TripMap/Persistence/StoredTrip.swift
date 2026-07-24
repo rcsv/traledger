@@ -75,6 +75,8 @@ final class StoredActivity {
     var day: StoredDay?
     @Relationship(deleteRule: .cascade, inverse: \StoredPlaceSnapshot.activity)
     var place: StoredPlaceSnapshot?
+    @Relationship(deleteRule: .cascade, inverse: \StoredReservationReference.activity)
+    var reservation: StoredReservationReference?
 
     init(
         id: UUID,
@@ -86,7 +88,8 @@ final class StoredActivity {
         note: String?,
         progressRawValue: String = ActivityProgress.planned.rawValue,
         progressUpdatedAt: Date? = nil,
-        place: StoredPlaceSnapshot?
+        place: StoredPlaceSnapshot?,
+        reservation: StoredReservationReference? = nil
     ) {
         self.id = id
         self.sequence = sequence
@@ -98,6 +101,34 @@ final class StoredActivity {
         self.progressRawValue = progressRawValue
         self.progressUpdatedAt = progressUpdatedAt
         self.place = place
+        self.reservation = reservation
+    }
+}
+
+@Model
+final class StoredReservationReference {
+    var id: UUID = UUID()
+    var kindRawValue: String = ReservationKind.other.rawValue
+    var title: String = ""
+    var confirmationCode: String?
+    var urlString: String?
+    var note: String?
+    var activity: StoredActivity?
+
+    init(
+        id: UUID,
+        kindRawValue: String,
+        title: String,
+        confirmationCode: String?,
+        urlString: String?,
+        note: String?
+    ) {
+        self.id = id
+        self.kindRawValue = kindRawValue
+        self.title = title
+        self.confirmationCode = confirmationCode
+        self.urlString = urlString
+        self.note = note
     }
 }
 
@@ -216,6 +247,7 @@ enum TripMapStore {
         StoredTrip.self,
         StoredDay.self,
         StoredActivity.self,
+        StoredReservationReference.self,
         StoredTravelLegPreference.self,
         StoredPlaceSnapshot.self,
         StoredParticipant.self,
@@ -326,6 +358,7 @@ extension StoredTrip {
         let desiredDayIDs = Set(trip.days.map(\.id))
         let desiredActivityIDs = Set(trip.days.flatMap(\.activities).map(\.id))
         var placesToDelete: [StoredPlaceSnapshot] = []
+        var reservationsToDelete: [StoredReservationReference] = []
 
         title = trip.title
         startDateCode = LocalDate(date: trip.dateRange.lowerBound, timeZone: timeZone).code
@@ -388,6 +421,21 @@ extension StoredTrip {
                     case (nil, nil):
                         break
                     }
+                    switch (domainActivity.reservation, storedActivity.reservation) {
+                    case let (domainReservation?, storedReservation?)
+                        where domainReservation.id == storedReservation.id:
+                        storedReservation.apply(domainReservation)
+                    case let (domainReservation?, storedReservation?):
+                        reservationsToDelete.append(storedReservation)
+                        storedActivity.reservation = StoredReservationReference(snapshot: domainReservation)
+                    case let (domainReservation?, nil):
+                        storedActivity.reservation = StoredReservationReference(snapshot: domainReservation)
+                    case (nil, let storedReservation?):
+                        reservationsToDelete.append(storedReservation)
+                        storedActivity.reservation = nil
+                    case (nil, nil):
+                        break
+                    }
                     return storedActivity
                 }
                 return StoredActivity(snapshot: domainActivity, dayDate: domainDay.date, timeZone: timeZone)
@@ -405,6 +453,9 @@ extension StoredTrip {
         }
         for place in placesToDelete {
             modelContext.delete(place)
+        }
+        for reservation in reservationsToDelete {
+            modelContext.delete(reservation)
         }
         for preference in priorTravelLegPreferences where !desiredPreferenceIDs.contains(preference.snapshotID) {
             modelContext.delete(preference)
@@ -518,7 +569,8 @@ private extension StoredActivity {
             note: activity.note,
             progressRawValue: activity.progress.rawValue,
             progressUpdatedAt: activity.progressUpdatedAt,
-            place: activity.place.map(StoredPlaceSnapshot.init(snapshot:))
+            place: activity.place.map(StoredPlaceSnapshot.init(snapshot:)),
+            reservation: activity.reservation.map(StoredReservationReference.init(snapshot:))
         )
     }
 
@@ -535,6 +587,13 @@ private extension StoredActivity {
         } else {
             startTime = nil
         }
+        let reservationSnapshot: ReservationReference?
+        if let reservation {
+            guard let snapshot = reservation.snapshot else { return nil }
+            reservationSnapshot = snapshot
+        } else {
+            reservationSnapshot = nil
+        }
         return Activity(
             id: id,
             sequence: sequence,
@@ -545,8 +604,49 @@ private extension StoredActivity {
             note: note,
             place: place?.snapshot,
             progress: progress,
-            progressUpdatedAt: progressUpdatedAt
+            progressUpdatedAt: progressUpdatedAt,
+            reservation: reservationSnapshot
         )
+    }
+}
+
+private extension StoredReservationReference {
+    convenience init(snapshot reservation: ReservationReference) {
+        self.init(
+            id: reservation.id,
+            kindRawValue: reservation.kind.rawValue,
+            title: reservation.title,
+            confirmationCode: reservation.confirmationCode,
+            urlString: reservation.url?.absoluteString,
+            note: reservation.note
+        )
+    }
+
+    var snapshot: ReservationReference? {
+        guard let kind = ReservationKind(rawValue: kindRawValue) else { return nil }
+        let url: URL?
+        if let urlString {
+            guard let parsedURL = URL(string: urlString) else { return nil }
+            url = parsedURL
+        } else {
+            url = nil
+        }
+        return ReservationReference(
+            id: id,
+            kind: kind,
+            title: title,
+            confirmationCode: confirmationCode,
+            url: url,
+            note: note
+        )
+    }
+
+    func apply(_ reservation: ReservationReference) {
+        kindRawValue = reservation.kind.rawValue
+        title = reservation.title
+        confirmationCode = reservation.confirmationCode
+        urlString = reservation.url?.absoluteString
+        note = reservation.note
     }
 }
 

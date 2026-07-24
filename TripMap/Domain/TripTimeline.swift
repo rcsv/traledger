@@ -172,3 +172,52 @@ enum GuideTimelineProjection {
         return lhs.activity.sequence < rhs.activity.sequence
     }
 }
+
+enum GuideOnlineDependency: Hashable, Sendable {
+    case reservationLink(activityID: Activity.ID, reservationID: ReservationReference.ID)
+    case travelEstimate(TravelLegID)
+    case externalVenueImage(activityID: Activity.ID)
+}
+
+struct GuideOfflineReviewReport: Hashable, Sendable {
+    let activityCount: Int
+    let venueSnapshotCount: Int
+    let userImageCount: Int
+    let reservationCount: Int
+    let onlineDependencies: [GuideOnlineDependency]
+}
+
+enum GuideOfflineReview {
+    static func report(for trip: Trip) -> GuideOfflineReviewReport {
+        let activities = trip.orderedDays.flatMap(\.orderedActivities)
+        var dependencies: [GuideOnlineDependency] = []
+
+        for activity in activities {
+            if let reservation = activity.reservation, reservation.url != nil {
+                dependencies.append(
+                    .reservationLink(activityID: activity.id, reservationID: reservation.id)
+                )
+            }
+            if activity.place?.imageData == nil, activity.place?.externalImage != nil {
+                dependencies.append(.externalVenueImage(activityID: activity.id))
+            }
+        }
+
+        let preferences = Dictionary(
+            trip.travelLegPreferences.map { ($0.legID, $0) },
+            uniquingKeysWith: { _, latest in latest }
+        )
+        let legs = TravelLegProjection.activeLegs(for: trip, preferences: preferences)
+        dependencies.append(contentsOf: legs.compactMap { leg in
+            leg.manualDurationMinutes == nil ? .travelEstimate(leg.id) : nil
+        })
+
+        return GuideOfflineReviewReport(
+            activityCount: activities.count,
+            venueSnapshotCount: activities.compactMap(\.place).count,
+            userImageCount: activities.compactMap(\.place?.imageData).count,
+            reservationCount: activities.compactMap(\.reservation).count,
+            onlineDependencies: dependencies
+        )
+    }
+}

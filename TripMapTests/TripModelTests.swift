@@ -1360,6 +1360,158 @@ final class TripModelTests: XCTestCase {
         )
     }
 
+    func testReservationEditingNormalizesAndValidatesLocalReference() throws {
+        let trip = OkinawaSample.trip
+        let activityID = trip.days[0].activities[0].id
+        let reservationID = UUID()
+        let updated = try TripPlanEditor.setReservation(
+            in: trip,
+            activityID: activityID,
+            reservation: ReservationReference(
+                id: reservationID,
+                kind: .transport,
+                title: "  空港リムジン  ",
+                confirmationCode: "  BUS-2048  ",
+                url: try XCTUnwrap(URL(string: "https://example.com/reservations/BUS-2048")),
+                note: "  10分前に集合  "
+            )
+        )
+        let reservation = try XCTUnwrap(updated.days[0].activities[0].reservation)
+
+        XCTAssertEqual(reservation.id, reservationID)
+        XCTAssertEqual(reservation.title, "空港リムジン")
+        XCTAssertEqual(reservation.confirmationCode, "BUS-2048")
+        XCTAssertEqual(reservation.note, "10分前に集合")
+
+        XCTAssertThrowsError(
+            try TripPlanEditor.setReservation(
+                in: trip,
+                activityID: activityID,
+                reservation: ReservationReference(
+                    id: UUID(),
+                    kind: .other,
+                    title: " ",
+                    confirmationCode: nil,
+                    url: nil,
+                    note: nil
+                )
+            )
+        ) { error in
+            XCTAssertEqual(error as? TripPlanEditingError, .invalidReservationTitle)
+        }
+        XCTAssertThrowsError(
+            try TripPlanEditor.setReservation(
+                in: trip,
+                activityID: activityID,
+                reservation: ReservationReference(
+                    id: UUID(),
+                    kind: .other,
+                    title: "Unsafe",
+                    confirmationCode: nil,
+                    url: URL(string: "javascript:alert(1)"),
+                    note: nil
+                )
+            )
+        ) { error in
+            XCTAssertEqual(error as? TripPlanEditingError, .invalidReservationURL)
+        }
+    }
+
+    func testOfflineReviewSeparatesLocalContentFromOnlineEnhancements() throws {
+        var trip = OkinawaSample.trip
+        let activityID = trip.days[0].activities[0].id
+        let reservationID = UUID()
+        trip = try TripPlanEditor.setReservation(
+            in: trip,
+            activityID: activityID,
+            reservation: ReservationReference(
+                id: reservationID,
+                kind: .transport,
+                title: "Airport bus",
+                confirmationCode: "BUS-2048",
+                url: try XCTUnwrap(URL(string: "https://example.com/booking")),
+                note: nil
+            )
+        )
+        trip.days[1].activities[0].place?.externalImage = externalPlaceImage()
+        trip.days[1].activities[1].place?.imageData = Data([0x01, 0x02])
+        let activeLegs = TravelLegProjection.activeLegs(for: trip)
+        let manualLeg = try XCTUnwrap(activeLegs.first)
+        trip = try TripPlanEditor.setTravelLegPreference(
+            in: trip,
+            legID: manualLeg.id,
+            transportType: .walking,
+            manualDurationMinutes: 20,
+            note: nil
+        )
+
+        let report = GuideOfflineReview.report(for: trip)
+
+        XCTAssertEqual(report.activityCount, 10)
+        XCTAssertEqual(report.venueSnapshotCount, 8)
+        XCTAssertEqual(report.userImageCount, 1)
+        XCTAssertEqual(report.reservationCount, 1)
+        XCTAssertTrue(
+            report.onlineDependencies.contains(
+                .reservationLink(activityID: activityID, reservationID: reservationID)
+            )
+        )
+        XCTAssertTrue(
+            report.onlineDependencies.contains(
+                .externalVenueImage(activityID: trip.days[1].activities[0].id)
+            )
+        )
+        XCTAssertFalse(report.onlineDependencies.contains(.travelEstimate(manualLeg.id)))
+        XCTAssertEqual(
+            report.onlineDependencies.compactMap {
+                if case let .travelEstimate(legID) = $0 { legID } else { nil }
+            }.count,
+            activeLegs.count - 1
+        )
+    }
+
+    @MainActor
+    func testStoredTripRoundTripsReservationReference() throws {
+        let container = try TripMapStore.makeContainer(inMemoryOnly: true)
+        let context = container.mainContext
+        let activityID = OkinawaSample.trip.days[0].activities[0].id
+        let reservationID = UUID()
+        let updated = try TripPlanEditor.setReservation(
+            in: OkinawaSample.trip,
+            activityID: activityID,
+            reservation: ReservationReference(
+                id: reservationID,
+                kind: .accommodation,
+                title: "瀬底の宿",
+                confirmationCode: "STAY-1024",
+                url: try XCTUnwrap(URL(string: "https://example.com/stay")),
+                note: "フロントで提示"
+            )
+        )
+        context.insert(try StoredTrip(validatingSnapshot: updated))
+        try context.save()
+
+        let reloadedContext = ModelContext(container)
+        let storedTrip = try XCTUnwrap(
+            try reloadedContext.fetch(FetchDescriptor<StoredTrip>()).first
+        )
+        let reloaded = try XCTUnwrap(storedTrip.snapshot)
+        let reservation = try XCTUnwrap(
+            reloaded.days.flatMap(\.activities).first(where: { $0.id == activityID })?.reservation
+        )
+        XCTAssertEqual(reservation.id, reservationID)
+        XCTAssertEqual(reservation.kind, .accommodation)
+        XCTAssertEqual(reservation.confirmationCode, "STAY-1024")
+        XCTAssertEqual(reservation.url?.absoluteString, "https://example.com/stay")
+
+        reloadedContext.delete(storedTrip)
+        try reloadedContext.save()
+        XCTAssertEqual(
+            try reloadedContext.fetchCount(FetchDescriptor<StoredReservationReference>()),
+            0
+        )
+    }
+
     @MainActor
     func testParticipantRoundTripUsesLocalStore() throws {
         let container = try TripMapStore.makeContainer(inMemoryOnly: true)

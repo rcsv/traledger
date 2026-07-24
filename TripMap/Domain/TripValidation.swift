@@ -8,6 +8,7 @@ enum TripValidationIssue: Equatable, Sendable {
     case invalidActivitySequence(Day.ID)
     case invalidActivityDuration(Activity.ID)
     case invalidActivityProgress(Activity.ID)
+    case invalidReservationReference(Activity.ID)
     case invalidCoordinate(Activity.ID)
     case invalidTravelLegPreference(TravelLegID)
 }
@@ -55,6 +56,21 @@ extension Trip {
                 }
                 if (activity.progress == .planned) != (activity.progressUpdatedAt == nil) {
                     issues.append(.invalidActivityProgress(activity.id))
+                }
+                if let reservation = activity.reservation {
+                    let title = reservation.title.trimmingCharacters(in: .whitespacesAndNewlines)
+                    let code = reservation.confirmationCode?.trimmingCharacters(in: .whitespacesAndNewlines)
+                    let note = reservation.note?.trimmingCharacters(in: .whitespacesAndNewlines)
+                    let hasValidURL = reservation.url.map {
+                        $0.scheme?.lowercased() == "https" && $0.host != nil
+                    } ?? true
+                    if title.isEmpty
+                        || title != reservation.title
+                        || (reservation.confirmationCode != nil && (code?.isEmpty != false || code != reservation.confirmationCode))
+                        || (reservation.note != nil && (note?.isEmpty != false || note != reservation.note))
+                        || !hasValidURL {
+                        issues.append(.invalidReservationReference(activity.id))
+                    }
                 }
                 guard let place = activity.place else { continue }
                 if !place.latitude.isFinite

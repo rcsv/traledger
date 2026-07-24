@@ -663,6 +663,12 @@ Reservation は Activity に任意で結び付く参照情報とする。
 メール自動解析や Wallet 連携から始めない。まずユーザーが安全に保存し、Guide ですぐ開ける体験を作る。
 confirmation code は通知や Widget に無条件表示しない。
 
+2026-07-24 時点で Activity に一件の `ReservationReference` を持つ最小 Domain と
+`StoredReservationReference` を実装した。種類、予約名、confirmation code、HTTPS URL、メモを
+Activity Quick Edit から保存し、Card に予約名を表示する。空白正規化、安全でない URL の拒否、
+SwiftData round-trip、cascade ownership の境界は
+[`ADR 0007`](adr/0007-reservation-offline-boundary.md) を正とする。
+
 ## 13. Apple フレームワーク採用方針
 
 ### 13.1 現在の中核
@@ -789,6 +795,10 @@ SwiftData は CloudKit entitlement と互換 schema があれば同期へ接続�
 - Checklist
 - Participant
 - 保存済み予約参照
+
+Guide の「オフライン確認」は、上記ローカル件数を表示し、通信が必要な MapKit 移動推定、
+外部 Venue 画像、予約 Web リンクだけを付加情報として列挙する。これは reachability 判定や
+エラー表示ではなく、通信不能でも何が残るかを旅行前に確認する決定論 projection である。
 
 ### 16.2 オンライン付加情報
 
@@ -1178,9 +1188,9 @@ platform expansion 記録として分離する。
 
 - Now / Next — pure Domain projection、Today 初期選択、Summary / Card 表示を実装済み。実画面 gate は保留
 - completed / skipped — Domain、SwiftData 永続化、Guide Quick Edit / Card 表示を実装済み
-- reservation reference
+- reservation reference — Activity Domain、SwiftData、Quick Edit、Card 表示を実装済み
 - local notification
-- offline review
+- offline review — local inventory / online edge projection と Guide sheet を実装済み
 
 完了条件:
 
@@ -1236,9 +1246,9 @@ platform expansion 記録として分離する。
 
 次の実装担当者は、この順序で作業する。
 
-1. Guide の offline review と予約参照の最小 Domain を定義する。
-2. Travel Leg route detail の価値と表示範囲を、常時 polyline を避ける前提で定義する。
-3. Now / Next の実画面 viewport gate を、安定した Simulator が利用可能になった時点で再開する。
+1. Travel Leg route detail の価値と表示範囲を、常時 polyline を避ける前提で定義する。
+2. Guide の local notification を、ユーザーが明示設定した reminder だけに限定して設計する。
+3. Now / Next、Reservation、Offline review の実画面 viewport gate を、安定した Simulator が利用可能になった時点で再開する。
 
 Travel Leg calculation states、iPadOS adaptive workspace、Activity progress / iPhone Quick Edit
 第二段階、Travel Leg preference editor / explicit retry、Guide Now / Next pure projection は

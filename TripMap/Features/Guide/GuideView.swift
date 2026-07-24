@@ -18,6 +18,7 @@ struct GuideView: View {
     @State private var mode: Mode = .map
     @State private var quickEditTarget: GuideQuickEditTarget?
     @State private var travelLegEditTarget: TravelLegID?
+    @State private var isOfflineReviewPresented = false
     @State private var errorMessage: String?
     #if TRIPMAP_QA
     @State private var didOpenQuickEditFromLaunchArgument = false
@@ -68,6 +69,11 @@ struct GuideView: View {
             }
         }
         .toolbar {
+            Button("オフライン確認", systemImage: "checkmark.icloud") {
+                isOfflineReviewPresented = true
+            }
+            .accessibilityIdentifier("guide-offline-review-button")
+
             if usesRegularWorkspace,
                let selectedActivityID = interaction.selectedActivityID {
                 Button("選択した予定を編集", systemImage: "pencil") {
@@ -108,6 +114,9 @@ struct GuideView: View {
                     description: Text("シートを閉じて、もう一度お試しください。")
                 )
             }
+        }
+        .sheet(isPresented: $isOfflineReviewPresented) {
+            GuideOfflineReviewSheet(report: GuideOfflineReview.report(for: trip))
         }
         .alert("変更を保存できませんでした", isPresented: Binding(
             get: { errorMessage != nil },
@@ -379,7 +388,8 @@ struct GuideView: View {
         startTime: Date?,
         note: String?,
         place: PlaceSnapshot?,
-        progress: ActivityProgress
+        progress: ActivityProgress,
+        reservation: ReservationReference?
     ) -> Bool {
         guard let (activity, _) = activityAndDay(for: activityID) else {
             errorMessage = "編集対象の予定が見つかりませんでした。"
@@ -397,10 +407,15 @@ struct GuideView: View {
                 note: note,
                 place: place
             )
-            let updated = try TripPlanEditor.setActivityProgress(
+            let withProgress = try TripPlanEditor.setActivityProgress(
                 in: edited,
                 activityID: activityID,
                 progress: progress
+            )
+            let updated = try TripPlanEditor.setReservation(
+                in: withProgress,
+                activityID: activityID,
+                reservation: reservation
             )
             if let persistenceError = onApplyPlan(updated) {
                 errorMessage = persistenceError
@@ -463,6 +478,77 @@ struct GuideView: View {
         } catch {
             errorMessage = error.localizedDescription
             return false
+        }
+    }
+}
+
+private struct GuideOfflineReviewSheet: View {
+    let report: GuideOfflineReviewReport
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    Label("旅程本体はオフラインで閲覧できます", systemImage: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                    LabeledContent("Activity", value: "\(report.activityCount)")
+                    LabeledContent("保存済み場所", value: "\(report.venueSnapshotCount)")
+                    LabeledContent("ユーザー画像", value: "\(report.userImageCount)")
+                    LabeledContent("予約参照", value: "\(report.reservationCount)")
+                } header: {
+                    Text("端末内に保存済み")
+                }
+
+                Section {
+                    dependencyRow("移動時間の再取得", count: travelEstimateCount, systemImage: "point.topleft.down.to.point.bottomright.curvepath")
+                    dependencyRow("外部Venue画像", count: externalImageCount, systemImage: "photo.badge.arrow.down")
+                    dependencyRow("予約Webリンク", count: reservationLinkCount, systemImage: "link")
+                } header: {
+                    Text("通信が必要な付加情報")
+                } footer: {
+                    Text("通信できなくても、保存済みの旅程、場所、確認番号、メモは消えません。")
+                }
+            }
+            .navigationTitle("オフライン確認")
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("完了") { dismiss() }
+                }
+            }
+        }
+        .accessibilityIdentifier("guide-offline-review")
+    }
+
+    private var travelEstimateCount: Int {
+        report.onlineDependencies.filter {
+            if case .travelEstimate = $0 { true } else { false }
+        }.count
+    }
+
+    private var externalImageCount: Int {
+        report.onlineDependencies.filter {
+            if case .externalVenueImage = $0 { true } else { false }
+        }.count
+    }
+
+    private var reservationLinkCount: Int {
+        report.onlineDependencies.filter {
+            if case .reservationLink = $0 { true } else { false }
+        }.count
+    }
+
+    @ViewBuilder
+    private func dependencyRow(_ title: String, count: Int, systemImage: String) -> some View {
+        if count > 0 {
+            LabeledContent {
+                Text("\(count)件")
+            } label: {
+                Label(title, systemImage: systemImage)
+            }
+        } else {
+            Label("\(title)は準備済み", systemImage: "checkmark")
+                .foregroundStyle(.secondary)
         }
     }
 }
@@ -747,7 +833,7 @@ private struct GuideQuickEditSheet: View {
     let activity: Activity
     let day: Day
     let timeZoneIdentifier: String
-    let onSave: (Activity.ID, Date?, String?, PlaceSnapshot?, ActivityProgress) -> Bool
+    let onSave: (Activity.ID, Date?, String?, PlaceSnapshot?, ActivityProgress, ReservationReference?) -> Bool
 
     @Environment(\.dismiss) private var dismiss
     @State private var hasStartTime: Bool
@@ -755,13 +841,19 @@ private struct GuideQuickEditSheet: View {
     @State private var note: String
     @State private var place: PlaceSnapshot?
     @State private var progress: ActivityProgress
+    @State private var hasReservation: Bool
+    @State private var reservationKind: ReservationKind
+    @State private var reservationTitle: String
+    @State private var confirmationCode: String
+    @State private var reservationURL: String
+    @State private var reservationNote: String
     @State private var isVenueSearchPresented = false
 
     init(
         activity: Activity,
         day: Day,
         timeZoneIdentifier: String,
-        onSave: @escaping (Activity.ID, Date?, String?, PlaceSnapshot?, ActivityProgress) -> Bool
+        onSave: @escaping (Activity.ID, Date?, String?, PlaceSnapshot?, ActivityProgress, ReservationReference?) -> Bool
     ) {
         self.activity = activity
         self.day = day
@@ -772,6 +864,12 @@ private struct GuideQuickEditSheet: View {
         _note = State(initialValue: activity.note ?? "")
         _place = State(initialValue: activity.place)
         _progress = State(initialValue: activity.progress)
+        _hasReservation = State(initialValue: activity.reservation != nil)
+        _reservationKind = State(initialValue: activity.reservation?.kind ?? .other)
+        _reservationTitle = State(initialValue: activity.reservation?.title ?? "")
+        _confirmationCode = State(initialValue: activity.reservation?.confirmationCode ?? "")
+        _reservationURL = State(initialValue: activity.reservation?.url?.absoluteString ?? "")
+        _reservationNote = State(initialValue: activity.reservation?.note ?? "")
         #if TRIPMAP_QA
         _isVenueSearchPresented = State(
             initialValue: ProcessInfo.processInfo.arguments.contains("-tripmap-open-guide-venue-search")
@@ -822,6 +920,33 @@ private struct GuideQuickEditSheet: View {
                         .lineLimit(2...4)
                 }
 
+                Section("予約") {
+                    Toggle("予約参照を保存", isOn: $hasReservation)
+                    if hasReservation {
+                        Picker("種類", selection: $reservationKind) {
+                            ForEach(ReservationKind.allCases) { kind in
+                                Label(kind.displayName, systemImage: kind.systemImage)
+                                    .tag(kind)
+                            }
+                        }
+                        TextField("予約名", text: $reservationTitle)
+                        TextField("確認番号", text: $confirmationCode)
+                            .textInputAutocapitalization(.characters)
+                            .autocorrectionDisabled()
+                        TextField("https://", text: $reservationURL)
+                            .keyboardType(.URL)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                        if hasInvalidReservationURL {
+                            Label("HTTPSのWebリンクを入力してください", systemImage: "exclamationmark.triangle.fill")
+                                .font(.caption)
+                                .foregroundStyle(.red)
+                        }
+                        TextField("予約に関するメモ", text: $reservationNote, axis: .vertical)
+                            .lineLimit(2...4)
+                    }
+                }
+
                 Section("場所") {
                     if let place {
                         VStack(alignment: .leading, spacing: 3) {
@@ -853,10 +978,22 @@ private struct GuideQuickEditSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("保存") {
-                        if onSave(activity.id, editedStartTime, note, place, progress) {
+                        let reservation = hasReservation ? ReservationReference(
+                            id: activity.reservation?.id ?? UUID(),
+                            kind: reservationKind,
+                            title: reservationTitle,
+                            confirmationCode: confirmationCode,
+                            url: parsedReservationURL,
+                            note: reservationNote
+                        ) : nil
+                        if onSave(activity.id, editedStartTime, note, place, progress, reservation) {
                             dismiss()
                         }
                     }
+                    .disabled(hasReservation && (
+                        reservationTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                            || hasInvalidReservationURL
+                    ))
                     .accessibilityIdentifier("guide-quick-edit-save")
                 }
             }
@@ -868,6 +1005,22 @@ private struct GuideQuickEditSheet: View {
                 place = selectedPlace
             }
         }
+    }
+
+    private var parsedReservationURL: URL? {
+        let value = reservationURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !value.isEmpty,
+              let url = URL(string: value),
+              url.scheme?.lowercased() == "https",
+              url.host != nil else {
+            return nil
+        }
+        return url
+    }
+
+    private var hasInvalidReservationURL: Bool {
+        !reservationURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && parsedReservationURL == nil
     }
 }
 #endif

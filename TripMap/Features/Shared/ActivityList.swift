@@ -305,6 +305,14 @@ private struct ActivityCard: View {
                             .lineLimit(1)
                     }
 
+                    if let reservation = activity.reservation {
+                        Label(reservation.title, systemImage: reservation.kind.systemImage)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .accessibilityIdentifier("activity-reservation")
+                    }
+
                     if let note = activity.note {
                         Text(note)
                             .font(.subheadline)

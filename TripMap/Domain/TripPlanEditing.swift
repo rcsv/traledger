@@ -10,6 +10,8 @@ enum TripPlanEditingError: LocalizedError, Equatable {
     case invalidActivityDuration
     case invalidTravelLegDuration
     case invalidTravelLegReference
+    case invalidReservationTitle
+    case invalidReservationURL
     case invalidTimeZone
 
     var errorDescription: String? {
@@ -23,6 +25,8 @@ enum TripPlanEditingError: LocalizedError, Equatable {
         case .invalidActivityDuration: "所要時間は1分から24時間の範囲で入力してください。"
         case .invalidTravelLegDuration: "移動時間は1分から23時間59分の範囲で入力してください。"
         case .invalidTravelLegReference: "編集対象の移動区間が見つかりません。"
+        case .invalidReservationTitle: "予約名を入力してください。"
+        case .invalidReservationURL: "予約URLにはHTTPSのリンクを入力してください。"
         case .invalidTimeZone: "タイムゾーンを確認してください。"
         }
     }
@@ -179,6 +183,37 @@ enum TripPlanEditor {
         copy.days[dayIndex].activities[activityIndex].progress = progress
         copy.days[dayIndex].activities[activityIndex].progressUpdatedAt =
             progress == .planned ? nil : changeDate
+        return copy
+    }
+
+    static func setReservation(
+        in trip: Trip,
+        activityID: Activity.ID,
+        reservation: ReservationReference?
+    ) throws -> Trip {
+        guard let dayIndex = trip.days.firstIndex(where: { day in
+            day.activities.contains(where: { $0.id == activityID })
+        }), let activityIndex = trip.days[dayIndex].activities.firstIndex(where: { $0.id == activityID }) else {
+            throw TripPlanEditingError.activityNotFound
+        }
+
+        var normalizedReservation = reservation
+        if var reservation {
+            reservation.title = reservation.title.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !reservation.title.isEmpty else {
+                throw TripPlanEditingError.invalidReservationTitle
+            }
+            reservation.confirmationCode = normalizedOptionalText(reservation.confirmationCode)
+            reservation.note = normalizedOptionalText(reservation.note)
+            if let url = reservation.url,
+               (url.scheme?.lowercased() != "https" || url.host == nil) {
+                throw TripPlanEditingError.invalidReservationURL
+            }
+            normalizedReservation = reservation
+        }
+
+        var copy = trip
+        copy.days[dayIndex].activities[activityIndex].reservation = normalizedReservation
         return copy
     }
 
@@ -360,5 +395,10 @@ enum TripPlanEditor {
         guard durationMinutes.map({ (1...1_440).contains($0) }) ?? true else {
             throw TripPlanEditingError.invalidActivityDuration
         }
+    }
+
+    private static func normalizedOptionalText(_ value: String?) -> String? {
+        let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed?.isEmpty == false ? trimmed : nil
     }
 }

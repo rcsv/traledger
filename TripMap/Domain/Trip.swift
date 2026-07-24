@@ -92,6 +92,45 @@ enum ActivityProgress: String, CaseIterable, Identifiable, Codable, Sendable {
     }
 }
 
+enum ReservationKind: String, CaseIterable, Identifiable, Codable, Sendable {
+    case accommodation
+    case transport
+    case restaurant
+    case admission
+    case other
+
+    var id: Self { self }
+
+    var displayName: String {
+        switch self {
+        case .accommodation: "宿泊"
+        case .transport: "交通"
+        case .restaurant: "飲食店"
+        case .admission: "チケット"
+        case .other: "その他"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .accommodation: "bed.double.fill"
+        case .transport: "ticket.fill"
+        case .restaurant: "fork.knife"
+        case .admission: "qrcode"
+        case .other: "bookmark.fill"
+        }
+    }
+}
+
+struct ReservationReference: Identifiable, Hashable, Codable, Sendable {
+    let id: UUID
+    var kind: ReservationKind
+    var title: String
+    var confirmationCode: String?
+    var url: URL?
+    var note: String?
+}
+
 struct Activity: Identifiable, Hashable, Sendable {
     let id: UUID
     var sequence: Int
@@ -103,6 +142,7 @@ struct Activity: Identifiable, Hashable, Sendable {
     var place: PlaceSnapshot?
     var progress: ActivityProgress = .planned
     var progressUpdatedAt: Date? = nil
+    var reservation: ReservationReference? = nil
 }
 
 struct ExternalPlaceImage: Hashable, Sendable {
