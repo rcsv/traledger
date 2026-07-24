@@ -1225,11 +1225,15 @@ platform expansion 記録として分離する。
 
 ### P8 — Sync Research Gate
 
-- versioned schema
-- CloudKit compatibility
-- conflict test
-- image quota
-- account states
+- versioned schema — local V1 baseline と legacy store migration の証明が必要
+- CloudKit compatibility — 非 optional to-many relationship が現時点の blocker
+- conflict test — full-snapshot write を granular mutation へ改めてから三端末 matrix を実施
+- image quota — external storage に加えて encoded-byte ceiling / Trip inventory が必要
+- account states — local-first を維持して全 `CKAccountStatus` を扱う
+
+2026-07-24 の調査結果は [`ADR 0011`](adr/0011-sync-research-gate.md) と
+[`P8 Sync Research Gate Matrix`](qa/sync-research-gate-matrix.md) を正とする。CloudKit entitlement、
+container、server schema はまだ追加しない。
 
 完了条件:
 
@@ -1262,11 +1266,12 @@ platform expansion 記録として分離する。
 
 次の実装担当者は、この順序で作業する。
 
-1. P8 Sync Research Gate として、現行 SwiftData schema の versioning、migration、CloudKit compatibility、
-   conflict policy、画像 quota、account state を調査し、実装前 ADR と検証 matrix を確定する。
-2. Memory の PhotosPicker、保存、再表示、削除と Trip Card 集計を、安定した Simulator または実機で確認する。
-3. local reminder の permission / delivery / timezone change gate を、安定した Simulator または実機で確認する。
-4. Now / Next、Reservation、Offline review、Travel Leg route detail の実画面 viewport gate を、安定した Simulator が利用可能になった時点で再開する。
+1. ADR 0011 の Stage 1 として、現行 schema を local V1 `VersionedSchema` と migration plan へ載せ、
+   `cloudKitDatabase: .none` のまま既存 disk store の無損失 open/reopen test を追加する。
+2. Stage 2 の前提として、画像 encoder の encoded-byte ceiling と Trip-level byte inventory を実装する。
+3. Memory の PhotosPicker、保存、再表示、削除と Trip Card 集計を、安定した Simulator または実機で確認する。
+4. local reminder の permission / delivery / timezone change gate を、安定した Simulator または実機で確認する。
+5. Now / Next、Reservation、Offline review、Travel Leg route detail の実画面 viewport gate を、安定した Simulator が利用可能になった時点で再開する。
 
 Travel Leg calculation states、iPadOS adaptive workspace、Activity progress / iPhone Quick Edit
 第二段階、Travel Leg preference editor / explicit retry、Guide Now / Next pure projection、P7 Memory
