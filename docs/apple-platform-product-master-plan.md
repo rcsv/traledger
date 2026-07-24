@@ -298,6 +298,18 @@ Map を隠した場合、Activity 一覧がその幅を使う。空白を残さ�
 
 Map と一覧の選択状態は単一の `TripInteractionState` を通す。各 View が独自の選択状態を持たない。
 
+2026-07-24 実装記録:
+
+- iOS target の device family を iPhone / iPad universal に変更した。
+- Regular 幅の Guide を三列 `NavigationSplitView` とし、Day、Activity / Travel Leg、Map を並置した。
+- iPad Air 13-inch portrait では三列を同時表示し、iPad Pro 11-inch portrait では system が
+  Primary の Day 列だけを sidebar button へ収納して Activity と Map の実効幅を維持することを確認した。
+- Day、Activity、Map pin の選択は既存の単一 `TripInteractionState` を共有し、幅変更用の別状態を追加していない。
+- Compact 幅では従来の Day picker、Map / List 切替、下部 Quick Edit を維持し、
+  iPhone 17 Pro viewport で回帰確認した。
+- Mac がロック中で GUI 回転操作を行えなかったため landscape の実画面証跡は保留する。
+  ただし、折り畳み境界の両側は 11-inch / 13-inch portrait で確認済みであり、次工程の開始条件にはしない。
+
 #### Narrow Width
 
 - Sidebar を rail、その後 hidden へ段階的に変える。
@@ -1069,8 +1081,9 @@ Waiver:
   fallback・ユーザー画像優先・Accessibility XXL を代替証跡とする
 - 安定版または修正済み Xcode を取得できた時点で再確認してよいが、P1 以降の開始条件にはしない
 
-iPadOS target と adaptive workspace は現行 shipping target の Venue Image Gate から分離し、
-P1 以降の platform expansion Gate として扱う。
+iPadOS は universal target と adaptive Guide workspace を追加済みである。Venue Image Gate 自体は
+従来どおり macOS / iPhone の証跡で閉じ、iPad の Place Card 固有検証は adaptive workspace の
+platform expansion 記録として分離する。
 
 完了条件:
 
@@ -1117,10 +1130,10 @@ P1 以降の platform expansion Gate として扱う。
 
 ### P4 — Adaptive Workspace
 
-- expanded / rail / hidden
+- expanded / primary sidebar hidden — iPad の 13-inch / 11-inch portrait で実装・確認済み
 - macOS window width
-- iPad NavigationSplitView
-- compact collapse
+- iPad NavigationSplitView — Day / Activity / Map の三列を実装済み
+- compact collapse — iPhone の Day picker、Map / List、Quick Edit を回帰確認済み
 - keyboard / pointer
 
 完了条件:
@@ -1201,9 +1214,11 @@ P1 以降の platform expansion Gate として扱う。
 
 次の実装担当者は、この順序で作業する。
 
-1. leg row の calculation states と、取得不能でも崩れない表示を実装する。
-2. iPadOS adaptive workspace を追加し、iPad viewport を確認する。
-3. Activity の完了 / スキップ状態を Domain として定義し、iPhone quick edit の第二段階を実装する。
+1. Activity の完了 / スキップ状態を Domain として定義し、永続化・正規化・Doctor との境界を ADR に残す。
+2. iPhone quick edit の第二段階として、上記状態を片手で変更できる操作を追加する。
+3. Travel Leg の transport type と明示的な refresh / retry 操作を設計し、取得不能状態を維持したまま編集可能にする。
+
+Travel Leg calculation states と iPadOS adaptive workspace は 2026-07-24 に実装・代表 viewport 確認済み。
 
 新しい外部画像 provider、評価データ、独自サーバー、AI、CloudKit は、それぞれの Research Gate
 なしに開始しない。

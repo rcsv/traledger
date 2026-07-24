@@ -11,6 +11,7 @@ struct GuideView: View {
 
     let trip: Trip
     let onApplyPlan: (Trip) -> String?
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @StateObject private var travelLoad = TripTravelLoadModel()
     @State private var interaction: TripInteractionState
     @State private var mode: Mode = .map
@@ -46,68 +47,29 @@ struct GuideView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
+        Group {
             if trip.days.isEmpty {
-                ContentUnavailableView(
-                    "旅行日程がありません",
-                    systemImage: "calendar.badge.exclamationmark",
-                    description: Text("Tripには少なくとも1日が必要です。")
-                )
+                emptyState
+            } else if usesRegularWorkspace {
+                regularWorkspace
             } else {
-                DayPicker(days: trip.orderedDays, selectedDayID: selectedDayBinding)
-                    .padding(.vertical, 8)
-
-                Picker("表示", selection: $mode) {
-                    ForEach(Mode.allCases) { mode in
-                        Text(mode.rawValue).tag(mode)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .padding(.horizontal)
-                .padding(.bottom, 8)
-
-                if let selectedDay {
-                    ZStack {
-                        ActivityMap(
-                            day: selectedDay,
-                            selectedActivityID: interaction.selectedActivityID,
-                            cameraRequest: interaction.cameraRequest,
-                            onSelectMapActivity: selectActivityFromMap
-                        )
-                        .opacity(mode == .map ? 1 : 0)
-                        .allowsHitTesting(mode == .map)
-                        .accessibilityHidden(mode != .map)
-
-                        ActivityList(
-                            day: selectedDay,
-                            selectedActivityID: interaction.selectedActivityID,
-                            travelLegs: travelLoad.legs,
-                            onSelectActivity: selectActivityFromList,
-                            onEditActivity: presentQuickEdit
-                        )
-                        .opacity(mode == .list ? 1 : 0)
-                        .allowsHitTesting(mode == .list)
-                        .accessibilityHidden(mode != .list)
-                    }
-                }
+                compactWorkspace
             }
         }
         .navigationTitle(trip.title)
         .navigationBarTitleDisplayMode(.inline)
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            if let selectedActivityID = interaction.selectedActivityID {
-                Button {
+            if !usesRegularWorkspace {
+                compactQuickEditButton
+            }
+        }
+        .toolbar {
+            if usesRegularWorkspace,
+               let selectedActivityID = interaction.selectedActivityID {
+                Button("選択した予定を編集", systemImage: "pencil") {
                     presentQuickEdit(selectedActivityID)
-                } label: {
-                    Label("クイック編集", systemImage: "pencil")
-                        .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
-                .accessibilityIdentifier("guide-quick-edit-button")
-                .padding(.horizontal)
-                .padding(.vertical, 8)
-                .background(.regularMaterial)
+                .accessibilityIdentifier("guide-quick-edit-toolbar-button")
             }
         }
         .sheet(item: $quickEditTarget) { target in
@@ -155,6 +117,124 @@ struct GuideView: View {
             presentQuickEdit(selectedActivityID)
         }
         #endif
+    }
+
+    private var usesRegularWorkspace: Bool {
+        horizontalSizeClass == .regular
+    }
+
+    private var emptyState: some View {
+        ContentUnavailableView(
+            "旅行日程がありません",
+            systemImage: "calendar.badge.exclamationmark",
+            description: Text("Tripには少なくとも1日が必要です。")
+        )
+    }
+
+    private var compactWorkspace: some View {
+        VStack(spacing: 0) {
+            DayPicker(days: trip.orderedDays, selectedDayID: selectedDayBinding)
+                .padding(.vertical, 8)
+
+            Picker("表示", selection: $mode) {
+                ForEach(Mode.allCases) { mode in
+                    Text(mode.rawValue).tag(mode)
+                }
+            }
+            .pickerStyle(.segmented)
+            .padding(.horizontal)
+            .padding(.bottom, 8)
+
+            if let selectedDay {
+                ZStack {
+                    map(for: selectedDay)
+                        .opacity(mode == .map ? 1 : 0)
+                        .allowsHitTesting(mode == .map)
+                        .accessibilityHidden(mode != .map)
+
+                    activityList(for: selectedDay)
+                        .opacity(mode == .list ? 1 : 0)
+                        .allowsHitTesting(mode == .list)
+                        .accessibilityHidden(mode != .list)
+                }
+            }
+        }
+    }
+
+    private var regularWorkspace: some View {
+        NavigationSplitView {
+            List(selection: selectedDayBinding) {
+                ForEach(trip.orderedDays) { day in
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Day \(day.sequence)")
+                            .font(.headline)
+                        Text(day.title)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                    }
+                    .tag(day.id)
+                    .accessibilityLabel("Day \(day.sequence)、\(day.title)")
+                }
+            }
+            .navigationTitle(trip.title)
+            .navigationSplitViewColumnWidth(min: 180, ideal: 220, max: 280)
+            .accessibilityIdentifier("guide-day-sidebar")
+        } content: {
+            if let selectedDay {
+                activityList(for: selectedDay)
+                    .navigationTitle("Day \(selectedDay.sequence)")
+                    .navigationSplitViewColumnWidth(min: 300, ideal: 380, max: 480)
+                    .accessibilityIdentifier("guide-activity-column")
+            } else {
+                emptyState
+            }
+        } detail: {
+            if let selectedDay {
+                map(for: selectedDay)
+                    .accessibilityIdentifier("guide-map-column")
+            } else {
+                emptyState
+            }
+        }
+        .navigationSplitViewStyle(.balanced)
+    }
+
+    @ViewBuilder
+    private var compactQuickEditButton: some View {
+        if let selectedActivityID = interaction.selectedActivityID {
+            Button {
+                presentQuickEdit(selectedActivityID)
+            } label: {
+                Label("クイック編集", systemImage: "pencil")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+            .accessibilityIdentifier("guide-quick-edit-button")
+            .padding(.horizontal)
+            .padding(.vertical, 8)
+            .background(.regularMaterial)
+        }
+    }
+
+    private func activityList(for day: Day) -> some View {
+        ActivityList(
+            day: day,
+            selectedActivityID: interaction.selectedActivityID,
+            travelLegs: travelLoad.legs,
+            onSelectActivity: selectActivityFromList,
+            onEditActivity: presentQuickEdit
+        )
+    }
+
+    private func map(for day: Day) -> some View {
+        ActivityMap(
+            day: day,
+            selectedActivityID: interaction.selectedActivityID,
+            cameraRequest: interaction.cameraRequest,
+            onSelectMapActivity: selectActivityFromMap
+        )
     }
 
     private func selectActivityFromList(_ activityID: Activity.ID) {

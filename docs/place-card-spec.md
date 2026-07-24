@@ -45,7 +45,8 @@ Venue Card 上の Look Around、Wikimedia fallback、PhotosPicker ユーザー�
 | iPhone ユーザー画像優先 | Pass | QA 専用の永続化済み画像を持つ fixture で、選択画像が表示され Wikimedia 帰属が出ないことを実画面確認 |
 | iPhone Accessibility XXL | Pass | Accessibility Extra Extra Large で Venue 名、住所、Wikimedia 作者・license、Maps ボタンを省略せず表示。Card は縦方向へ適応 |
 | iPhone live Look Around | Waived | iOS 27 Simulator の渋谷は実行時に `nil` となり正常に Wikimedia へ fallback。iOS 17 Simulator は Xcode 27 beta が生成する SwiftData symbol の起動時リンクエラーで実行不能。安定版 Xcode を取得できないため、macOS live 経路と決定的テストを代替証跡として製品判断で waiver |
-| iPad | Deferred | 現行 project に iPadOS target がないため、adaptive workspace の target 追加時に別 Gate として確認 |
+| iPad adaptive workspace | Pass | universal target と三列 `NavigationSplitView` を追加。13-inch は Day / Activity / Map の三列、11-inch portrait は Day sidebar を自動収納して Activity / Map を維持 |
+| iPad Place Card 固有確認 | Deferred | adaptive workspace の選択連携は確認済み。Place Card の画像寸法・Dynamic Type・landscape は platform expansion の別 Gate で確認 |
 
 live smoke test は通常テストへ外部通信依存を持ち込まないよう、
 `OTHER_SWIFT_FLAGS='$(inherited) -D TRIPMAP_LIVE_VENUE_IMAGE_QA'` を指定した場合だけ
@@ -324,9 +325,11 @@ Apple の純正 Place Card に表示される写真は、公開 `MKMapItem` API 
 | macOS、カード本文幅 400 pt 未満 | `88 × 88 pt` の画像 | `ViewThatFits` がCompact表示へ切り替わることをレイアウト条件で確認 |
 | iPhone 17 Pro、標準文字サイズ | Compact | iOS 27 Simulatorで沖縄サンプルを直接表示して確認。Venue名、住所、順番、時刻、`Mapsで開く` が省略されない |
 | iPhone 17 Pro、Accessibility XXL | Compact | 住所が二行へ折り返され、カードが縦へ拡張する。`Mapsで開く` は完全表示を維持する |
+| iPad Pro 11-inch、portrait | Adaptive two-column | Primary の Day sidebar を system が収納し、Activity / Travel Leg と Map の実効幅、選択連携を維持 |
+| iPad Air 13-inch、portrait | Regular three-column | Day、Activity / Travel Leg、Map を同時表示し、選択 Activity と Map pin / Venue Card が一致 |
 
-iOSターゲットは現在iPhoneのみであり、iPadはサポート対象に含めない。iPhone上では画像編集を
-許可していないためアクションは `Mapsで開く` の一つ、macOS Plannerでは画像変更を加えた二つになる。
+iOSターゲットは iPhone / iPad universal とする。Guide の Venue Card では iPhone / iPad とも
+画像編集を許可しないためアクションは `Mapsで開く` の一つ、macOS Plannerでは画像変更を加えた二つになる。
 
 ネイティブ Place Card の sheet 高さ、閉じる操作、Dynamic Type は、該当 UI を採用しない決定により
 Research Gate の完了条件から除外した。Venue Card は電話、Web、営業時間と `場所の詳細` ボタンを
