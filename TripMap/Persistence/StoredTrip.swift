@@ -16,6 +16,8 @@ final class StoredTrip {
     var participantAssignments: [StoredTripParticipant] = []
     @Relationship(deleteRule: .cascade, inverse: \StoredChecklistItem.trip)
     var checklistItems: [StoredChecklistItem] = []
+    @Relationship(deleteRule: .cascade, inverse: \StoredTravelLegPreference.trip)
+    var travelLegPreferences: [StoredTravelLegPreference] = []
 
     init(
         id: UUID,
@@ -25,7 +27,8 @@ final class StoredTrip {
         timeZoneIdentifier: String,
         defaultCurrencyCode: String = "JPY",
         coverImageData: Data? = nil,
-        days: [StoredDay] = []
+        days: [StoredDay] = [],
+        travelLegPreferences: [StoredTravelLegPreference] = []
     ) {
         self.id = id
         self.title = title
@@ -35,6 +38,7 @@ final class StoredTrip {
         self.defaultCurrencyCode = defaultCurrencyCode
         self.coverImageData = coverImageData
         self.days = days
+        self.travelLegPreferences = travelLegPreferences
     }
 }
 
@@ -94,6 +98,33 @@ final class StoredActivity {
         self.progressRawValue = progressRawValue
         self.progressUpdatedAt = progressUpdatedAt
         self.place = place
+    }
+}
+
+@Model
+final class StoredTravelLegPreference {
+    var id: UUID = UUID()
+    var fromActivityID: UUID = UUID()
+    var toActivityID: UUID = UUID()
+    var transportTypeRawValue: String = TravelTransportType.automobile.rawValue
+    var manualDurationMinutes: Int?
+    var note: String?
+    var trip: StoredTrip?
+
+    init(
+        id: UUID = UUID(),
+        fromActivityID: UUID,
+        toActivityID: UUID,
+        transportTypeRawValue: String,
+        manualDurationMinutes: Int?,
+        note: String?
+    ) {
+        self.id = id
+        self.fromActivityID = fromActivityID
+        self.toActivityID = toActivityID
+        self.transportTypeRawValue = transportTypeRawValue
+        self.manualDurationMinutes = manualDurationMinutes
+        self.note = note
     }
 }
 
@@ -185,6 +216,7 @@ enum TripMapStore {
         StoredTrip.self,
         StoredDay.self,
         StoredActivity.self,
+        StoredTravelLegPreference.self,
         StoredPlaceSnapshot.self,
         StoredParticipant.self,
         StoredTripParticipant.self,
@@ -236,7 +268,8 @@ extension StoredTrip {
             timeZoneIdentifier: timeZone.identifier,
             defaultCurrencyCode: trip.defaultCurrencyCode,
             coverImageData: trip.coverImageData,
-            days: trip.days.map { StoredDay(snapshot: $0, timeZone: timeZone) }
+            days: trip.days.map { StoredDay(snapshot: $0, timeZone: timeZone) },
+            travelLegPreferences: trip.travelLegPreferences.map(StoredTravelLegPreference.init(snapshot:))
         )
     }
 
@@ -249,7 +282,9 @@ extension StoredTrip {
         }
 
         let snapshots = days.compactMap { $0.snapshot(timeZone: timeZone) }
-        guard snapshots.count == days.count else { return nil }
+        let preferenceSnapshots = travelLegPreferences.compactMap(\.snapshot)
+        guard snapshots.count == days.count,
+              preferenceSnapshots.count == travelLegPreferences.count else { return nil }
         let trip = Trip(
             id: id,
             title: title,
@@ -257,7 +292,8 @@ extension StoredTrip {
             timeZoneIdentifier: timeZoneIdentifier,
             defaultCurrencyCode: defaultCurrencyCode,
             coverImageData: coverImageData,
-            days: snapshots
+            days: snapshots,
+            travelLegPreferences: preferenceSnapshots
         )
         do {
             try trip.validateForPersistence()
@@ -272,6 +308,7 @@ extension StoredTrip {
         let timeZone = try trip.persistenceTimeZone()
         let priorDays = days
         let priorActivities = priorDays.flatMap(\.activities)
+        let priorTravelLegPreferences = travelLegPreferences
         var existingDays: [UUID: StoredDay] = [:]
         var existingActivities: [UUID: StoredActivity] = [:]
         var originalDayIDByActivityID: [UUID: UUID] = [:]
@@ -296,6 +333,24 @@ extension StoredTrip {
         timeZoneIdentifier = timeZone.identifier
         defaultCurrencyCode = trip.defaultCurrencyCode
         coverImageData = trip.coverImageData
+
+        var existingPreferences: [TravelLegID: StoredTravelLegPreference] = [:]
+        for preference in priorTravelLegPreferences {
+            let legID = TravelLegID(
+                fromActivityID: preference.fromActivityID,
+                toActivityID: preference.toActivityID
+            )
+            guard existingPreferences.updateValue(preference, forKey: legID) == nil else {
+                throw TripPersistenceError.duplicateIdentifier
+            }
+        }
+        let desiredPreferenceIDs = Set(trip.travelLegPreferences.map(\.legID))
+        travelLegPreferences = trip.travelLegPreferences.map { domainPreference in
+            let storedPreference = existingPreferences[domainPreference.legID]
+                ?? StoredTravelLegPreference(snapshot: domainPreference)
+            storedPreference.apply(domainPreference)
+            return storedPreference
+        }
 
         days = trip.days.map { domainDay in
             let storedDay = existingDays[domainDay.id] ?? StoredDay(
@@ -351,6 +406,9 @@ extension StoredTrip {
         for place in placesToDelete {
             modelContext.delete(place)
         }
+        for preference in priorTravelLegPreferences where !desiredPreferenceIDs.contains(preference.snapshotID) {
+            modelContext.delete(preference)
+        }
     }
 }
 
@@ -390,6 +448,42 @@ private extension Trip {
                 }
             }
         }
+    }
+}
+
+private extension StoredTravelLegPreference {
+    convenience init(snapshot preference: TravelLegPreference) {
+        self.init(
+            fromActivityID: preference.legID.fromActivityID,
+            toActivityID: preference.legID.toActivityID,
+            transportTypeRawValue: preference.transportType.rawValue,
+            manualDurationMinutes: preference.manualDurationMinutes,
+            note: preference.note
+        )
+    }
+
+    var snapshotID: TravelLegID {
+        TravelLegID(fromActivityID: fromActivityID, toActivityID: toActivityID)
+    }
+
+    var snapshot: TravelLegPreference? {
+        guard let transportType = TravelTransportType(rawValue: transportTypeRawValue) else {
+            return nil
+        }
+        return TravelLegPreference(
+            legID: snapshotID,
+            transportType: transportType,
+            manualDurationMinutes: manualDurationMinutes,
+            note: note
+        )
+    }
+
+    func apply(_ preference: TravelLegPreference) {
+        fromActivityID = preference.legID.fromActivityID
+        toActivityID = preference.legID.toActivityID
+        transportTypeRawValue = preference.transportType.rawValue
+        manualDurationMinutes = preference.manualDurationMinutes
+        note = preference.note
     }
 }
 

@@ -740,6 +740,90 @@ final class TripModelTests: XCTestCase {
         XCTAssertEqual(staleLeg.effectiveDuration?.source, .staleMapKit)
     }
 
+    func testTravelLegPreferenceEditingNormalizesAndClearsDefaultIntent() throws {
+        let trip = OkinawaSample.trip
+        let legID = try XCTUnwrap(TravelLegProjection.activeLegs(for: trip).first?.id)
+
+        let edited = try TripPlanEditor.setTravelLegPreference(
+            in: trip,
+            legID: legID,
+            transportType: .walking,
+            manualDurationMinutes: 18,
+            note: "  北口で集合  "
+        )
+        XCTAssertEqual(
+            edited.travelLegPreferences,
+            [
+                TravelLegPreference(
+                    legID: legID,
+                    transportType: .walking,
+                    manualDurationMinutes: 18,
+                    note: "北口で集合"
+                )
+            ]
+        )
+
+        let cleared = try TripPlanEditor.setTravelLegPreference(
+            in: edited,
+            legID: legID,
+            transportType: .automobile,
+            manualDurationMinutes: nil,
+            note: "  "
+        )
+        XCTAssertTrue(cleared.travelLegPreferences.isEmpty)
+    }
+
+    func testTravelLegPreferenceRejectsCrossDayAndInvalidDuration() throws {
+        let trip = OkinawaSample.trip
+        let crossDayID = TravelLegID(
+            fromActivityID: trip.orderedDays[0].orderedActivities[0].id,
+            toActivityID: trip.orderedDays[1].orderedActivities[0].id
+        )
+        XCTAssertThrowsError(
+            try TripPlanEditor.setTravelLegPreference(
+                in: trip,
+                legID: crossDayID,
+                transportType: .transit,
+                manualDurationMinutes: nil,
+                note: nil
+            )
+        ) {
+            XCTAssertEqual($0 as? TripPlanEditingError, .invalidTravelLegReference)
+        }
+
+        let legID = try XCTUnwrap(TravelLegProjection.activeLegs(for: trip).first?.id)
+        XCTAssertThrowsError(
+            try TripPlanEditor.setTravelLegPreference(
+                in: trip,
+                legID: legID,
+                transportType: .other,
+                manualDurationMinutes: 1_440,
+                note: nil
+            )
+        ) {
+            XCTAssertEqual($0 as? TripPlanEditingError, .invalidTravelLegDuration)
+        }
+    }
+
+    func testDeletingActivityDeletesReferencingTravelLegPreferences() throws {
+        let trip = OkinawaSample.trip
+        let legID = try XCTUnwrap(TravelLegProjection.activeLegs(for: trip).first?.id)
+        let edited = try TripPlanEditor.setTravelLegPreference(
+            in: trip,
+            legID: legID,
+            transportType: .transit,
+            manualDurationMinutes: nil,
+            note: nil
+        )
+
+        let deleted = try TripPlanEditor.deleteActivity(
+            in: edited,
+            activityID: legID.toActivityID
+        )
+
+        XCTAssertTrue(deleted.travelLegPreferences.isEmpty)
+    }
+
     func testAdversarialFixturesCoverEmptyOverlapAndDensity() {
         XCTAssertTrue(PrototypeEdgeCases.emptyDayTrip.days[0].activities.isEmpty)
         XCTAssertTrue(PrototypeEdgeCases.noPlaceTrip.days[0].activities.allSatisfy { $0.place == nil })
@@ -1302,6 +1386,36 @@ final class TripModelTests: XCTestCase {
         )
         XCTAssertEqual(activity.progress, .skipped)
         XCTAssertEqual(activity.progressUpdatedAt, changeDate)
+    }
+
+    @MainActor
+    func testStoredTripRoundTripsOnlyTravelLegUserIntent() throws {
+        let container = try TripMapStore.makeContainer(inMemoryOnly: true)
+        let context = container.mainContext
+        let legID = try XCTUnwrap(TravelLegProjection.activeLegs(for: OkinawaSample.trip).first?.id)
+        let updated = try TripPlanEditor.setTravelLegPreference(
+            in: OkinawaSample.trip,
+            legID: legID,
+            transportType: .transit,
+            manualDurationMinutes: 42,
+            note: "駅で乗り換え"
+        )
+        let storedTrip = try StoredTrip(validatingSnapshot: updated)
+        context.insert(storedTrip)
+        try context.save()
+
+        let reloadedContext = ModelContext(container)
+        let fetched = try XCTUnwrap(
+            try reloadedContext.fetch(FetchDescriptor<StoredTrip>()).first
+        )
+        let snapshot = try XCTUnwrap(fetched.snapshot)
+
+        XCTAssertEqual(snapshot.travelLegPreferences, updated.travelLegPreferences)
+        XCTAssertEqual(fetched.travelLegPreferences.count, 1)
+        XCTAssertEqual(
+            try reloadedContext.fetchCount(FetchDescriptor<StoredTravelLegPreference>()),
+            1
+        )
     }
 
     @MainActor

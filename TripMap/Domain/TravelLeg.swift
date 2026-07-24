@@ -1,22 +1,46 @@
 import Foundation
 
-enum TravelTransportType: String, CaseIterable, Hashable, Sendable {
+enum TravelTransportType: String, CaseIterable, Identifiable, Hashable, Codable, Sendable {
     case automobile
     case walking
     case transit
     case other
+
+    var id: Self { self }
+
+    var displayName: String {
+        switch self {
+        case .automobile: "車"
+        case .walking: "徒歩"
+        case .transit: "公共交通"
+        case .other: "その他"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .automobile: "car.fill"
+        case .walking: "figure.walk"
+        case .transit: "tram.fill"
+        case .other: "arrow.right"
+        }
+    }
 }
 
-struct TravelLegID: Hashable, Sendable {
+struct TravelLegID: Identifiable, Hashable, Codable, Sendable {
     let fromActivityID: Activity.ID
     let toActivityID: Activity.ID
+
+    var id: Self { self }
 }
 
-struct TravelLegPreference: Hashable, Sendable {
+struct TravelLegPreference: Identifiable, Hashable, Codable, Sendable {
     let legID: TravelLegID
     var transportType: TravelTransportType
     var manualDurationMinutes: Int?
     var note: String?
+
+    var id: TravelLegID { legID }
 }
 
 struct TravelLegRoutingFingerprint: Hashable, Sendable {

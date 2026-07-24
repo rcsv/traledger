@@ -81,6 +81,17 @@ private enum DebugFixtureSeeder {
             fixture.days[0].activities[1].progress = .skipped
             fixture.days[0].activities[1].progressUpdatedAt = Date(timeIntervalSince1970: 1_800_000_060)
         }
+        if ProcessInfo.processInfo.arguments.contains("-tripmap-travel-leg-preference-qa"),
+           let legID = TravelLegProjection.activeLegs(for: fixture).first?.id {
+            fixture.travelLegPreferences = [
+                TravelLegPreference(
+                    legID: legID,
+                    transportType: .transit,
+                    manualDurationMinutes: 42,
+                    note: "駅で乗り換え"
+                )
+            ]
+        }
 
         let fixtureID = fixture.id
         let descriptor = FetchDescriptor<StoredTrip>(

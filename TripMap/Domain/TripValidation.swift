@@ -9,6 +9,7 @@ enum TripValidationIssue: Equatable, Sendable {
     case invalidActivityDuration(Activity.ID)
     case invalidActivityProgress(Activity.ID)
     case invalidCoordinate(Activity.ID)
+    case invalidTravelLegPreference(TravelLegID)
 }
 
 extension Trip {
@@ -35,6 +36,7 @@ extension Trip {
         }
 
         var seenDates: Set<Date> = []
+        var dayIDByActivityID: [Activity.ID: Day.ID] = [:]
         for day in days {
             if !dateRange.contains(day.date) {
                 issues.append(.dayOutsideTripRange(day.id))
@@ -46,6 +48,7 @@ extension Trip {
                 issues.append(.invalidActivitySequence(day.id))
             }
             for activity in day.activities {
+                dayIDByActivityID[activity.id] = day.id
                 if let durationMinutes = activity.durationMinutes,
                    !(1...1_440).contains(durationMinutes) {
                     issues.append(.invalidActivityDuration(activity.id))
@@ -60,6 +63,27 @@ extension Trip {
                     || !(-180...180).contains(place.longitude) {
                     issues.append(.invalidCoordinate(activity.id))
                 }
+            }
+        }
+
+        var seenLegIDs: Set<TravelLegID> = []
+        for preference in travelLegPreferences {
+            let legID = preference.legID
+            let trimmedNote = preference.note?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let isDefault = preference.transportType == .automobile
+                && preference.manualDurationMinutes == nil
+                && trimmedNote == nil
+            let isValidDuration = preference.manualDurationMinutes.map { (1...1_439).contains($0) } ?? true
+            let isSameDay = dayIDByActivityID[legID.fromActivityID] != nil
+                && dayIDByActivityID[legID.fromActivityID] == dayIDByActivityID[legID.toActivityID]
+            let hasNormalizedNote = preference.note == nil || (trimmedNote?.isEmpty == false && preference.note == trimmedNote)
+            if legID.fromActivityID == legID.toActivityID
+                || !seenLegIDs.insert(legID).inserted
+                || !isSameDay
+                || !isValidDuration
+                || !hasNormalizedNote
+                || isDefault {
+                issues.append(.invalidTravelLegPreference(legID))
             }
         }
 

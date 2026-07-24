@@ -10,6 +10,7 @@ struct ActivityList: View {
     let onEditActivity: ((Activity.ID) -> Void)?
     let onDeleteActivity: ((Activity.ID) -> Void)?
     let onMoveActivity: ((Activity.ID, Activity.ID) -> Void)?
+    let onEditTravelLeg: ((TravelLegID) -> Void)?
 
     init(
         day: Day,
@@ -20,7 +21,8 @@ struct ActivityList: View {
         onAddActivity: (() -> Void)? = nil,
         onEditActivity: ((Activity.ID) -> Void)? = nil,
         onDeleteActivity: ((Activity.ID) -> Void)? = nil,
-        onMoveActivity: ((Activity.ID, Activity.ID) -> Void)? = nil
+        onMoveActivity: ((Activity.ID, Activity.ID) -> Void)? = nil,
+        onEditTravelLeg: ((TravelLegID) -> Void)? = nil
     ) {
         self.day = day
         self.selectedActivityID = selectedActivityID
@@ -31,6 +33,7 @@ struct ActivityList: View {
         self.onEditActivity = onEditActivity
         self.onDeleteActivity = onDeleteActivity
         self.onMoveActivity = onMoveActivity
+        self.onEditTravelLeg = onEditTravelLeg
     }
 
     var body: some View {
@@ -93,7 +96,10 @@ struct ActivityList: View {
                                     TravelLegRow(
                                         leg: leg,
                                         fromActivity: activity,
-                                        toActivity: nextActivity
+                                        toActivity: nextActivity,
+                                        onEdit: onEditTravelLeg.map { edit in
+                                            { edit(leg.id) }
+                                        }
                                     )
                                 }
                             }
@@ -146,10 +152,23 @@ private struct TravelLegRow: View {
     let leg: TravelLeg
     let fromActivity: Activity
     let toActivity: Activity
+    let onEdit: (() -> Void)?
 
     var body: some View {
+        if let onEdit {
+            Button(action: onEdit) {
+                content
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint("移動手段、手動所要時間、メモを編集")
+        } else {
+            content
+        }
+    }
+
+    private var content: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Image(systemName: transportSystemImage)
+            Image(systemName: leg.transportType.systemImage)
                 .frame(width: 22)
                 .accessibilityHidden(true)
 
@@ -199,21 +218,7 @@ private struct TravelLegRow: View {
     }
 
     private var transportLabel: String {
-        switch leg.transportType {
-        case .automobile: "車"
-        case .walking: "徒歩"
-        case .transit: "公共交通"
-        case .other: "その他の移動"
-        }
-    }
-
-    private var transportSystemImage: String {
-        switch leg.transportType {
-        case .automobile: "car.fill"
-        case .walking: "figure.walk"
-        case .transit: "tram.fill"
-        case .other: "arrow.right"
-        }
+        leg.transportType == .other ? "その他の移動" : leg.transportType.displayName
     }
 
     private func formattedDuration(_ minutes: Int) -> String {

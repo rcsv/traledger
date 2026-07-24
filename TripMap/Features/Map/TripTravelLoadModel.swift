@@ -25,7 +25,11 @@ final class TripTravelLoadModel: ObservableObject {
         #if TRIPMAP_QA
         if ProcessInfo.processInfo.arguments.contains("-tripmap-travel-leg-qa") {
             let now = Date()
-            let projectedLegs = TravelLegProjection.activeLegs(for: trip, now: now)
+            let projectedLegs = TravelLegProjection.activeLegs(
+                for: trip,
+                preferences: preferences(for: trip),
+                now: now
+            )
             calculations = Dictionary(
                 uniqueKeysWithValues: projectedLegs.enumerated().map { index, leg in
                     let state: TravelLegCalculationState = index == 0
@@ -41,6 +45,7 @@ final class TripTravelLoadModel: ObservableObject {
 
         let projectedLegs = TravelLegProjection.activeLegs(
             for: trip,
+            preferences: preferences(for: trip),
             calculations: calculations
         )
         let activeFingerprints = Set(projectedLegs.map(\.routingFingerprint))
@@ -85,10 +90,30 @@ final class TripTravelLoadModel: ObservableObject {
         }
     }
 
+    func retry(_ legID: TravelLegID, for trip: Trip) {
+        guard let leg = TravelLegProjection.activeLegs(
+            for: trip,
+            preferences: preferences(for: trip),
+            calculations: calculations
+        ).first(where: { $0.id == legID }) else {
+            return
+        }
+        calculations[leg.routingFingerprint] = .idle
+        refresh(for: trip)
+    }
+
     private func publishLegs(for trip: Trip) {
         legs = TravelLegProjection.activeLegs(
             for: trip,
+            preferences: preferences(for: trip),
             calculations: calculations
+        )
+    }
+
+    private func preferences(for trip: Trip) -> [TravelLegID: TravelLegPreference] {
+        Dictionary(
+            trip.travelLegPreferences.map { ($0.legID, $0) },
+            uniquingKeysWith: { _, latest in latest }
         )
     }
 

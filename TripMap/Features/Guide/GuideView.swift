@@ -16,9 +16,11 @@ struct GuideView: View {
     @State private var interaction: TripInteractionState
     @State private var mode: Mode = .map
     @State private var quickEditTarget: GuideQuickEditTarget?
+    @State private var travelLegEditTarget: TravelLegID?
     @State private var errorMessage: String?
     #if TRIPMAP_QA
     @State private var didOpenQuickEditFromLaunchArgument = false
+    @State private var didOpenTravelLegEditFromLaunchArgument = false
     #endif
 
     init(
@@ -88,6 +90,23 @@ struct GuideView: View {
                 )
             }
         }
+        .sheet(item: $travelLegEditTarget) { legID in
+            if let (leg, fromActivity, toActivity) = legAndActivities(for: legID) {
+                TravelLegEditSheet(
+                    leg: leg,
+                    fromActivityTitle: fromActivity.title,
+                    toActivityTitle: toActivity.title,
+                    onSave: updateTravelLeg,
+                    onRetry: retryTravelLeg
+                )
+            } else {
+                ContentUnavailableView(
+                    "移動区間を読み込めません",
+                    systemImage: "arrow.trianglehead.swap",
+                    description: Text("シートを閉じて、もう一度お試しください。")
+                )
+            }
+        }
         .alert("変更を保存できませんでした", isPresented: Binding(
             get: { errorMessage != nil },
             set: { if !$0 { errorMessage = nil } }
@@ -115,6 +134,22 @@ struct GuideView: View {
             }
             didOpenQuickEditFromLaunchArgument = true
             presentQuickEdit(selectedActivityID)
+        }
+        .task(id: travelLoad.legs) {
+            let arguments = ProcessInfo.processInfo.arguments
+            let targetLeg = arguments.contains("-tripmap-travel-leg-editor-unavailable")
+                ? travelLoad.legs.last(where: {
+                    if case .unavailable = $0.calculationState { true } else { false }
+                })
+                : travelLoad.legs.first
+            guard !didOpenTravelLegEditFromLaunchArgument,
+                  arguments.contains("-tripmap-open-travel-leg-editor"),
+                  let legID = targetLeg?.id else {
+                return
+            }
+            didOpenTravelLegEditFromLaunchArgument = true
+            mode = .list
+            travelLegEditTarget = legID
         }
         #endif
     }
@@ -224,7 +259,8 @@ struct GuideView: View {
             selectedActivityID: interaction.selectedActivityID,
             travelLegs: travelLoad.legs,
             onSelectActivity: selectActivityFromList,
-            onEditActivity: presentQuickEdit
+            onEditActivity: presentQuickEdit,
+            onEditTravelLeg: { travelLegEditTarget = $0 }
         )
     }
 
@@ -257,6 +293,21 @@ struct GuideView: View {
             return nil
         }
         return (activity, day)
+    }
+
+    private func legAndActivities(
+        for legID: TravelLegID
+    ) -> (TravelLeg, Activity, Activity)? {
+        guard let leg = travelLoad.legs.first(where: { $0.id == legID }),
+              let fromActivity = trip.days
+                .flatMap(\.activities)
+                .first(where: { $0.id == legID.fromActivityID }),
+              let toActivity = trip.days
+                .flatMap(\.activities)
+                .first(where: { $0.id == legID.toActivityID }) else {
+            return nil
+        }
+        return (leg, fromActivity, toActivity)
     }
 
     private func updateActivity(
@@ -298,11 +349,198 @@ struct GuideView: View {
             return false
         }
     }
+
+    private func updateTravelLeg(
+        legID: TravelLegID,
+        transportType: TravelTransportType,
+        manualDurationMinutes: Int?,
+        note: String?
+    ) -> Bool {
+        do {
+            let updated = try TripPlanEditor.setTravelLegPreference(
+                in: trip,
+                legID: legID,
+                transportType: transportType,
+                manualDurationMinutes: manualDurationMinutes,
+                note: note
+            )
+            if let persistenceError = onApplyPlan(updated) {
+                errorMessage = persistenceError
+                return false
+            }
+            travelLoad.refresh(for: updated)
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
+
+    private func retryTravelLeg(
+        legID: TravelLegID,
+        transportType: TravelTransportType,
+        manualDurationMinutes: Int?,
+        note: String?
+    ) -> Bool {
+        do {
+            let updated = try TripPlanEditor.setTravelLegPreference(
+                in: trip,
+                legID: legID,
+                transportType: transportType,
+                manualDurationMinutes: manualDurationMinutes,
+                note: note
+            )
+            if let persistenceError = onApplyPlan(updated) {
+                errorMessage = persistenceError
+                return false
+            }
+            travelLoad.retry(legID, for: updated)
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
 }
 
 private struct GuideQuickEditTarget: Identifiable {
     let activityID: Activity.ID
     var id: Activity.ID { activityID }
+}
+
+private struct TravelLegEditSheet: View {
+    let leg: TravelLeg
+    let fromActivityTitle: String
+    let toActivityTitle: String
+    let onSave: (TravelLegID, TravelTransportType, Int?, String?) -> Bool
+    let onRetry: (TravelLegID, TravelTransportType, Int?, String?) -> Bool
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var transportType: TravelTransportType
+    @State private var hasManualDuration: Bool
+    @State private var manualDurationMinutes: Int
+    @State private var note: String
+
+    init(
+        leg: TravelLeg,
+        fromActivityTitle: String,
+        toActivityTitle: String,
+        onSave: @escaping (TravelLegID, TravelTransportType, Int?, String?) -> Bool,
+        onRetry: @escaping (TravelLegID, TravelTransportType, Int?, String?) -> Bool
+    ) {
+        self.leg = leg
+        self.fromActivityTitle = fromActivityTitle
+        self.toActivityTitle = toActivityTitle
+        self.onSave = onSave
+        self.onRetry = onRetry
+        _transportType = State(initialValue: leg.transportType)
+        _hasManualDuration = State(initialValue: leg.manualDurationMinutes != nil)
+        _manualDurationMinutes = State(initialValue: leg.manualDurationMinutes ?? 30)
+        _note = State(initialValue: leg.note ?? "")
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    LabeledContent("出発", value: fromActivityTitle)
+                    LabeledContent("到着", value: toActivityTitle)
+                }
+
+                Section("移動手段") {
+                    Picker("移動手段", selection: $transportType) {
+                        ForEach(TravelTransportType.allCases) { transport in
+                            Label(transport.displayName, systemImage: transport.systemImage)
+                                .tag(transport)
+                        }
+                    }
+                    .pickerStyle(.navigationLink)
+                    .accessibilityIdentifier("travel-leg-transport-picker")
+                }
+
+                if transportType != .other {
+                    Section {
+                        Button(retryTitle, systemImage: "arrow.clockwise") {
+                            if onRetry(
+                                leg.id,
+                                transportType,
+                                hasManualDuration ? manualDurationMinutes : nil,
+                                note
+                            ) {
+                                dismiss()
+                            }
+                        }
+                        .disabled(isLoading)
+                        .accessibilityIdentifier("travel-leg-retry-button")
+                    } footer: {
+                        Text("再計算しても、手動所要時間は上書きされません。")
+                    }
+                }
+
+                Section("所要時間") {
+                    Toggle("手動で設定", isOn: $hasManualDuration)
+                    if hasManualDuration {
+                        Stepper(
+                            "所要時間 \(formattedDuration(manualDurationMinutes))",
+                            value: $manualDurationMinutes,
+                            in: 1...1_439,
+                            step: 5
+                        )
+                        .accessibilityIdentifier("travel-leg-manual-duration")
+                    } else {
+                        Text("MapKitの推定を使用します")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                Section("短いメモ") {
+                    TextField("乗り換え、集合場所など", text: $note, axis: .vertical)
+                        .lineLimit(2...4)
+                }
+            }
+            .navigationTitle("移動区間")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("キャンセル") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("保存") {
+                        if onSave(
+                            leg.id,
+                            transportType,
+                            hasManualDuration ? manualDurationMinutes : nil,
+                            note
+                        ) {
+                            dismiss()
+                        }
+                    }
+                    .accessibilityIdentifier("travel-leg-save-button")
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+        .accessibilityIdentifier("travel-leg-editor")
+    }
+
+    private var isLoading: Bool {
+        if case .loading = leg.calculationState { true } else { false }
+    }
+
+    private var retryTitle: String {
+        switch leg.calculationState {
+        case .failed, .unavailable: "経路取得を再試行"
+        case .idle, .loading, .loaded, .stale: "経路を再計算"
+        }
+    }
+
+    private func formattedDuration(_ minutes: Int) -> String {
+        let hours = minutes / 60
+        let remainder = minutes % 60
+        if hours == 0 { return "\(minutes)分" }
+        if remainder == 0 { return "\(hours)時間" }
+        return "\(hours)時間\(remainder)分"
+    }
 }
 
 private struct GuideQuickEditSheet: View {

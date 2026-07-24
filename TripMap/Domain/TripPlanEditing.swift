@@ -8,6 +8,8 @@ enum TripPlanEditingError: LocalizedError, Equatable {
     case sameDay
     case blankActivityTitle
     case invalidActivityDuration
+    case invalidTravelLegDuration
+    case invalidTravelLegReference
     case invalidTimeZone
 
     var errorDescription: String? {
@@ -19,6 +21,8 @@ enum TripPlanEditingError: LocalizedError, Equatable {
         case .sameDay: "同じDay同士は入れ替えできません。"
         case .blankActivityTitle: "予定の名前を入力してください。"
         case .invalidActivityDuration: "所要時間は1分から24時間の範囲で入力してください。"
+        case .invalidTravelLegDuration: "移動時間は1分から23時間59分の範囲で入力してください。"
+        case .invalidTravelLegReference: "編集対象の移動区間が見つかりません。"
         case .invalidTimeZone: "タイムゾーンを確認してください。"
         }
     }
@@ -178,6 +182,44 @@ enum TripPlanEditor {
         return copy
     }
 
+    static func setTravelLegPreference(
+        in trip: Trip,
+        legID: TravelLegID,
+        transportType: TravelTransportType,
+        manualDurationMinutes: Int?,
+        note: String?
+    ) throws -> Trip {
+        let dayIDByActivityID = Dictionary(
+            uniqueKeysWithValues: trip.days.flatMap { day in
+                day.activities.map { ($0.id, day.id) }
+            }
+        )
+        guard legID.fromActivityID != legID.toActivityID,
+              let fromDayID = dayIDByActivityID[legID.fromActivityID],
+              fromDayID == dayIDByActivityID[legID.toActivityID] else {
+            throw TripPlanEditingError.invalidTravelLegReference
+        }
+        guard manualDurationMinutes.map({ (1...1_439).contains($0) }) ?? true else {
+            throw TripPlanEditingError.invalidTravelLegDuration
+        }
+
+        let trimmedNote = note?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedNote = trimmedNote?.isEmpty == false ? trimmedNote : nil
+        var copy = trip
+        copy.travelLegPreferences.removeAll { $0.legID == legID }
+        if transportType != .automobile || manualDurationMinutes != nil || normalizedNote != nil {
+            copy.travelLegPreferences.append(
+                TravelLegPreference(
+                    legID: legID,
+                    transportType: transportType,
+                    manualDurationMinutes: manualDurationMinutes,
+                    note: normalizedNote
+                )
+            )
+        }
+        return copy
+    }
+
     static func deleteActivity(in trip: Trip, activityID: Activity.ID) throws -> Trip {
         guard let dayIndex = trip.days.firstIndex(where: { day in
             day.activities.contains(where: { $0.id == activityID })
@@ -191,6 +233,9 @@ enum TripPlanEditor {
             var updated = activity
             updated.sequence = index + 1
             return updated
+        }
+        copy.travelLegPreferences.removeAll {
+            $0.legID.fromActivityID == activityID || $0.legID.toActivityID == activityID
         }
         return copy
     }

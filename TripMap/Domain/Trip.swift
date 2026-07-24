@@ -9,6 +9,7 @@ struct Trip: Identifiable, Hashable, Sendable {
     var defaultCurrencyCode: String = "JPY"
     var coverImageData: Data? = nil
     var days: [Day]
+    var travelLegPreferences: [TravelLegPreference] = []
 }
 
 struct Day: Identifiable, Hashable, Sendable {

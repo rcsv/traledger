@@ -527,7 +527,7 @@ Pexels は地域イメージを得るためだけに API キー保護サーバ�
 Domain、MapKit 境界、状態、無効化、永続化の判断は
 [`ADR 0004`](adr/0004-travel-leg-domain.md) を正とする。
 
-将来の永続モデルは、ユーザーが明示した次の意図だけを持つ。
+永続モデルは、ユーザーが明示した次の意図だけを持つ。
 
 - from Activity ID
 - to Activity ID
@@ -536,15 +536,16 @@ Domain、MapKit 境界、状態、無効化、永続化の判断は
 - メモ（乗換、集合場所など）
 
 MapKit 推定時間、取得日時、polyline は破棄可能な派生データとし、Trip の永続モデルや交換
-schema へ含めない。初期段階は、隣接し双方に Venue がある Activity ペアから車の leg を導出し、
-推定をメモリだけに保持する。transport、手動所要時間、メモを編集する段階で初めてユーザー意図の
-永続レコードを追加する。
+schema へ含めない。隣接し双方に Venue がある Activity ペアから車の leg を導出し、推定を
+メモリだけに保持する。transport、手動所要時間、メモのいずれかが初期値と異なる場合だけ、
+ユーザー意図の永続レコードを追加する。
 
 2026-07-24 時点で ADR 0004 の stateful domain projection を実装済みである。方向付き Activity
 pair、routing fingerprint、`idle / loading / loaded / unavailable / failed / stale`、24時間の
 freshness、手動時間の優先順位を Domain で表現し、既存 MapKit loader と Doctor をこの投影へ
 移行した。決定論テストと macOS 全モデルテスト、iOS Simulator generic build は成功している。
-ユーザー意図の永続化と leg row は未実装である。
+`StoredTravelLegPreference` によるユーザー意図の永続化、Activity 削除時の参照 preference 削除、
+cross-Day / orphan / 不正時間の拒否を実装し、ディスク保存を含む決定論テストで確認済みである。
 
 ### 10.2 表示
 
@@ -557,8 +558,13 @@ freshness、手動時間の優先順位を Domain で表現し、既存 MapKit l
 公共交通、その他の symbol と名称、手動値、MapKit 推定、計算中、未計算、利用不可、失敗、古い
 推定を、色だけに依存せず文字で区別する。VoiceOver では前後 Activity 名を含む一要素として読む。
 macOS 実画面 UI test で `車 25分` と `経路を利用できません` を確認し、iPhone 17 Pro の標準
-Dynamic Type と Accessibility XXL でも実画面確認済みである。leg row は現時点では表示専用で、
-transport / manual duration editor と route detail は未実装である。
+Dynamic Type と Accessibility XXL でも leg row を実画面確認済みである。
+
+Guide では leg row から transport、手動所要時間、メモを編集できる。取得不能／失敗時も編集を
+妨げず、明示的な再試行を同じ sheet に置く。再試行前に未保存の transport を永続化し、その
+fingerprint で MapKit を再要求する。手動時間は再計算で上書きしない。標準 Dynamic Type の
+iPhone 17 Pro で、公共交通・手動42分の保存状態と、取得不能状態の再試行導線を実画面確認済み。
+route detail は未実装である。
 
 ### 10.3 MapKit 境界
 
@@ -1122,8 +1128,8 @@ platform expansion 記録として分離する。
 - Domain / MapKit boundary ADR — accepted in ADR 0004
 - stateful domain projection / deterministic tests — implemented
 - leg UI / calculation-state presentation — implemented, macOS UI-tested and iPhone viewport-verified
-- transport type
-- retry / explicit refresh behavior
+- transport type / manual duration / note editor — implemented and persisted as explicit user intent
+- retry / explicit refresh behavior — implemented without overwriting manual duration
 - route detail
 - Doctor integration
 
@@ -1217,12 +1223,13 @@ platform expansion 記録として分離する。
 
 次の実装担当者は、この順序で作業する。
 
-1. Travel Leg の transport type と明示的な refresh / retry 操作を設計し、取得不能状態を維持したまま編集可能にする。
-2. Activity progress を用いた Now / Next projection を、時刻から状態を書き換えない純粋な派生表示として定義する。
-3. Guide の offline review と予約参照の最小 Domain を定義する。
+1. Activity progress を用いた Now / Next projection を、時刻から状態を書き換えない純粋な派生表示として定義する。
+2. Guide の offline review と予約参照の最小 Domain を定義する。
+3. Travel Leg route detail の価値と表示範囲を、常時 polyline を避ける前提で定義する。
 
 Travel Leg calculation states、iPadOS adaptive workspace、Activity progress / iPhone Quick Edit
-第二段階は 2026-07-24 に実装・代表 viewport 確認済み。
+第二段階、Travel Leg preference editor / explicit retry は 2026-07-24 に実装・代表 viewport
+確認済み。
 
 新しい外部画像 provider、評価データ、独自サーバー、AI、CloudKit は、それぞれの Research Gate
 なしに開始しない。

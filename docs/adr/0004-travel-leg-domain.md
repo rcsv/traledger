@@ -151,11 +151,13 @@ Trip field changes.
 
 ### 8. Persistence and deletion rules
 
-P3 begins with derived default automobile legs and in-memory estimates. The
-SwiftData preference record is introduced only with the transport/manual
-duration editor.
+P3 began with derived default automobile legs and in-memory estimates. The
+transport/manual-duration editor now introduces `StoredTravelLegPreference`
+only when the user expresses intent: a non-default transport, a manual
+duration, or a note. A default automobile leg without either optional value
+remains derived and creates no persistence record.
 
-When introduced:
+The implemented deletion and validation rules are:
 
 - deleting an Activity deletes preferences that reference it;
 - deleting a Day or Trip removes descendants through the existing ownership
@@ -180,7 +182,7 @@ Domain tests must cover:
 - obsolete asynchronous results are discarded;
 - Doctor waits for complete effective durations and aggregates each active leg
   exactly once;
-- a future persistence adapter round-trips explicit preferences without storing
+- the persistence adapter round-trips explicit preferences without storing
   MapKit estimates or polylines.
 
 UI tests must cover a loaded leg, loading state, unavailable fallback, manual
@@ -192,11 +194,11 @@ rendering.
 
 ## Consequences
 
-- P3 can add leg rows and calculation states without committing transient
+- P3 adds leg rows and calculation states without committing transient
   MapKit data to SwiftData.
-- The current `TripTravelEstimate` and `TripTravelLoadModel` are a prototype
-  projection. They should be replaced by the stateful domain projection
-  described here before transport editing is added.
+- `TripTravelLoadModel` consumes the stateful domain projection and keeps
+  MapKit route state in memory. Explicit retry resets only the selected
+  fingerprint and requests it again.
 - A placeless Activity intentionally breaks route continuity; the product does
   not guess a route across unknown itinerary intent.
 - Offline use can always read the itinerary and any manual duration. A previous
