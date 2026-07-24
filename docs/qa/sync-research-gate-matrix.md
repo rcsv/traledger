@@ -128,6 +128,9 @@ Local preconditions completed on 2026-07-25:
 - Activity delete rejects a target whose parent Day changed. This is only a
   local precondition check; C05 still requires a remote delete-versus-edit
   policy and replica evidence.
+- Activity reorder and Undo/Redo use before/after Activity anchors and update
+  only sequence fields. Local tests preserve an append and edits made between
+  forward move and inverse, but C04/C06 still require replica order policy.
 - in-memory tests prove independent local fields survive scoped Cover, Venue
   image, and Memory writes.
 

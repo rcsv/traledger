@@ -693,6 +693,34 @@ extension StoredTrip {
                 modelContext.delete(preference)
             }
             modelContext.delete(activity)
+        case .moveActivity(let mutation):
+            let day = try storedDay(mutation.dayID)
+            let dayActivityIDs = Set(day.activities.map(\.id))
+            guard dayActivityIDs.contains(mutation.activityID),
+                  dayActivityIDs.contains(mutation.anchorActivityID) else {
+                let allActivityIDs = Set(days.flatMap(\.activities).map(\.id))
+                if allActivityIDs.contains(mutation.activityID)
+                    || allActivityIDs.contains(mutation.anchorActivityID) {
+                    throw TripPlanEditingError.activityChangedDay
+                }
+                throw TripPlanEditingError.activityNotFound
+            }
+            guard let desiredDay = updated.days.first(
+                where: { $0.id == mutation.dayID }
+            ) else {
+                throw TripPlanEditingError.targetDayNotFound
+            }
+            let desiredSequences = Dictionary(
+                uniqueKeysWithValues: desiredDay.activities.map {
+                    ($0.id, $0.sequence)
+                }
+            )
+            for activity in day.activities {
+                guard let sequence = desiredSequences[activity.id] else {
+                    throw TripPlanEditingError.activityNotFound
+                }
+                activity.sequence = sequence
+            }
         case .setVenueUserImage(let activityID, _, _):
             let stored = try storedActivity(activityID)
             let desired = try updatedActivity(activityID)

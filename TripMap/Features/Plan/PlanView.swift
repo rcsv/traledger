@@ -149,6 +149,7 @@ struct PlanView: View {
             planUndo.configure(
                 undoManager: undoManager,
                 applyPlan: onApplyPlan,
+                applyMutation: onApplyMutation,
                 onError: { errorMessage = $0 }
             )
         }
@@ -835,18 +836,62 @@ struct PlanView: View {
         relativeTo targetActivityID: Activity.ID
     ) {
         do {
-            let updated = try TripPlanEditor.moveActivity(
-                in: trip,
-                dayID: dayID,
-                activityID: activityID,
-                relativeTo: targetActivityID
+            guard let day = trip.days.first(where: { $0.id == dayID }) else {
+                throw TripPlanEditingError.targetDayNotFound
+            }
+            let ordered = day.orderedActivities
+            guard let sourceIndex = ordered.firstIndex(
+                where: { $0.id == activityID }
+            ), let targetIndex = ordered.firstIndex(
+                where: { $0.id == targetActivityID }
+            ) else {
+                throw TripPlanEditingError.activityNotFound
+            }
+            guard sourceIndex != targetIndex else { return }
+            let forward = TripMutation.moveActivity(
+                MoveActivityMutation(
+                    dayID: dayID,
+                    activityID: activityID,
+                    anchorActivityID: targetActivityID,
+                    placement: sourceIndex < targetIndex ? .after : .before
+                )
             )
-            guard updated != trip, apply(updated) else { return }
-            planUndo.registerTransition(
-                from: trip,
-                to: updated,
-                actionName: "予定の並べ替え"
+            let inverseAnchor: Activity.ID
+            let inversePlacement: ActivityMovePlacement
+            if sourceIndex == 0 {
+                inverseAnchor = ordered[1].id
+                inversePlacement = .before
+            } else {
+                inverseAnchor = ordered[sourceIndex - 1].id
+                inversePlacement = .after
+            }
+            let inverse = TripMutation.moveActivity(
+                MoveActivityMutation(
+                    dayID: dayID,
+                    activityID: activityID,
+                    anchorActivityID: inverseAnchor,
+                    placement: inversePlacement
+                )
             )
+            let updated = try forward.applying(to: trip)
+            if let onApplyMutation {
+                if let persistenceError = onApplyMutation(forward) {
+                    errorMessage = persistenceError
+                    return
+                }
+                planUndo.registerMutation(
+                    forward: forward,
+                    inverse: inverse,
+                    actionName: "予定の並べ替え"
+                )
+            } else {
+                guard apply(updated) else { return }
+                planUndo.registerTransition(
+                    from: trip,
+                    to: updated,
+                    actionName: "予定の並べ替え"
+                )
+            }
             interaction.selectActivity(activityID, source: .list, in: updated)
         } catch {
             errorMessage = error.localizedDescription
@@ -881,15 +926,18 @@ struct PlanView: View {
 private final class PlanUndoCoordinator: ObservableObject {
     private weak var undoManager: UndoManager?
     private var applyPlan: ((Trip) -> String?)?
+    private var applyMutation: ((TripMutation) -> String?)?
     private var onError: ((String) -> Void)?
 
     func configure(
         undoManager: UndoManager?,
         applyPlan: @escaping (Trip) -> String?,
+        applyMutation: ((TripMutation) -> String?)?,
         onError: @escaping (String) -> Void
     ) {
         self.undoManager = undoManager
         self.applyPlan = applyPlan
+        self.applyMutation = applyMutation
         self.onError = onError
     }
 
@@ -897,6 +945,18 @@ private final class PlanUndoCoordinator: ObservableObject {
         registerRestore(
             desired: previous,
             inverse: updated,
+            actionName: actionName
+        )
+    }
+
+    func registerMutation(
+        forward: TripMutation,
+        inverse: TripMutation,
+        actionName: String
+    ) {
+        registerMutationRestore(
+            desired: inverse,
+            inverse: forward,
             actionName: actionName
         )
     }
@@ -916,6 +976,39 @@ private final class PlanUndoCoordinator: ObservableObject {
             return
         }
         registerRestore(
+            desired: inverse,
+            inverse: desired,
+            actionName: actionName
+        )
+    }
+
+    private func registerMutationRestore(
+        desired: TripMutation,
+        inverse: TripMutation,
+        actionName: String
+    ) {
+        guard let undoManager else { return }
+        undoManager.registerUndo(withTarget: self) { target in
+            target.restoreMutation(
+                desired,
+                inverse: inverse,
+                actionName: actionName
+            )
+        }
+        undoManager.setActionName(actionName)
+    }
+
+    private func restoreMutation(
+        _ desired: TripMutation,
+        inverse: TripMutation,
+        actionName: String
+    ) {
+        guard let applyMutation else { return }
+        if let message = applyMutation(desired) {
+            onError?(message)
+            return
+        }
+        registerMutationRestore(
             desired: inverse,
             inverse: desired,
             actionName: actionName

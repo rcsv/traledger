@@ -2408,6 +2408,119 @@ final class TripModelTests: XCTestCase {
     }
 
     @MainActor
+    func testScopedActivityMoveAndInversePreserveConcurrentChanges() throws {
+        let container = try TripMapStore.makeContainer(inMemoryOnly: true)
+        let context = container.mainContext
+        let dayID = OkinawaSample.trip.orderedDays[0].id
+        let activities = OkinawaSample.trip.orderedDays[0].orderedActivities
+        let first = try XCTUnwrap(activities.first)
+        let second = try XCTUnwrap(activities.dropFirst().first)
+        let third = try XCTUnwrap(activities.dropFirst(2).first)
+        let concurrentActivityID = UUID()
+        let forward = TripMutation.moveActivity(
+            MoveActivityMutation(
+                dayID: dayID,
+                activityID: first.id,
+                anchorActivityID: third.id,
+                placement: .after
+            )
+        )
+        let inverse = TripMutation.moveActivity(
+            MoveActivityMutation(
+                dayID: dayID,
+                activityID: first.id,
+                anchorActivityID: second.id,
+                placement: .before
+            )
+        )
+        let stored = try StoredTrip(validatingSnapshot: OkinawaSample.trip)
+        context.insert(stored)
+        try context.save()
+
+        var concurrent = try TripPlanEditor.appendActivity(
+            in: try XCTUnwrap(stored.snapshot),
+            to: dayID,
+            activityID: concurrentActivityID,
+            title: "並べ替え中の追加",
+            startTime: nil,
+            category: nil,
+            durationMinutes: nil
+        )
+        let concurrentDayIndex = try XCTUnwrap(
+            concurrent.days.firstIndex(where: { $0.id == dayID })
+        )
+        let secondIndex = try XCTUnwrap(
+            concurrent.days[concurrentDayIndex].activities.firstIndex(
+                where: { $0.id == second.id }
+            )
+        )
+        concurrent.days[concurrentDayIndex].activities[secondIndex].note =
+            "並べ替えとは独立したメモ"
+        try stored.applyPlan(concurrent, in: context)
+        try context.save()
+
+        try stored.applyMutation(forward, in: context)
+        try context.save()
+
+        var snapshot = try XCTUnwrap(stored.snapshot)
+        var ordered = try XCTUnwrap(
+            snapshot.days.first(where: { $0.id == dayID })
+        ).orderedActivities
+        let firstIndexAfterMove = try XCTUnwrap(
+            ordered.firstIndex(where: { $0.id == first.id })
+        )
+        let thirdIndexAfterMove = try XCTUnwrap(
+            ordered.firstIndex(where: { $0.id == third.id })
+        )
+        XCTAssertEqual(firstIndexAfterMove, thirdIndexAfterMove + 1)
+        XCTAssertNotNil(
+            ordered.first(where: { $0.id == concurrentActivityID })
+        )
+
+        var afterForward = snapshot
+        let afterForwardDayIndex = try XCTUnwrap(
+            afterForward.days.firstIndex(where: { $0.id == dayID })
+        )
+        let thirdActivityIndex = try XCTUnwrap(
+            afterForward.days[afterForwardDayIndex].activities.firstIndex(
+                where: { $0.id == third.id }
+            )
+        )
+        afterForward.days[afterForwardDayIndex]
+            .activities[thirdActivityIndex].title =
+            "Undo前に更新したタイトル"
+        try stored.applyPlan(afterForward, in: context)
+        try context.save()
+
+        try stored.applyMutation(inverse, in: context)
+        try context.save()
+
+        snapshot = try XCTUnwrap(stored.snapshot)
+        ordered = try XCTUnwrap(
+            snapshot.days.first(where: { $0.id == dayID })
+        ).orderedActivities
+        XCTAssertEqual(
+            Array(ordered.prefix(3).map(\.id)),
+            [first.id, second.id, third.id]
+        )
+        XCTAssertNotNil(
+            ordered.first(where: { $0.id == concurrentActivityID })
+        )
+        XCTAssertEqual(
+            ordered.first(where: { $0.id == second.id })?.note,
+            "並べ替えとは独立したメモ"
+        )
+        XCTAssertEqual(
+            ordered.first(where: { $0.id == third.id })?.title,
+            "Undo前に更新したタイトル"
+        )
+        XCTAssertEqual(
+            ordered.map(\.sequence),
+            Array(1...ordered.count)
+        )
+    }
+
+    @MainActor
     func testScopedPlanActivityMutationPreservesExecutionFieldsAndReplacesVenue() throws {
         let container = try TripMapStore.makeContainer(inMemoryOnly: true)
         let context = container.mainContext

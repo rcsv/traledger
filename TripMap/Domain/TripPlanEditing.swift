@@ -105,6 +105,18 @@ struct DeleteActivityMutation: Equatable, Sendable {
     let activityID: Activity.ID
 }
 
+enum ActivityMovePlacement: Equatable, Sendable {
+    case before
+    case after
+}
+
+struct MoveActivityMutation: Equatable, Sendable {
+    let dayID: Day.ID
+    let activityID: Activity.ID
+    let anchorActivityID: Activity.ID
+    let placement: ActivityMovePlacement
+}
+
 enum TripMutation: Equatable, Sendable {
     case setCoverImage(Data?)
     case setDefaultCurrencyCode(String)
@@ -114,6 +126,7 @@ enum TripMutation: Equatable, Sendable {
     case setTravelLegPreference(TravelLegPreferenceMutation)
     case appendActivity(AppendActivityMutation)
     case deleteActivity(DeleteActivityMutation)
+    case moveActivity(MoveActivityMutation)
     case setVenueUserImage(
         activityID: Activity.ID,
         placeID: PlaceSnapshot.ID,
@@ -222,6 +235,14 @@ enum TripMutation: Equatable, Sendable {
             return try TripPlanEditor.deleteActivity(
                 in: trip,
                 activityID: activity.activityID
+            )
+        case .moveActivity(let activity):
+            return try TripPlanEditor.positionActivity(
+                in: trip,
+                dayID: activity.dayID,
+                activityID: activity.activityID,
+                relativeTo: activity.anchorActivityID,
+                placement: activity.placement
             )
         case let .setVenueUserImage(activityID, placeID, imageData):
             return try updatingPlace(
@@ -612,15 +633,42 @@ enum TripPlanEditor {
             throw TripPlanEditingError.activityNotFound
         }
         guard sourceIndex != targetIndex else { return trip }
+        let placement: ActivityMovePlacement =
+            sourceIndex < targetIndex ? .after : .before
+        return try positionActivity(
+            in: trip,
+            dayID: dayID,
+            activityID: activityID,
+            relativeTo: targetActivityID,
+            placement: placement
+        )
+    }
 
-        var reordered = ordered
-        let movedActivity = reordered.remove(at: sourceIndex)
-        guard let adjustedTargetIndex = reordered.firstIndex(where: { $0.id == targetActivityID }) else {
+    static func positionActivity(
+        in trip: Trip,
+        dayID: Day.ID,
+        activityID: Activity.ID,
+        relativeTo anchorActivityID: Activity.ID,
+        placement: ActivityMovePlacement
+    ) throws -> Trip {
+        guard activityID != anchorActivityID else { return trip }
+        guard let dayIndex = trip.days.firstIndex(where: { $0.id == dayID }) else {
+            throw TripPlanEditingError.targetDayNotFound
+        }
+        let ordered = trip.days[dayIndex].orderedActivities
+        guard let sourceIndex = ordered.firstIndex(where: { $0.id == activityID }),
+              ordered.contains(where: { $0.id == anchorActivityID }) else {
             throw TripPlanEditingError.activityNotFound
         }
-        let insertionIndex = sourceIndex < targetIndex
-            ? adjustedTargetIndex + 1
-            : adjustedTargetIndex
+        var reordered = ordered
+        let movedActivity = reordered.remove(at: sourceIndex)
+        guard let anchorIndex = reordered.firstIndex(
+            where: { $0.id == anchorActivityID }
+        ) else {
+            throw TripPlanEditingError.activityNotFound
+        }
+        let insertionIndex =
+            placement == .before ? anchorIndex : anchorIndex + 1
         reordered.insert(movedActivity, at: insertionIndex)
 
         var copy = trip
