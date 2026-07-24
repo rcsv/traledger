@@ -587,6 +587,8 @@ extension StoredTrip {
         }
 
         switch mutation {
+        case .renameTrip:
+            title = updated.title
         case .setCoverImage:
             coverImageData = updated.coverImageData
         case .setDefaultCurrencyCode:

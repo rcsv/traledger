@@ -137,6 +137,7 @@ struct SwapDayPlansMutation: Equatable, Sendable {
 }
 
 enum TripMutation: Equatable, Sendable {
+    case renameTrip(String)
     case setCoverImage(Data?)
     case setDefaultCurrencyCode(String)
     case changeTimeZone(String)
@@ -172,6 +173,8 @@ enum TripMutation: Equatable, Sendable {
 
     func applying(to trip: Trip) throws -> Trip {
         switch self {
+        case .renameTrip(let title):
+            return try TripPlanEditor.renameTrip(in: trip, to: title)
         case .setCoverImage(let imageData):
             var copy = trip
             copy.coverImageData = imageData
@@ -350,6 +353,18 @@ enum TripMutation: Equatable, Sendable {
 }
 
 enum TripPlanEditor {
+    static func renameTrip(in trip: Trip, to title: String) throws -> Trip {
+        let normalizedTitle = title.trimmingCharacters(
+            in: .whitespacesAndNewlines
+        )
+        guard !normalizedTitle.isEmpty else {
+            throw TripPersistenceError.blankTitle
+        }
+        var copy = trip
+        copy.title = normalizedTitle
+        return copy
+    }
+
     static func changeTimeZone(in trip: Trip, to identifier: String) throws -> Trip {
         guard let currentTimeZone = TimeZone(identifier: trip.timeZoneIdentifier),
               let newTimeZone = TimeZone(identifier: identifier) else {

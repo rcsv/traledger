@@ -26,6 +26,7 @@ Represent small user intents as `TripMutation`. At save time:
 
 The first mutation set owns:
 
+- Trip title;
 - Trip cover image;
 - Trip default currency and time-zone identifier;
 - Plan Activity details: title, start time, category, duration, note, and an
@@ -62,9 +63,10 @@ same-field conflict policy. A mutation can preserve independent local fields,
 but CloudKit activation remains blocked until schema migration and the
 three-device matrix are complete.
 
-Trip title/date editing is not currently exposed. If introduced, it must use a
-scoped operation or gain proven field-level merge behavior; production may not
-enable the compatibility callback for it.
+Trip title editing uses a scoped mutation. Trip date-range editing is not
+currently exposed. If introduced, it must use a scoped structural operation or
+gain proven field-level merge behavior; production may not enable the
+compatibility callback for it.
 
 Activity append generates its UUID before persistence and assigns sequence
 against the latest Day, so concurrent appends survive. Activity delete requires
@@ -107,6 +109,8 @@ been cleared.
 
 - Cover, Venue image, external image, progress, and Memory saves no longer
   replay stale unrelated values.
+- Trip rename trims and validates the new title while preserving concurrent
+  Activity changes.
 - Plan and Guide Activity edits preserve fields owned by the other workflow.
 - Venue replacement/clear and reservation replacement/clear delete superseded
   SwiftData children in the same `ModelContext` transaction.
@@ -133,13 +137,15 @@ been cleared.
 - Reminder reconciliation after a Guide mutation uses the latest persisted
   snapshot.
 - Production AppShell workspaces fail closed if a future UI operation omits its
-  scoped mutation; Trip title/date editing remains unavailable.
+  scoped mutation; Trip date-range editing remains unavailable.
 
 ## Verification
 
 In-memory SwiftData regression tests must prove that:
 
 - a cover update preserves a concurrent Activity edit;
+- a Trip rename preserves a concurrent Activity append and rejects a blank
+  title;
 - a Plan edit preserves execution fields while replacing its Venue;
 - a Guide edit preserves planning and Memory fields while clearing Venue and
   reservation children;

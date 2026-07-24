@@ -2076,6 +2076,53 @@ final class TripModelTests: XCTestCase {
     }
 
     @MainActor
+    func testScopedTripRenamePreservesAConcurrentActivityAppend() throws {
+        let container = try TripMapStore.makeContainer(inMemoryOnly: true)
+        let context = container.mainContext
+        let dayID = OkinawaSample.trip.orderedDays[0].id
+        let concurrentActivityID = UUID()
+        let stored = try StoredTrip(validatingSnapshot: OkinawaSample.trip)
+        context.insert(stored)
+        try context.save()
+
+        let concurrent = try TripPlanEditor.appendActivity(
+            in: try XCTUnwrap(stored.snapshot),
+            to: dayID,
+            activityID: concurrentActivityID,
+            title: "名前変更と同時に追加",
+            startTime: nil,
+            category: .other,
+            durationMinutes: 30
+        )
+        try stored.applyPlan(concurrent, in: context)
+        try context.save()
+
+        try stored.applyMutation(
+            .renameTrip("  瀬底島の夏休み  "),
+            in: context
+        )
+        try context.save()
+
+        let snapshot = try XCTUnwrap(stored.snapshot)
+        XCTAssertEqual(snapshot.title, "瀬底島の夏休み")
+        XCTAssertNotNil(
+            snapshot.days
+                .flatMap(\.activities)
+                .first(where: { $0.id == concurrentActivityID })
+        )
+
+        XCTAssertThrowsError(
+            try stored.applyMutation(.renameTrip(" \n "), in: context)
+        ) { error in
+            XCTAssertEqual(
+                error as? TripPersistenceError,
+                .blankTitle
+            )
+        }
+        XCTAssertEqual(stored.title, "瀬底島の夏休み")
+    }
+
+    @MainActor
     func testScopedTripMetadataMutationsPreserveLocalCalendarAndActivityEdits() throws {
         let container = try TripMapStore.makeContainer(inMemoryOnly: true)
         let context = container.mainContext

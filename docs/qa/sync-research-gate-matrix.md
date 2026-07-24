@@ -108,6 +108,8 @@ Domain snapshots by stable UUID.
 
 Local preconditions completed on 2026-07-25:
 
+- C01 Trip rename owns only the normalized title. A local test preserves a
+  concurrent Activity append and rejects a blank title.
 - C03 has a scoped Memory intent that owns completion, photo, and reflection.
 - C02/C09 Plan and Guide Activity edits have separate field ownership; Guide
   owns progress, reservation, and reminder without replaying planning fields.
@@ -139,7 +141,8 @@ Local preconditions completed on 2026-07-25:
   field, while an append/delete/reorder on either Day rejects the stale swap.
 - Production Plan/Guide workspaces reject their full-snapshot compatibility
   callback. An operation without a scoped mutation fails closed; Trip
-  title/date editing remains unavailable until it has a scoped design.
+  date-range editing remains unavailable until it has a scoped structural
+  design.
 - in-memory tests prove independent local fields survive scoped Cover, Venue
   image, and Memory writes.
 

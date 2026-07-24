@@ -379,6 +379,7 @@ struct PlanView: View {
             trip: trip,
             doctorReport: doctorReport,
             coverPickerItem: $coverPickerItem,
+            onRenameTrip: updateTripTitle,
             onSelectCurrency: updateTripCurrency,
             onSelectTimeZone: updateTripTimeZone,
             onSelectDoctorIssue: selectDoctorIssue
@@ -732,6 +733,18 @@ struct PlanView: View {
         var updated = trip
         updated.defaultCurrencyCode = currencyCode
         apply(updated)
+    }
+
+    private func updateTripTitle(_ title: String) {
+        do {
+            let mutation = TripMutation.renameTrip(title)
+            if applyMutationIfAvailable(mutation) {
+                return
+            }
+            apply(try mutation.applying(to: trip))
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
 
     private func updateTripTimeZone(_ identifier: String) {
@@ -1460,12 +1473,15 @@ private struct TripOverviewView: View {
     let trip: Trip
     let doctorReport: TripDoctorReport
     @Binding var coverPickerItem: PhotosPickerItem?
+    let onRenameTrip: (String) -> Void
     let onSelectCurrency: (String) -> Void
     let onSelectTimeZone: (String) -> Void
     let onSelectDoctorIssue: (TripDoctorIssue) -> Void
     @State private var isParticipantPickerPresented = false
     @State private var isChecklistEditorPresented = false
     @State private var checklistTitle = ""
+    @State private var isRenameTripPresented = false
+    @State private var tripTitleDraft = ""
 
     private let timeZones = [
         "Asia/Tokyo", "Asia/Singapore", "Australia/Sydney", "Pacific/Auckland",
@@ -1475,9 +1491,19 @@ private struct TripOverviewView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
-                Text(trip.title)
-                    .font(.largeTitle.bold())
-                    .lineLimit(2)
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    Text(trip.title)
+                        .font(.largeTitle.bold())
+                        .lineLimit(2)
+
+                    Button("旅行名を変更", systemImage: "pencil") {
+                        tripTitleDraft = trip.title
+                        isRenameTripPresented = true
+                    }
+                    .labelStyle(.iconOnly)
+                    .help("旅行名を変更")
+                    .accessibilityIdentifier("trip-rename-button")
+                }
 
                 HStack(spacing: 8) {
                     Text(trip.dateRange.lowerBound, format: .dateTime.year().month(.abbreviated).day())
@@ -1624,6 +1650,20 @@ private struct TripOverviewView: View {
         }
         .background(Color(nsColor: .windowBackgroundColor))
         .accessibilityIdentifier("trip-overview-content")
+        .alert("旅行名を変更", isPresented: $isRenameTripPresented) {
+            TextField("旅行名", text: $tripTitleDraft)
+            Button("キャンセル", role: .cancel) {}
+            Button("保存") {
+                onRenameTrip(tripTitleDraft)
+            }
+            .disabled(
+                tripTitleDraft
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                    .isEmpty
+            )
+        } message: {
+            Text("LibraryとTrip画面に表示する名前です。")
+        }
         .sheet(isPresented: $isParticipantPickerPresented) {
             ParticipantPickerSheet(
                 participants: participants.filter { participant in

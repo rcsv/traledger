@@ -1237,7 +1237,8 @@ platform expansion 記録として分離する。
   Activity ID順を前提条件とし、コピー先IDを事前生成する限定保存へ移行済み。
   Day入れ替えも両DayのActivity ID順を前提条件とし、既存Activityを移動する限定保存へ移行済み。
   production AppShell は full-snapshot callback を拒否し、mutation 未対応操作を fail-closed にする。
-  Trip title/date 編集は未提供であり、追加時は scoped mutation を必須とする。
+  Trip title 編集はOverviewの標準alertと限定mutationで提供済み。date-range 編集は未提供であり、
+  追加時はDay生成・削除方針を含む scoped structural mutationを必須とする。
   以上を前提に三端末 matrix を実施
 - image quota — 1600px / 2MiB encoded ceiling と Cover・Venue・Memory 別 Trip inventory、
   25MiB soft threshold、置換量を考慮した非破壊 confirmation UX を実装済み。
