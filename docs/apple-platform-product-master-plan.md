@@ -1228,13 +1228,16 @@ platform expansion 記録として分離する。
 - versioned schema — local V1 baseline、migration plan、legacy store 無損失 open test を実装済み
 - CloudKit compatibility — optional to-many の隔離軽量 migration spike は成功。本番 V1 が live
   model type を参照しており独立 freeze されていないことが現時点の blocker
-- conflict test — full-snapshot write を granular mutation へ改めてから三端末 matrix を実施
+- conflict test — Cover、Venue画像、外部画像、進捗、Memory は最新 snapshot へ再適用する
+  scoped mutation へ移行済み。Trip metadata、Day/Activity 構造変更、Venue置換、予約、
+  reminder、travel leg は full-snapshot write が残るため、移行後に三端末 matrix を実施
 - image quota — 1600px / 2MiB encoded ceiling と Cover・Venue・Memory 別 Trip inventory、
   25MiB soft threshold、置換量を考慮した非破壊 confirmation UX を実装済み。
   device format と実画面 gate は継続
 - account states — local-first を維持して全 `CKAccountStatus` を扱う
 
-2026-07-24 の調査結果は [`ADR 0011`](adr/0011-sync-research-gate.md) と
+2026-07-24 以降の調査結果は [`ADR 0011`](adr/0011-sync-research-gate.md)、
+[`ADR 0013`](adr/0013-scoped-trip-mutations.md) と
 [`P8 Sync Research Gate Matrix`](qa/sync-research-gate-matrix.md) を正とする。CloudKit entitlement、
 container、server schema はまだ追加しない。
 

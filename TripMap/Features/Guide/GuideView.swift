@@ -14,6 +14,7 @@ struct GuideView: View {
 
     let trip: Trip
     let onApplyPlan: (Trip) -> String?
+    let onApplyMutation: ((TripMutation) -> String?)?
     private let fixedReferenceDate: Date?
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @StateObject private var travelLoad = TripTravelLoadModel()
@@ -33,10 +34,12 @@ struct GuideView: View {
     init(
         trip: Trip,
         initialActivityID: Activity.ID? = nil,
-        onApplyPlan: @escaping (Trip) -> String? = { _ in nil }
+        onApplyPlan: @escaping (Trip) -> String? = { _ in nil },
+        onApplyMutation: ((TripMutation) -> String?)? = nil
     ) {
         self.trip = trip
         self.onApplyPlan = onApplyPlan
+        self.onApplyMutation = onApplyMutation
         let fixedReferenceDate = Self.qaReferenceDate(for: trip)
         self.fixedReferenceDate = fixedReferenceDate
         var initialInteraction = TripInteractionState(trip: trip)
@@ -148,18 +151,22 @@ struct GuideView: View {
             GuideOfflineReviewSheet(report: GuideOfflineReview.report(for: trip))
         }
         .sheet(isPresented: $isMemoryPresented) {
-            MemoryView(trip: trip) { updated in
-                let result = onApplyPlan(updated)
-                if result == nil {
-                    Task {
-                        try? await GuideReminderScheduler.sync(
-                            trip: updated,
-                            requestingAuthorization: false
-                        )
+            MemoryView(
+                trip: trip,
+                onApplyPlan: { updated in
+                    let result = onApplyPlan(updated)
+                    if result == nil {
+                        Task {
+                            try? await GuideReminderScheduler.sync(
+                                trip: updated,
+                                requestingAuthorization: false
+                            )
+                        }
                     }
-                }
-                return result
-            }
+                    return result
+                },
+                onApplyMutation: onApplyMutation
+            )
         }
         .alert("操作を完了できませんでした", isPresented: Binding(
             get: { errorMessage != nil },
@@ -1304,7 +1311,7 @@ private enum GuideReminderSchedulingError: LocalizedError {
 }
 
 @MainActor
-private enum GuideReminderScheduler {
+enum GuideReminderScheduler {
     static func sync(
         trip: Trip,
         requestingAuthorization: Bool,

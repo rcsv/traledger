@@ -68,11 +68,13 @@ They must become optional in a later schema version before CloudKit is enabled.
 Application accessors must continue to expose empty collections so optional
 persistence does not leak into the Domain.
 
-The current `StoredTrip.applyPlan` method applies a complete value snapshot and
-assigns nearly every stored field. This is safe in a single local writer, but it
-is too broad for concurrent replicas: an edit to one Activity can write stale
-values over unrelated remote edits. Sync therefore also requires granular
-mutation paths or a proven merge layer before activation.
+`StoredTrip.applyPlan` applies a complete value snapshot and assigns nearly
+every stored field. This is safe in a single local writer, but it is too broad
+for concurrent replicas: an edit to one Activity can write stale values over
+unrelated remote edits. The first scoped paths now cover Cover, Venue images,
+Activity progress, and Memory as described in
+[`ADR 0013`](0013-scoped-trip-mutations.md). Structural and composite edits
+still require granular mutations or a proven merge layer before activation.
 
 The 1600-pixel JPEG normalization policy has no encoded-byte ceiling and no
 per-Trip storage budget. External storage is the correct persistence shape, but
@@ -170,6 +172,23 @@ Large PNG normalization and byte/pixel limits have automated macOS coverage.
 The soft-budget decision rule also has unit coverage. Large HEIC/JPEG inputs,
 image orientation, on-device PhotosPicker delivery, and visual confirmation of
 the warning remain part of the stable-device gate.
+
+## Scoped mutation implementation
+
+The first conflict-risk reduction landed on 2026-07-25:
+
+- `TripMutation` expresses Cover, user Venue image, external Venue image,
+  Activity progress, and Memory intents;
+- `StoredTrip.applyMutation` reapplies an intent to the latest valid local
+  snapshot and writes only its owned fields;
+- Plan and Guide production workspaces use the scoped path for those operations;
+- in-memory persistence tests prove that unrelated edits survive Cover, Venue
+  image, and Memory writes.
+
+This is not the Stage 2 exit. Trip metadata, structural Day/Activity changes,
+Venue replacement, reservation, reminder, and travel-leg edits still use
+`applyPlan`. Same-field resolution and real replica convergence also remain
+unproven.
 
 ## Data and UX rules
 

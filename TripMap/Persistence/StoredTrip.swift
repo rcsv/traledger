@@ -499,6 +499,65 @@ extension StoredTrip {
             modelContext.delete(preference)
         }
     }
+
+    /// Applies a small user intent to the latest persisted snapshot, then writes
+    /// only the fields owned by that intent. This avoids replaying an older
+    /// screen snapshot over unrelated changes.
+    func applyMutation(_ mutation: TripMutation) throws {
+        guard let current = snapshot else {
+            throw TripPersistenceError.invalidModel
+        }
+        let updated = try mutation.applying(to: current)
+
+        func storedActivity(_ activityID: Activity.ID) throws -> StoredActivity {
+            guard let activity = days
+                .flatMap(\.activities)
+                .first(where: { $0.id == activityID }) else {
+                throw TripPlanEditingError.activityNotFound
+            }
+            return activity
+        }
+
+        func updatedActivity(_ activityID: Activity.ID) throws -> Activity {
+            guard let activity = updated.days
+                .flatMap(\.activities)
+                .first(where: { $0.id == activityID }) else {
+                throw TripPlanEditingError.activityNotFound
+            }
+            return activity
+        }
+
+        switch mutation {
+        case .setCoverImage:
+            coverImageData = updated.coverImageData
+        case .setVenueUserImage(let activityID, _):
+            let stored = try storedActivity(activityID)
+            let desired = try updatedActivity(activityID)
+            guard let storedPlace = stored.place, let desiredPlace = desired.place else {
+                throw TripPlanEditingError.placeNotFound
+            }
+            storedPlace.imageData = desiredPlace.imageData
+        case .setExternalVenueImage(let activityID, _):
+            let stored = try storedActivity(activityID)
+            let desired = try updatedActivity(activityID)
+            guard let storedPlace = stored.place, let desiredPlace = desired.place else {
+                throw TripPlanEditingError.placeNotFound
+            }
+            storedPlace.applyExternalImage(desiredPlace.externalImage)
+        case .setActivityProgress(let activityID, _, _):
+            let stored = try storedActivity(activityID)
+            let desired = try updatedActivity(activityID)
+            stored.progressRawValue = desired.progress.rawValue
+            stored.progressUpdatedAt = desired.progressUpdatedAt
+        case .recordActivityMemory(let activityID, _, _, _):
+            let stored = try storedActivity(activityID)
+            let desired = try updatedActivity(activityID)
+            stored.progressRawValue = desired.progress.rawValue
+            stored.progressUpdatedAt = desired.progressUpdatedAt
+            stored.memoryPhotoData = desired.memoryPhotoData
+            stored.reflection = desired.reflection
+        }
+    }
 }
 
 private extension Trip {

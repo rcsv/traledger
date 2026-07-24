@@ -85,6 +85,27 @@ private struct TripGuideWorkspaceView: View {
                         modelContext.rollback()
                         return error.localizedDescription
                     }
+                },
+                onApplyMutation: { mutation in
+                    guard let storedTrip = storedTrips.first else {
+                        return "旅行データを読み込めませんでした。"
+                    }
+                    do {
+                        try storedTrip.applyMutation(mutation)
+                        try modelContext.save()
+                        if let updated = storedTrip.snapshot {
+                            Task {
+                                try? await GuideReminderScheduler.sync(
+                                    trip: updated,
+                                    requestingAuthorization: false
+                                )
+                            }
+                        }
+                        return nil
+                    } catch {
+                        modelContext.rollback()
+                        return error.localizedDescription
+                    }
                 }
             )
                 .id(trip.id)
@@ -222,6 +243,17 @@ struct MacTripWorkspaceView: View {
                     guard let storedTrip = storedTrips.first else { return "旅行データを読み込めませんでした。" }
                     do {
                         try storedTrip.applyPlan(updated, in: modelContext)
+                        try modelContext.save()
+                        return nil
+                    } catch {
+                        modelContext.rollback()
+                        return error.localizedDescription
+                    }
+                },
+                onApplyMutation: { mutation in
+                    guard let storedTrip = storedTrips.first else { return "旅行データを読み込めませんでした。" }
+                    do {
+                        try storedTrip.applyMutation(mutation)
                         try modelContext.save()
                         return nil
                     } catch {

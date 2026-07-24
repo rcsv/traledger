@@ -23,6 +23,7 @@ struct PlanView: View {
     @StateObject private var planUndo = PlanUndoCoordinator()
     let trip: Trip
     let onApplyPlan: (Trip) -> String?
+    let onApplyMutation: ((TripMutation) -> String?)?
     @State private var destination: PlanDestination
     @State private var isMapVisible = true
     @State private var interaction: TripInteractionState
@@ -40,10 +41,12 @@ struct PlanView: View {
         trip: Trip,
         initialDayID: Day.ID? = nil,
         initialActivityID: Activity.ID? = nil,
-        onApplyPlan: @escaping (Trip) -> String? = { _ in nil }
+        onApplyPlan: @escaping (Trip) -> String? = { _ in nil },
+        onApplyMutation: ((TripMutation) -> String?)? = nil
     ) {
         self.trip = trip
         self.onApplyPlan = onApplyPlan
+        self.onApplyMutation = onApplyMutation
         var initialInteraction = TripInteractionState(trip: trip)
         if let initialDayID {
             initialInteraction.selectDay(initialDayID, in: trip)
@@ -182,7 +185,11 @@ struct PlanView: View {
             }
         }
         .sheet(isPresented: $isMemoryPresented) {
-            MemoryView(trip: trip, onApplyPlan: onApplyPlan)
+            MemoryView(
+                trip: trip,
+                onApplyPlan: onApplyPlan,
+                onApplyMutation: onApplyMutation
+            )
         }
         .sheet(isPresented: $isActivityCreationPresented) {
             if let selectedDay {
@@ -545,6 +552,9 @@ struct PlanView: View {
     private func commitImageUpdate(_ update: PendingTripImageUpdate) {
         switch update {
         case .cover(let data):
+            if applyMutationIfAvailable(.setCoverImage(data)) {
+                return
+            }
             var updated = trip
             updated.coverImageData = data
             apply(updated)
@@ -554,6 +564,9 @@ struct PlanView: View {
     }
 
     private func commitPlaceImage(activityID: Activity.ID, imageData: Data?) {
+        if applyMutationIfAvailable(.setVenueUserImage(activityID: activityID, imageData: imageData)) {
+            return
+        }
         var updated = trip
         for dayIndex in updated.days.indices {
             guard let activityIndex = updated.days[dayIndex].activities.firstIndex(where: { $0.id == activityID }) else {
@@ -603,6 +616,9 @@ struct PlanView: View {
     }
 
     private func updateExternalPlaceImage(activityID: Activity.ID, image: ExternalPlaceImage?) {
+        if applyMutationIfAvailable(.setExternalVenueImage(activityID: activityID, image: image)) {
+            return
+        }
         var updated = trip
         for dayIndex in updated.days.indices {
             guard let activityIndex = updated.days[dayIndex].activities.firstIndex(where: { $0.id == activityID }) else {
@@ -733,6 +749,12 @@ struct PlanView: View {
     private func apply(_ updated: Trip) -> Bool {
         errorMessage = onApplyPlan(updated)
         return errorMessage == nil
+    }
+
+    private func applyMutationIfAvailable(_ mutation: TripMutation) -> Bool {
+        guard let onApplyMutation else { return false }
+        errorMessage = onApplyMutation(mutation)
+        return true
     }
 
     private func focusPendingVenue(in trip: Trip) {

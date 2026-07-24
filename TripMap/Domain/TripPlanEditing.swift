@@ -16,6 +16,7 @@ enum TripPlanEditingError: LocalizedError, Equatable {
     case memoryRequiresCompletedActivity
     case invalidReflection
     case invalidTimeZone
+    case placeNotFound
 
     var errorDescription: String? {
         switch self {
@@ -34,7 +35,83 @@ enum TripPlanEditingError: LocalizedError, Equatable {
         case .memoryRequiresCompletedActivity: "訪問済みにしてから思い出を記録してください。"
         case .invalidReflection: "感想は500文字以内で入力してください。"
         case .invalidTimeZone: "タイムゾーンを確認してください。"
+        case .placeNotFound: "場所が見つかりません。"
         }
+    }
+}
+
+enum TripMutation: Equatable, Sendable {
+    case setCoverImage(Data?)
+    case setVenueUserImage(activityID: Activity.ID, imageData: Data?)
+    case setExternalVenueImage(activityID: Activity.ID, image: ExternalPlaceImage?)
+    case setActivityProgress(
+        activityID: Activity.ID,
+        progress: ActivityProgress,
+        changedAt: Date
+    )
+    case recordActivityMemory(
+        activityID: Activity.ID,
+        photoData: Data?,
+        reflection: String?,
+        completedAt: Date
+    )
+
+    func applying(to trip: Trip) throws -> Trip {
+        switch self {
+        case .setCoverImage(let imageData):
+            var copy = trip
+            copy.coverImageData = imageData
+            return copy
+        case let .setVenueUserImage(activityID, imageData):
+            return try updatingPlace(in: trip, activityID: activityID) { place in
+                place.imageData = imageData
+            }
+        case let .setExternalVenueImage(activityID, image):
+            return try updatingPlace(in: trip, activityID: activityID) { place in
+                place.externalImage = image
+            }
+        case let .setActivityProgress(activityID, progress, changedAt):
+            return try TripPlanEditor.setActivityProgress(
+                in: trip,
+                activityID: activityID,
+                progress: progress,
+                at: changedAt
+            )
+        case let .recordActivityMemory(activityID, photoData, reflection, completedAt):
+            let completed = try TripPlanEditor.setActivityProgress(
+                in: trip,
+                activityID: activityID,
+                progress: .completed,
+                at: completedAt
+            )
+            return try TripPlanEditor.setActivityMemory(
+                in: completed,
+                activityID: activityID,
+                photoData: photoData,
+                reflection: reflection
+            )
+        }
+    }
+
+    private func updatingPlace(
+        in trip: Trip,
+        activityID: Activity.ID,
+        update: (inout PlaceSnapshot) -> Void
+    ) throws -> Trip {
+        guard let dayIndex = trip.days.firstIndex(where: { day in
+            day.activities.contains(where: { $0.id == activityID })
+        }), let activityIndex = trip.days[dayIndex].activities.firstIndex(
+            where: { $0.id == activityID }
+        ) else {
+            throw TripPlanEditingError.activityNotFound
+        }
+        guard var place = trip.days[dayIndex].activities[activityIndex].place else {
+            throw TripPlanEditingError.placeNotFound
+        }
+        update(&place)
+        var copy = trip
+        copy.days[dayIndex].activities[activityIndex].place = place
+        return copy
     }
 }
 

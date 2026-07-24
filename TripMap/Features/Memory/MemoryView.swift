@@ -10,10 +10,21 @@ import UIKit
 struct MemoryView: View {
     let trip: Trip
     let onApplyPlan: (Trip) -> String?
+    let onApplyMutation: ((TripMutation) -> String?)?
 
     @Environment(\.dismiss) private var dismiss
     @State private var editorTarget: MemoryEditorTarget?
     @State private var errorMessage: String?
+
+    init(
+        trip: Trip,
+        onApplyPlan: @escaping (Trip) -> String?,
+        onApplyMutation: ((TripMutation) -> String?)? = nil
+    ) {
+        self.trip = trip
+        self.onApplyPlan = onApplyPlan
+        self.onApplyMutation = onApplyMutation
+    }
 
     private var summary: MemoryTripSummary {
         MemoryProjection.summary(for: trip)
@@ -124,6 +135,21 @@ struct MemoryView: View {
         reflection: String?
     ) -> Bool {
         do {
+            let completedAt = Date()
+            if let onApplyMutation {
+                let mutation = TripMutation.recordActivityMemory(
+                    activityID: activityID,
+                    photoData: photoData,
+                    reflection: reflection,
+                    completedAt: completedAt
+                )
+                if let error = onApplyMutation(mutation) {
+                    errorMessage = error
+                    return false
+                }
+                return true
+            }
+
             var updated = trip
             if updated.days.flatMap(\.activities)
                 .first(where: { $0.id == activityID })?.progress != .completed {

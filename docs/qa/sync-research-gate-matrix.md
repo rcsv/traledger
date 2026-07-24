@@ -106,6 +106,20 @@ Domain snapshots by stable UUID.
 | C11 | 30 days offline, then reconnect | Continue editing on B/C | All supported changes converge |
 | C12 | Three simultaneous independent Trip edits | Different Trip on each device | No cross-Trip blocking or data loss |
 
+Local preconditions completed on 2026-07-25:
+
+- C03 has a scoped Memory intent that owns completion, photo, and reflection.
+- C07 user image and external image metadata have separate scoped ownership.
+- C09 has a scoped progress intent, although reminder editing remains on the
+  full-snapshot path.
+- in-memory tests prove independent local fields survive scoped Cover, Venue
+  image, and Memory writes.
+
+These are local preservation checks, not evidence that any C-row passes. All
+rows still require real replicas, recorded convergence, and an explicit
+same-field policy. C07/C08 additionally require Venue replacement/clear to
+leave the full-snapshot path.
+
 ## Observability record
 
 Each manual run must capture:

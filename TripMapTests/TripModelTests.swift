@@ -2035,6 +2035,203 @@ final class TripModelTests: XCTestCase {
     }
 
     @MainActor
+    func testScopedCoverMutationPreservesAnUnrelatedConcurrentActivityEdit() throws {
+        let container = try TripMapStore.makeContainer(inMemoryOnly: true)
+        let context = container.mainContext
+        let activityID = OkinawaSample.trip.days[0].activities[0].id
+        let stored = try StoredTrip(validatingSnapshot: OkinawaSample.trip)
+        context.insert(stored)
+        try context.save()
+
+        var concurrent = try XCTUnwrap(stored.snapshot)
+        let concurrentDayIndex = try XCTUnwrap(
+            concurrent.days.firstIndex(where: { $0.activities.contains(where: { $0.id == activityID }) })
+        )
+        let concurrentActivityIndex = try XCTUnwrap(
+            concurrent.days[concurrentDayIndex].activities.firstIndex(where: { $0.id == activityID })
+        )
+        concurrent.days[concurrentDayIndex].activities[concurrentActivityIndex].note =
+            "別端末で更新したメモ"
+        try stored.applyPlan(concurrent, in: context)
+        try context.save()
+
+        try stored.applyMutation(.setCoverImage(Data([0xCA, 0xFE])))
+        try context.save()
+
+        let reloaded = try XCTUnwrap(stored.snapshot)
+        XCTAssertEqual(reloaded.coverImageData, Data([0xCA, 0xFE]))
+        XCTAssertEqual(
+            reloaded.days.flatMap(\.activities).first(where: { $0.id == activityID })?.note,
+            "別端末で更新したメモ"
+        )
+    }
+
+    @MainActor
+    func testScopedVenueImageMutationOnlyChangesTheUserOwnedImageField() throws {
+        let container = try TripMapStore.makeContainer(inMemoryOnly: true)
+        let context = container.mainContext
+        let activityID = OkinawaSample.trip.days[0].activities[0].id
+        let stored = try StoredTrip(validatingSnapshot: OkinawaSample.trip)
+        context.insert(stored)
+        try context.save()
+
+        var concurrent = try XCTUnwrap(stored.snapshot)
+        let concurrentDayIndex = try XCTUnwrap(
+            concurrent.days.firstIndex(where: { $0.activities.contains(where: { $0.id == activityID }) })
+        )
+        let concurrentActivityIndex = try XCTUnwrap(
+            concurrent.days[concurrentDayIndex].activities.firstIndex(where: { $0.id == activityID })
+        )
+        concurrent.days[concurrentDayIndex].activities[concurrentActivityIndex].place?.name =
+            "別端末で更新した場所名"
+        try stored.applyPlan(concurrent, in: context)
+        try context.save()
+
+        try stored.applyMutation(
+            .setVenueUserImage(activityID: activityID, imageData: Data([0x01, 0x02]))
+        )
+        try context.save()
+
+        let place = try XCTUnwrap(
+            stored.snapshot?.days
+                .flatMap(\.activities)
+                .first(where: { $0.id == activityID })?
+                .place
+        )
+        XCTAssertEqual(place.name, "別端末で更新した場所名")
+        XCTAssertEqual(place.imageData, Data([0x01, 0x02]))
+    }
+
+    @MainActor
+    func testScopedExternalVenueImageMutationPreservesUserOwnedVenueFields() throws {
+        let container = try TripMapStore.makeContainer(inMemoryOnly: true)
+        let context = container.mainContext
+        let activityID = OkinawaSample.trip.days[0].activities[0].id
+        let userImageData = Data([0x11, 0x12])
+        let externalImage = externalPlaceImage(providerImageID: "Scoped.jpg")
+        let stored = try StoredTrip(validatingSnapshot: OkinawaSample.trip)
+        context.insert(stored)
+        try context.save()
+
+        var concurrent = try XCTUnwrap(stored.snapshot)
+        let dayIndex = try XCTUnwrap(
+            concurrent.days.firstIndex(where: { $0.activities.contains(where: { $0.id == activityID }) })
+        )
+        let activityIndex = try XCTUnwrap(
+            concurrent.days[dayIndex].activities.firstIndex(where: { $0.id == activityID })
+        )
+        concurrent.days[dayIndex].activities[activityIndex].place?.name =
+            "ユーザーが選び直した場所"
+        concurrent.days[dayIndex].activities[activityIndex].place?.imageData =
+            userImageData
+        try stored.applyPlan(concurrent, in: context)
+        try context.save()
+
+        try stored.applyMutation(
+            .setExternalVenueImage(activityID: activityID, image: externalImage)
+        )
+        try context.save()
+
+        let place = try XCTUnwrap(
+            stored.snapshot?.days
+                .flatMap(\.activities)
+                .first(where: { $0.id == activityID })?
+                .place
+        )
+        XCTAssertEqual(place.name, "ユーザーが選び直した場所")
+        XCTAssertEqual(place.imageData, userImageData)
+        XCTAssertEqual(place.externalImage, externalImage)
+    }
+
+    @MainActor
+    func testScopedProgressMutationPreservesUnrelatedActivityFields() throws {
+        let container = try TripMapStore.makeContainer(inMemoryOnly: true)
+        let context = container.mainContext
+        let activityID = OkinawaSample.trip.days[0].activities[0].id
+        let changedAt = Date(timeIntervalSince1970: 1_810_000_000)
+        let stored = try StoredTrip(validatingSnapshot: OkinawaSample.trip)
+        context.insert(stored)
+        try context.save()
+
+        var concurrent = try XCTUnwrap(stored.snapshot)
+        let dayIndex = try XCTUnwrap(
+            concurrent.days.firstIndex(where: { $0.activities.contains(where: { $0.id == activityID }) })
+        )
+        let activityIndex = try XCTUnwrap(
+            concurrent.days[dayIndex].activities.firstIndex(where: { $0.id == activityID })
+        )
+        concurrent.days[dayIndex].activities[activityIndex].note =
+            "進捗とは独立したメモ"
+        try stored.applyPlan(concurrent, in: context)
+        try context.save()
+
+        try stored.applyMutation(
+            .setActivityProgress(
+                activityID: activityID,
+                progress: .skipped,
+                changedAt: changedAt
+            )
+        )
+        try context.save()
+
+        let activity = try XCTUnwrap(
+            stored.snapshot?.days
+                .flatMap(\.activities)
+                .first(where: { $0.id == activityID })
+        )
+        XCTAssertEqual(activity.progress, .skipped)
+        XCTAssertEqual(activity.progressUpdatedAt, changedAt)
+        XCTAssertEqual(activity.note, "進捗とは独立したメモ")
+    }
+
+    @MainActor
+    func testScopedMemoryMutationCompletesTheTargetWithoutOverwritingOtherFields() throws {
+        let container = try TripMapStore.makeContainer(inMemoryOnly: true)
+        let context = container.mainContext
+        let activityID = OkinawaSample.trip.days[0].activities[0].id
+        let otherActivityID = OkinawaSample.trip.days[0].activities[1].id
+        let completedAt = Date(timeIntervalSince1970: 1_800_000_000)
+        let stored = try StoredTrip(validatingSnapshot: OkinawaSample.trip)
+        context.insert(stored)
+        try context.save()
+
+        var concurrent = try XCTUnwrap(stored.snapshot)
+        let concurrentDayIndex = try XCTUnwrap(
+            concurrent.days.firstIndex(where: { $0.activities.contains(where: { $0.id == otherActivityID }) })
+        )
+        let concurrentActivityIndex = try XCTUnwrap(
+            concurrent.days[concurrentDayIndex].activities.firstIndex(where: { $0.id == otherActivityID })
+        )
+        concurrent.days[concurrentDayIndex].activities[concurrentActivityIndex].title =
+            "別端末で更新した次の予定"
+        try stored.applyPlan(concurrent, in: context)
+        try context.save()
+
+        try stored.applyMutation(
+            .recordActivityMemory(
+                activityID: activityID,
+                photoData: Data([0x03, 0x04]),
+                reflection: "  また来たい  ",
+                completedAt: completedAt
+            )
+        )
+        try context.save()
+
+        let reloaded = try XCTUnwrap(stored.snapshot)
+        let activity = try XCTUnwrap(
+            reloaded.days.flatMap(\.activities).first(where: { $0.id == activityID })
+        )
+        XCTAssertEqual(activity.progress, .completed)
+        XCTAssertEqual(activity.progressUpdatedAt, completedAt)
+        XCTAssertEqual(activity.memoryPhotoData, Data([0x03, 0x04]))
+        XCTAssertEqual(activity.reflection, "また来たい")
+        XCTAssertEqual(
+            reloaded.days.flatMap(\.activities).first(where: { $0.id == otherActivityID })?.title,
+            "別端末で更新した次の予定"
+        )
+    }
+
+    @MainActor
     func testStoredTripPersistsActivityProgressAfterPlanUpdate() throws {
         let container = try TripMapStore.makeContainer(inMemoryOnly: true)
         let context = container.mainContext
