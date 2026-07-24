@@ -1226,10 +1226,12 @@ platform expansion 記録として分離する。
 ### P8 — Sync Research Gate
 
 - versioned schema — local V1 baseline、migration plan、legacy store 無損失 open test を実装済み
-- CloudKit compatibility — 非 optional to-many relationship が現時点の blocker
+- CloudKit compatibility — optional to-many の隔離軽量 migration spike は成功。本番 V1 が live
+  model type を参照しており独立 freeze されていないことが現時点の blocker
 - conflict test — full-snapshot write を granular mutation へ改めてから三端末 matrix を実施
 - image quota — 1600px / 2MiB encoded ceiling と Cover・Venue・Memory 別 Trip inventory、
-  25MiB soft threshold を実装済み。device format と quota UX gate は継続
+  25MiB soft threshold、置換量を考慮した非破壊 confirmation UX を実装済み。
+  device format と実画面 gate は継続
 - account states — local-first を維持して全 `CKAccountStatus` を扱う
 
 2026-07-24 の調査結果は [`ADR 0011`](adr/0011-sync-research-gate.md) と
@@ -1267,8 +1269,10 @@ container、server schema はまだ追加しない。
 
 次の実装担当者は、この順序で作業する。
 
-1. Cloud-compatible V2 の optional relationship 設計と V1→V2 migration fixture を実装する。
-2. Trip image soft budget を画像選択前後の非破壊 UX へ接続する。
+1. 本番 V1 の version-specific model freeze と既存 store checksum / entity identity 互換性を、
+   iOS 17 / macOS 14 を扱える安定版 toolchain で証明する。証明前に本番 V2 を追加しない。
+2. Trip image soft budget の非破壊 UX は接続済み。実機で Cover・Venue・Memory の
+   予測量、確認、キャンセル、容量縮小時の非表示を確認する。
 3. Memory の PhotosPicker、保存、再表示、削除と Trip Card 集計を、安定した Simulator または実機で確認する。
 4. local reminder の permission / delivery / timezone change gate を、安定した Simulator または実機で確認する。
 5. Now / Next、Reservation、Offline review、Travel Leg route detail の実画面 viewport gate を、安定した Simulator が利用可能になった時点で再開する。

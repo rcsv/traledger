@@ -36,6 +36,7 @@ struct ActivityMap: View {
     let allowsPlaceImageEditing: Bool
     let showsPlaceDetailOverlay: Bool
     let pinLabels: [Activity.ID: ActivityMapPinLabel]
+    let imageBudgetSummary: String?
     @State private var cameraPosition: MapCameraPosition
 
     init(
@@ -47,7 +48,8 @@ struct ActivityMap: View {
         onUpdateExternalPlaceImage: @escaping (Activity.ID, ExternalPlaceImage?) -> Void = { _, _ in },
         allowsPlaceImageEditing: Bool = false,
         showsPlaceDetailOverlay: Bool = true,
-        pinLabels: [Activity.ID: ActivityMapPinLabel] = [:]
+        pinLabels: [Activity.ID: ActivityMapPinLabel] = [:],
+        imageBudgetSummary: String? = nil
     ) {
         self.day = day
         self.selectedActivityID = selectedActivityID
@@ -58,6 +60,7 @@ struct ActivityMap: View {
         self.allowsPlaceImageEditing = allowsPlaceImageEditing
         self.showsPlaceDetailOverlay = showsPlaceDetailOverlay
         self.pinLabels = pinLabels
+        self.imageBudgetSummary = imageBudgetSummary
         _cameraPosition = State(initialValue: Self.region(for: day).map(MapCameraPosition.region) ?? .automatic)
     }
 
@@ -136,7 +139,8 @@ struct ActivityMap: View {
                             place: place,
                             onUpdateImage: { imageData in onUpdatePlaceImage(selectedActivity.id, imageData) },
                             onUpdateExternalImage: { image in onUpdateExternalPlaceImage(selectedActivity.id, image) },
-                            allowsImageEditing: allowsPlaceImageEditing
+                            allowsImageEditing: allowsPlaceImageEditing,
+                            imageBudgetSummary: imageBudgetSummary
                         )
                         .padding()
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
@@ -297,6 +301,7 @@ private struct PlaceDetailOverlay: View {
     let onUpdateImage: (Data?) -> Void
     let onUpdateExternalImage: (ExternalPlaceImage?) -> Void
     let allowsImageEditing: Bool
+    let imageBudgetSummary: String?
     @State private var pickerItem: PhotosPickerItem?
     @State private var imageError: String?
     @StateObject private var venueResolution = PlaceResolutionModel()
@@ -468,6 +473,8 @@ private struct PlaceDetailOverlay: View {
                 .frame(maxWidth: .infinity)
         }
         .frame(maxWidth: .infinity)
+        .help(imageBudgetSummary ?? "Trip の場所画像を変更")
+        .accessibilityHint(imageBudgetSummary ?? "")
     }
 
     private var imageAccessibilityLabel: String {

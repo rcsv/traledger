@@ -7,6 +7,68 @@ import XCTest
 @testable import TripMap
 
 final class TripModelTests: XCTestCase {
+    @available(macOS 26.0, *)
+    @MainActor
+    func testOptionalToManyRelationshipSupportsLightweightMigration() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(
+            UUID().uuidString,
+            isDirectory: true
+        )
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let storeURL = directory.appendingPathComponent("OptionalRelationship.store")
+
+        do {
+            let schema = Schema(versionedSchema: OptionalRelationshipSchemaV1.self)
+            let configuration = ModelConfiguration(
+                schema: schema,
+                url: storeURL,
+                cloudKitDatabase: .none
+            )
+            let container = try ModelContainer(
+                for: schema,
+                migrationPlan: OptionalRelationshipMigrationPlan.self,
+                configurations: configuration
+            )
+            let root = OptionalRelationshipSchemaV1.Root(
+                id: UUID(uuidString: "A11E0000-0000-4000-8000-00000000AA01")!,
+                title: "Migration fixture"
+            )
+            root.children = [
+                OptionalRelationshipSchemaV1.Child(
+                    id: UUID(uuidString: "A11E0000-0000-4000-8000-00000000AA02")!,
+                    sequence: 1
+                )
+            ]
+            container.mainContext.insert(root)
+            try container.mainContext.save()
+        }
+
+        let schema = Schema(versionedSchema: OptionalRelationshipSchemaV2.self)
+        let configuration = ModelConfiguration(
+            schema: schema,
+            url: storeURL,
+            cloudKitDatabase: .none
+        )
+        let container = try ModelContainer(
+            for: schema,
+            migrationPlan: OptionalRelationshipMigrationPlan.self,
+            configurations: configuration
+        )
+        let roots = try container.mainContext.fetch(
+            FetchDescriptor<OptionalRelationshipSchemaV2.Root>()
+        )
+        let root = try XCTUnwrap(roots.first)
+        let child = try XCTUnwrap(root.children?.first)
+
+        XCTAssertEqual(roots.count, 1)
+        XCTAssertEqual(root.title, "Migration fixture")
+        XCTAssertEqual(root.id, UUID(uuidString: "A11E0000-0000-4000-8000-00000000AA01"))
+        XCTAssertEqual(child.id, UUID(uuidString: "A11E0000-0000-4000-8000-00000000AA02"))
+        XCTAssertEqual(child.sequence, 1)
+        XCTAssertEqual(child.root?.id, root.id)
+    }
+
     @MainActor
     func testImageNormalizationEnforcesPixelAndEncodedByteCeilings() throws {
         let image = NSImage(size: NSSize(width: 3_200, height: 2_400))
@@ -56,6 +118,47 @@ final class TripModelTests: XCTestCase {
         XCTAssertEqual(inventory.memoryPhotoCount, 1)
         XCTAssertEqual(inventory.totalImageCount, 4)
         XCTAssertFalse(inventory.exceedsSoftLimit)
+    }
+
+    func testTripImageSoftBudgetOnlyConfirmsGrowthAboveTheLimit() {
+        let limit = TripImageStorageInventory.softLimitByteCount
+        let inventory = TripImageStorageInventory(
+            coverByteCount: limit - 10,
+            venueUserImageByteCount: 0,
+            memoryPhotoByteCount: 0,
+            coverCount: 1,
+            venueUserImageCount: 0,
+            memoryPhotoCount: 0
+        )
+
+        let crossing = inventory.proposal(
+            replacing: Data(repeating: 0, count: limit - 10),
+            with: Data(repeating: 0, count: limit + 1)
+        )
+        XCTAssertTrue(crossing.requiresConfirmation)
+        XCTAssertEqual(crossing.proposedTotalByteCount, limit + 1)
+
+        let alreadyOver = TripImageStorageInventory(
+            coverByteCount: limit + 100,
+            venueUserImageByteCount: 0,
+            memoryPhotoByteCount: 0,
+            coverCount: 1,
+            venueUserImageCount: 0,
+            memoryPhotoCount: 0
+        )
+        let shrinking = alreadyOver.proposal(
+            replacing: Data(repeating: 0, count: limit + 100),
+            with: Data(repeating: 0, count: limit)
+        )
+        XCTAssertFalse(shrinking.requiresConfirmation)
+        XCTAssertEqual(shrinking.proposedTotalByteCount, limit)
+
+        let removal = alreadyOver.proposal(
+            replacing: Data(repeating: 0, count: limit + 100),
+            with: nil
+        )
+        XCTAssertFalse(removal.requiresConfirmation)
+        XCTAssertEqual(removal.proposedTotalByteCount, 0)
     }
 
     @MainActor
@@ -2143,4 +2246,80 @@ final class TripModelTests: XCTestCase {
         )
     }
     #endif
+}
+
+@available(macOS 26.0, *)
+enum OptionalRelationshipSchemaV1: VersionedSchema {
+    static let versionIdentifier = Schema.Version(1, 0, 0)
+    static let models: [any PersistentModel.Type] = [Root.self, Child.self]
+
+    @Model
+    final class Root {
+        var id: UUID = UUID()
+        var title: String = ""
+        @Relationship(deleteRule: .cascade, inverse: \Child.root)
+        var children: [Child] = []
+
+        init(id: UUID, title: String) {
+            self.id = id
+            self.title = title
+        }
+    }
+
+    @Model
+    final class Child {
+        var id: UUID = UUID()
+        var sequence: Int = 0
+        var root: Root?
+
+        init(id: UUID, sequence: Int) {
+            self.id = id
+            self.sequence = sequence
+        }
+    }
+}
+
+@available(macOS 26.0, *)
+enum OptionalRelationshipSchemaV2: VersionedSchema {
+    static let versionIdentifier = Schema.Version(2, 0, 0)
+    static let models: [any PersistentModel.Type] = [Root.self, Child.self]
+
+    @Model
+    final class Root {
+        var id: UUID = UUID()
+        var title: String = ""
+        @Relationship(deleteRule: .cascade, inverse: \Child.root)
+        var children: [Child]? = []
+
+        init(id: UUID, title: String) {
+            self.id = id
+            self.title = title
+        }
+    }
+
+    @Model
+    final class Child {
+        var id: UUID = UUID()
+        var sequence: Int = 0
+        var root: Root?
+
+        init(id: UUID, sequence: Int) {
+            self.id = id
+            self.sequence = sequence
+        }
+    }
+}
+
+@available(macOS 26.0, *)
+enum OptionalRelationshipMigrationPlan: SchemaMigrationPlan {
+    static let schemas: [any VersionedSchema.Type] = [
+        OptionalRelationshipSchemaV1.self,
+        OptionalRelationshipSchemaV2.self
+    ]
+    static let stages: [MigrationStage] = [
+        .lightweight(
+            fromVersion: OptionalRelationshipSchemaV1.self,
+            toVersion: OptionalRelationshipSchemaV2.self
+        )
+    ]
 }

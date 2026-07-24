@@ -7,9 +7,10 @@ Date: 2026-07-24
 ## Context
 
 TripMap currently has one local SwiftData store shared by the iOS, iPadOS, and
-macOS targets. The store has no explicit `VersionedSchema` or
-`SchemaMigrationPlan`. It contains a graph rooted at `StoredTrip`, three
-externally stored image fields, and several cascade relationships.
+macOS targets. It contains a graph rooted at `StoredTrip`, three externally
+stored image fields, and several cascade relationships. A local
+`VersionedSchema` baseline and `SchemaMigrationPlan` now identify this model as
+V1, but V1 still references the live top-level model types.
 
 P8 is limited to same-person, private-database synchronization. Collaboration
 and CloudKit sharing remain P10 work.
@@ -126,6 +127,29 @@ The local V1 baseline was implemented on 2026-07-24:
 This establishes the migration runway. It does not make the V1 relationship
 shape CloudKit-compatible and does not unblock sync activation.
 
+### V1 freeze finding
+
+`TripMapSchemaV1` identifies the current schema version, but its `models` list
+points to the same top-level `@Model` classes compiled by the live app. Changing
+one of those classes for V2 would also change the model metadata returned by V1.
+V1 is therefore versioned, but not yet an independently frozen historical model
+definition.
+
+An isolated test-only spike proves that a lightweight migration can preserve a
+parent and child while changing a to-many relationship from `[Child]` to
+`[Child]?`. The spike uses separate nested model definitions for V1 and V2 and
+passes in
+`testOptionalToManyRelationshipSupportsLightweightMigration`.
+
+With the current Xcode 27 beta SDK, those nested version-specific `@Model`
+definitions require a macOS 26 availability boundary even though the test
+target deploys to macOS 14. This is useful feasibility evidence, not permission
+to raise TripMap's deployment target or replace its production schema. The next
+production migration must first prove, on a stable toolchain supporting the
+app's iOS 17 and macOS 14 minimums, that frozen historical definitions retain
+the exact entity identity and checksum of stores already written by the live
+types.
+
 The Stage 2 image prerequisite was also implemented locally:
 
 - `TripImageProcessor` uses Image I/O on every platform, strips the selected
@@ -134,12 +158,18 @@ The Stage 2 image prerequisite was also implemented locally:
 - `TripImageStorageInventory` separately counts Cover, Venue user-image, and
   Activity Memory bytes and images;
 - 25 MiB per Trip is a soft product-review threshold, not a destructive limit;
+- Cover, Venue, and Memory selection paths calculate replacement-aware projected
+  usage; growth above the threshold requires explicit confirmation, while
+  removal and size-reducing replacement remain uninterrupted;
+- Plan Overview and Memory editing expose current or projected usage, and the
+  warning explains sync cost without claiming that local save or sync failed;
 - Look Around and Wikimedia metadata are excluded because they are not
   user-owned stored image bytes.
 
 Large PNG normalization and byte/pixel limits have automated macOS coverage.
-Large HEIC/JPEG inputs, image orientation, and on-device PhotosPicker delivery
-remain part of Q01’s stable-device gate.
+The soft-budget decision rule also has unit coverage. Large HEIC/JPEG inputs,
+image orientation, on-device PhotosPicker delivery, and visual confirmation of
+the warning remain part of the stable-device gate.
 
 ## Data and UX rules
 
@@ -159,7 +189,8 @@ remain part of Q01’s stable-device gate.
 
 ## Exit criteria
 
-CloudKit activation remains blocked until all required rows in
+CloudKit activation remains blocked until V1 has an independently frozen,
+back-deployable historical definition, all required rows in
 [`sync-research-gate-matrix.md`](../qa/sync-research-gate-matrix.md) have
 evidence, the local V1-to-V2 path preserves a realistic fixture store, and no
 test requires deleting the application or its data to recover.

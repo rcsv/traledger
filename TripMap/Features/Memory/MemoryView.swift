@@ -95,7 +95,10 @@ struct MemoryView: View {
         }
         .sheet(item: $editorTarget) { target in
             if let activity = trip.days.flatMap(\.activities).first(where: { $0.id == target.activityID }) {
-                MemoryEditorSheet(activity: activity) { photoData, reflection in
+                MemoryEditorSheet(
+                    activity: activity,
+                    imageInventory: trip.imageStorageInventory
+                ) { photoData, reflection in
                     saveMemory(
                         activityID: activity.id,
                         photoData: photoData,
@@ -186,6 +189,7 @@ private struct MemoryActivityRow: View {
 
 private struct MemoryEditorSheet: View {
     let activity: Activity
+    let imageInventory: TripImageStorageInventory
     let onSave: (Data?, String?) -> Bool
 
     @Environment(\.dismiss) private var dismiss
@@ -193,9 +197,15 @@ private struct MemoryEditorSheet: View {
     @State private var photoData: Data?
     @State private var reflection: String
     @State private var imageError: String?
+    @State private var isBudgetConfirmationPresented = false
 
-    init(activity: Activity, onSave: @escaping (Data?, String?) -> Bool) {
+    init(
+        activity: Activity,
+        imageInventory: TripImageStorageInventory,
+        onSave: @escaping (Data?, String?) -> Bool
+    ) {
         self.activity = activity
+        self.imageInventory = imageInventory
         self.onSave = onSave
         _photoData = State(initialValue: activity.memoryPhotoData)
         _reflection = State(initialValue: activity.reflection ?? "")
@@ -210,7 +220,7 @@ private struct MemoryEditorSheet: View {
                     Label(activity.title, systemImage: "checkmark.circle.fill")
                 }
 
-                Section("写真") {
+                Section {
                     MemoryPhoto(data: photoData)
                         .frame(maxWidth: .infinity)
                         .frame(height: 220)
@@ -229,6 +239,10 @@ private struct MemoryEditorSheet: View {
                             pickerItem = nil
                         }
                     }
+                } header: {
+                    Text("写真")
+                } footer: {
+                    Text(imageBudgetSummary)
                 }
 
                 Section {
@@ -252,8 +266,10 @@ private struct MemoryEditorSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("保存") {
-                        if onSave(photoData, reflection) {
-                            dismiss()
+                        if imageBudgetProposal.requiresConfirmation {
+                            isBudgetConfirmationPresented = true
+                        } else {
+                            saveAndDismiss()
                         }
                     }
                     .accessibilityIdentifier("memory-save-button")
@@ -277,8 +293,39 @@ private struct MemoryEditorSheet: View {
         } message: {
             Text(imageError ?? "不明なエラー")
         }
+        .alert("画像容量の目安を超えます", isPresented: $isBudgetConfirmationPresented) {
+            Button("この写真を使用") { saveAndDismiss() }
+            Button("キャンセル", role: .cancel) {}
+        } message: {
+            Text(
+                "保存後は \(formattedByteCount(imageBudgetProposal.proposedTotalByteCount)) です。"
+                    + " 写真は削除されませんが、将来の端末間同期に時間がかかる可能性があります。"
+            )
+        }
         .presentationDetents([.large])
         .accessibilityIdentifier("memory-editor")
+    }
+
+    private var imageBudgetProposal: TripImageBudgetProposal {
+        imageInventory.proposal(
+            replacing: activity.memoryPhotoData,
+            with: photoData
+        )
+    }
+
+    private var imageBudgetSummary: String {
+        "Trip の画像 \(formattedByteCount(imageBudgetProposal.proposedTotalByteCount))"
+            + " / 目安 \(formattedByteCount(TripImageStorageInventory.softLimitByteCount))"
+    }
+
+    private func formattedByteCount(_ byteCount: Int) -> String {
+        ByteCountFormatter.string(fromByteCount: Int64(byteCount), countStyle: .file)
+    }
+
+    private func saveAndDismiss() {
+        if onSave(photoData, reflection) {
+            dismiss()
+        }
     }
 }
 

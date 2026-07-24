@@ -29,13 +29,22 @@ close the release gate.
 | M04 | Interrupt migration using a copied store | Original copy remains recoverable; no reset path is offered | integration test |
 | M05 | Open a future/unknown schema | Show non-destructive store-unavailable UI | integration test |
 | M06 | Upgrade a store with empty, dense, and adversarial Trips | All validation invariants remain true | macOS test |
+| M07 | Freeze V1 into version-specific model definitions | Existing V1 store entity identities and checksums remain compatible on iOS 17 / macOS 14 | stable-toolchain fixture test |
 
 Current evidence:
 
 - M01 passes in
   `testVersionedStoreOpensUnversionedStoreWithoutDataLoss`.
 - M02 passes in `testDiskBackedStoreReopensSavedTrip`.
-- M03–M06 remain required before a Cloud-compatible V2 can ship.
+- A test-only, macOS 26-available spike proves the core M03 relationship change:
+  `testOptionalToManyRelationshipSupportsLightweightMigration` preserves the
+  parent, child, UUIDs, scalar values, and inverse when `[Child]` becomes
+  `[Child]?`.
+- M03 is not closed for the production graph. The current V1 schema references
+  live top-level models rather than frozen version-specific definitions.
+- M04–M07 remain required before a Cloud-compatible V2 can ship. M07 must run
+  with a stable toolchain at the supported iOS 17 / macOS 14 minimums; beta-only
+  evidence cannot close it.
 
 ## Stage B — image budget
 
@@ -55,7 +64,12 @@ Current evidence:
   1600-pixel and 2 MiB ceilings, and malformed data is rejected.
 - The pure Trip inventory has automated Cover/Venue/Memory separation and count
   coverage.
-- HEIC/JPEG device inputs, orientation, Q02 UI, and Q03–Q05 remain open.
+- Q02's product rule and UI wiring are implemented: only growth above 25 MiB
+  asks for confirmation; removal and size-reducing replacement are never
+  blocked. Cover, Venue, and Memory all use the same replacement-aware
+  projection.
+- HEIC/JPEG device inputs, orientation, visual/device confirmation of Q02, and
+  Q03–Q05 remain open.
 
 ## Stage C — account and lifecycle
 

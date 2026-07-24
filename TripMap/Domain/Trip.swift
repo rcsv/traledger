@@ -33,6 +33,30 @@ struct TripImageStorageInventory: Equatable, Sendable {
     var exceedsSoftLimit: Bool {
         totalByteCount > Self.softLimitByteCount
     }
+
+    func proposal(replacing existingData: Data?, with candidateData: Data?) -> TripImageBudgetProposal {
+        TripImageBudgetProposal(
+            currentTotalByteCount: totalByteCount,
+            replacedByteCount: existingData?.count ?? 0,
+            candidateByteCount: candidateData?.count ?? 0
+        )
+    }
+}
+
+struct TripImageBudgetProposal: Equatable, Sendable {
+    let currentTotalByteCount: Int
+    let replacedByteCount: Int
+    let candidateByteCount: Int
+
+    var proposedTotalByteCount: Int {
+        max(0, currentTotalByteCount - replacedByteCount + candidateByteCount)
+    }
+
+    /// A soft budget never blocks removal or a replacement that reduces usage.
+    var requiresConfirmation: Bool {
+        proposedTotalByteCount > TripImageStorageInventory.softLimitByteCount
+            && proposedTotalByteCount > currentTotalByteCount
+    }
 }
 
 struct Day: Identifiable, Hashable, Sendable {

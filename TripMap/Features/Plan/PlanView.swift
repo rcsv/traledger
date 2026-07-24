@@ -11,6 +11,11 @@ private enum PlanDestination: Hashable {
     case day(Day.ID)
 }
 
+private enum PendingTripImageUpdate {
+    case cover(Data)
+    case venue(activityID: Activity.ID, data: Data)
+}
+
 struct PlanView: View {
     @Query private var participantAssignments: [StoredTripParticipant]
     @Environment(\.undoManager) private var undoManager
@@ -29,6 +34,7 @@ struct PlanView: View {
     @State private var pendingVenueFocusActivityID: Activity.ID?
     @State private var isMemoryPresented = false
     @State private var errorMessage: String?
+    @State private var pendingImageUpdate: PendingTripImageUpdate?
 
     init(
         trip: Trip,
@@ -160,10 +166,8 @@ struct PlanView: View {
                 if coverPickerItem != nil { errorMessage = "表紙画像を読み込めませんでした。" }
                 return
             }
-            var updated = trip
-            updated.coverImageData = data
-            apply(updated)
             coverPickerItem = nil
+            requestImageUpdate(.cover(data), replacing: trip.coverImageData)
         }
         .sheet(item: $operation) { operation in
             switch operation {
@@ -224,6 +228,20 @@ struct PlanView: View {
             Button("キャンセル", role: .cancel) { pendingActivityDeletion = nil }
         } message: {
             Text("場所と画像も削除されます。この操作は取り消せません。")
+        }
+        .alert("画像容量の目安を超えます", isPresented: Binding(
+            get: { pendingImageUpdate != nil },
+            set: { if !$0 { pendingImageUpdate = nil } }
+        )) {
+            Button("この画像を使用") {
+                if let pendingImageUpdate {
+                    commitImageUpdate(pendingImageUpdate)
+                }
+                pendingImageUpdate = nil
+            }
+            Button("キャンセル", role: .cancel) { pendingImageUpdate = nil }
+        } message: {
+            Text(imageBudgetWarningMessage)
         }
         .alert("予定を更新できませんでした", isPresented: Binding(
             get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } }
@@ -432,10 +450,11 @@ struct PlanView: View {
             selectedActivityID: interaction.selectedActivityID,
             cameraRequest: interaction.cameraRequest,
             onSelectMapActivity: selectActivityFromMap,
-            onUpdatePlaceImage: updatePlaceImage,
-            onUpdateExternalPlaceImage: updateExternalPlaceImage,
-            allowsPlaceImageEditing: true
-        )
+                onUpdatePlaceImage: updatePlaceImage,
+                onUpdateExternalPlaceImage: updateExternalPlaceImage,
+                allowsPlaceImageEditing: true,
+                imageBudgetSummary: imageBudgetSummary
+            )
         .ignoresSafeArea(edges: [.top, .bottom])
     }
 
@@ -488,6 +507,53 @@ struct PlanView: View {
     }
 
     private func updatePlaceImage(activityID: Activity.ID, imageData: Data?) {
+        guard let imageData else {
+            commitPlaceImage(activityID: activityID, imageData: nil)
+            return
+        }
+        let existingData = trip.days
+            .flatMap(\.activities)
+            .first(where: { $0.id == activityID })?
+            .place?
+            .imageData
+        requestImageUpdate(
+            .venue(activityID: activityID, data: imageData),
+            replacing: existingData
+        )
+    }
+
+    private func requestImageUpdate(
+        _ update: PendingTripImageUpdate,
+        replacing existingData: Data?
+    ) {
+        let candidateData: Data
+        switch update {
+        case .cover(let data), .venue(_, let data):
+            candidateData = data
+        }
+        let proposal = trip.imageStorageInventory.proposal(
+            replacing: existingData,
+            with: candidateData
+        )
+        if proposal.requiresConfirmation {
+            pendingImageUpdate = update
+        } else {
+            commitImageUpdate(update)
+        }
+    }
+
+    private func commitImageUpdate(_ update: PendingTripImageUpdate) {
+        switch update {
+        case .cover(let data):
+            var updated = trip
+            updated.coverImageData = data
+            apply(updated)
+        case .venue(let activityID, let data):
+            commitPlaceImage(activityID: activityID, imageData: data)
+        }
+    }
+
+    private func commitPlaceImage(activityID: Activity.ID, imageData: Data?) {
         var updated = trip
         for dayIndex in updated.days.indices {
             guard let activityIndex = updated.days[dayIndex].activities.firstIndex(where: { $0.id == activityID }) else {
@@ -498,6 +564,42 @@ struct PlanView: View {
             return
         }
         errorMessage = "画像を更新するActivityが見つかりませんでした。"
+    }
+
+    private var pendingImageBudgetProposal: TripImageBudgetProposal? {
+        guard let pendingImageUpdate else { return nil }
+        switch pendingImageUpdate {
+        case .cover(let data):
+            return trip.imageStorageInventory.proposal(
+                replacing: trip.coverImageData,
+                with: data
+            )
+        case .venue(let activityID, let data):
+            let existingData = trip.days
+                .flatMap(\.activities)
+                .first(where: { $0.id == activityID })?
+                .place?
+                .imageData
+            return trip.imageStorageInventory.proposal(
+                replacing: existingData,
+                with: data
+            )
+        }
+    }
+
+    private var imageBudgetWarningMessage: String {
+        guard let proposal = pendingImageBudgetProposal else { return "" }
+        return "追加後は \(formattedByteCount(proposal.proposedTotalByteCount)) です。"
+            + " 画像は削除されませんが、将来の端末間同期に時間がかかる可能性があります。"
+    }
+
+    private var imageBudgetSummary: String {
+        "Trip の画像 \(formattedByteCount(trip.imageStorageInventory.totalByteCount))"
+            + " / 目安 \(formattedByteCount(TripImageStorageInventory.softLimitByteCount))"
+    }
+
+    private func formattedByteCount(_ byteCount: Int) -> String {
+        ByteCountFormatter.string(fromByteCount: Int64(byteCount), countStyle: .file)
     }
 
     private func updateExternalPlaceImage(activityID: Activity.ID, image: ExternalPlaceImage?) {
@@ -1130,6 +1232,17 @@ private struct TripOverviewView: View {
                     .padding(16)
                 }
                 .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+
+                Label(
+                    "Trip の画像 \(ByteCountFormatter.string(fromByteCount: Int64(trip.imageStorageInventory.totalByteCount), countStyle: .file))"
+                        + " / 目安 \(ByteCountFormatter.string(fromByteCount: Int64(TripImageStorageInventory.softLimitByteCount), countStyle: .file))",
+                    systemImage: trip.imageStorageInventory.exceedsSoftLimit
+                        ? "exclamationmark.icloud"
+                        : "externaldrive"
+                )
+                .font(.caption)
+                .foregroundStyle(trip.imageStorageInventory.exceedsSoftLimit ? Color.orange : Color.secondary)
+                .accessibilityIdentifier("trip-image-budget-summary")
 
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 260), alignment: .top)], spacing: 16) {
                     GroupBox("Trip details") {
