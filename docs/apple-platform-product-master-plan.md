@@ -512,16 +512,21 @@ Pexels は地域イメージを得るためだけに API キー保護サーバ�
 
 移動は Activity の属性ではなく、前後 Activity の関係である。
 
-将来の永続モデルとして最低限、次を持つ。
+Domain、MapKit 境界、状態、無効化、永続化の判断は
+[`ADR 0004`](adr/0004-travel-leg-domain.md) を正とする。
+
+将来の永続モデルは、ユーザーが明示した次の意図だけを持つ。
 
 - from Activity ID
 - to Activity ID
 - transport type
 - ユーザー指定の所要時間（任意）
-- MapKit 推定時間と取得日時（キャッシュ）
 - メモ（乗換、集合場所など）
 
-初期段階では MapKit 推定を派生データとして扱い、安定後にユーザー指定値だけを永続化する。
+MapKit 推定時間、取得日時、polyline は破棄可能な派生データとし、Trip の永続モデルや交換
+schema へ含めない。初期段階は、隣接し双方に Venue がある Activity ペアから車の leg を導出し、
+推定をメモリだけに保持する。transport、手動所要時間、メモを編集する段階で初めてユーザー意図の
+永続レコードを追加する。
 
 ### 10.2 表示
 
@@ -1085,6 +1090,7 @@ P1 以降の platform expansion Gate として扱う。
 
 ### P3 — Travel Leg
 
+- Domain / MapKit boundary ADR — accepted in ADR 0004
 - leg UI
 - transport type
 - calculation states
@@ -1181,9 +1187,10 @@ P1 以降の platform expansion Gate として扱う。
 
 次の実装担当者は、この順序で作業する。
 
-1. Travel Leg の Domain 仕様を ADR として先に確定する。
-2. iPadOS adaptive workspace を追加し、iPad viewport を確認する。
-3. Activity の完了 / スキップ状態を Domain として定義し、iPhone quick edit の第二段階を実装する。
+1. ADR 0004 に従い、Travel Leg の stateful domain projection と deterministic test を追加する。
+2. leg row の calculation states と、取得不能でも崩れない表示を実装する。
+3. iPadOS adaptive workspace を追加し、iPad viewport を確認する。
+4. Activity の完了 / スキップ状態を Domain として定義し、iPhone quick edit の第二段階を実装する。
 
 新しい外部画像 provider、評価データ、独自サーバー、AI、CloudKit は、それぞれの Research Gate
 なしに開始しない。
