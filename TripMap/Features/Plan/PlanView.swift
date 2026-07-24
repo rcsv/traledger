@@ -648,7 +648,7 @@ private struct ActivityEditorSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("予定") {
+                Section {
                     TextField("予定の名前", text: $title)
                     Toggle("時刻を設定", isOn: $hasStartTime)
                     if hasStartTime {
@@ -657,22 +657,17 @@ private struct ActivityEditorSheet: View {
                     }
                     TextField("メモ", text: $note, axis: .vertical)
                         .lineLimit(3...6)
+                } header: {
+                    Text("予定")
+                        .accessibilityIdentifier("activity-editor")
                 }
 
                 Section("種類と所要時間") {
-                    Picker("カテゴリ", selection: $category) {
-                        Text("未設定").tag(nil as ActivityCategory?)
-                        ForEach(ActivityCategory.allCases) { category in
-                            Label(category.displayName, systemImage: category.systemImage)
-                                .tag(Optional(category))
-                        }
-                    }
-                    Toggle("所要時間を設定", isOn: $hasDuration)
-                    if hasDuration {
-                        Stepper(value: $durationMinutes, in: 5...1_440, step: 5) {
-                            Text("所要時間 \(formattedDuration(durationMinutes))")
-                        }
-                    }
+                    ActivityCategoryDurationFields(
+                        category: $category,
+                        hasDuration: $hasDuration,
+                        durationMinutes: $durationMinutes
+                    )
                 }
 
                 Section("場所") {
@@ -697,7 +692,6 @@ private struct ActivityEditorSheet: View {
                     }
                 }
             }
-            .accessibilityIdentifier("activity-editor")
             .navigationTitle("予定を編集")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -727,14 +721,6 @@ private struct ActivityEditorSheet: View {
                 self.place = place
             }
         }
-    }
-
-    private func formattedDuration(_ minutes: Int) -> String {
-        let hours = minutes / 60
-        let remainder = minutes % 60
-        if hours == 0 { return "\(minutes)分" }
-        if remainder == 0 { return "\(hours)時間" }
-        return "\(hours)時間\(remainder)分"
     }
 }
 
@@ -861,6 +847,52 @@ private struct VenueSearchSheet: View {
     }
 }
 
+private struct ActivityCategoryDurationFields: View {
+    @Binding var category: ActivityCategory?
+    @Binding var hasDuration: Bool
+    @Binding var durationMinutes: Int
+
+    var body: some View {
+        Picker("カテゴリ", selection: $category) {
+            Text("未設定").tag(nil as ActivityCategory?)
+            ForEach(ActivityCategory.allCases) { category in
+                Label(category.displayName, systemImage: category.systemImage)
+                    .tag(Optional(category))
+            }
+        }
+
+        if !hasDuration,
+           let suggestedDuration = category?.suggestedDurationMinutes {
+            Button {
+                durationMinutes = suggestedDuration
+                hasDuration = true
+            } label: {
+                Label(
+                    "おすすめの所要時間：\(formattedDuration(suggestedDuration))",
+                    systemImage: "sparkles"
+                )
+            }
+            .accessibilityIdentifier("duration-suggestion")
+            .accessibilityHint("カテゴリの目安を所要時間として設定します")
+        }
+
+        Toggle("所要時間を設定", isOn: $hasDuration)
+        if hasDuration {
+            Stepper(value: $durationMinutes, in: 5...1_440, step: 5) {
+                Text("所要時間 \(formattedDuration(durationMinutes))")
+            }
+        }
+    }
+
+    private func formattedDuration(_ minutes: Int) -> String {
+        let hours = minutes / 60
+        let remainder = minutes % 60
+        if hours == 0 { return "\(minutes)分" }
+        if remainder == 0 { return "\(hours)時間" }
+        return "\(hours)時間\(remainder)分"
+    }
+}
+
 private struct ActivityCreationSheet: View {
     let day: Day
     let timeZoneIdentifier: String
@@ -913,19 +945,11 @@ private struct ActivityCreationSheet: View {
                 }
 
                 Section("種類と所要時間") {
-                    Picker("カテゴリ", selection: $category) {
-                        Text("未設定").tag(nil as ActivityCategory?)
-                        ForEach(ActivityCategory.allCases) { category in
-                            Label(category.displayName, systemImage: category.systemImage)
-                                .tag(Optional(category))
-                        }
-                    }
-                    Toggle("所要時間を設定", isOn: $hasDuration)
-                    if hasDuration {
-                        Stepper(value: $durationMinutes, in: 5...1_440, step: 5) {
-                            Text("所要時間 \(formattedDuration(durationMinutes))")
-                        }
-                    }
+                    ActivityCategoryDurationFields(
+                        category: $category,
+                        hasDuration: $hasDuration,
+                        durationMinutes: $durationMinutes
+                    )
                 }
             }
             .navigationTitle("Day \(day.sequence)に追加")
@@ -948,14 +972,6 @@ private struct ActivityCreationSheet: View {
             }
         }
         .frame(minWidth: 360, minHeight: 340)
-    }
-
-    private func formattedDuration(_ minutes: Int) -> String {
-        let hours = minutes / 60
-        let remainder = minutes % 60
-        if hours == 0 { return "\(minutes)分" }
-        if remainder == 0 { return "\(hours)時間" }
-        return "\(hours)時間\(remainder)分"
     }
 }
 

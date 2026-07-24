@@ -574,6 +574,16 @@ final class TripModelTests: XCTestCase {
         }))
     }
 
+    func testActivityCategoryDurationSuggestionsUseTravelPlanningDefaults() {
+        XCTAssertEqual(ActivityCategory.transport.suggestedDurationMinutes, 30)
+        XCTAssertEqual(ActivityCategory.restaurant.suggestedDurationMinutes, 60)
+        XCTAssertEqual(ActivityCategory.accommodation.suggestedDurationMinutes, 30)
+        XCTAssertEqual(ActivityCategory.sightseeing.suggestedDurationMinutes, 90)
+        XCTAssertEqual(ActivityCategory.activity.suggestedDurationMinutes, 120)
+        XCTAssertEqual(ActivityCategory.shopping.suggestedDurationMinutes, 60)
+        XCTAssertNil(ActivityCategory.other.suggestedDurationMinutes)
+    }
+
     func testDoctorTargetsCategorizedActivityMissingDuration() {
         var trip = OkinawaSample.trip
         let day = trip.days[1]

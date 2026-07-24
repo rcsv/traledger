@@ -30,7 +30,7 @@ Venue Card 上の Look Around、Wikimedia fallback、PhotosPicker ユーザー�
 | Look Around 取得不能時の Wikimedia fallback | Pass | 那覇空港で Look Around が `nil`、Commons exact-venue image の取得・保存コールバックを確認 |
 | 同一 request の再実行防止 | Pass | 同一 Venue の連続 `load` で各 resolver が1回だけ呼ばれるモデルテスト |
 | Venue 変更後の古い結果を棄却 | Pass | 遅延した旧 Wikimedia 結果が表示・保存されないモデルテスト |
-| 通常 macOS regression | Pass | `TripMap-macOS` の60テストが成功 |
+| 通常 macOS regression | Pass | `TripMap-macOS` の61テストが成功 |
 | 通常 iOS Simulator build | Pass | arm64 / x86_64 の generic Simulator build が成功 |
 | QA fixture の Library 表示 | Pass | `TRIPMAP_QA` 専用ビルドで `Venue Image QA` Trip を実画面確認 |
 | macOS UI automation mode | Pass | 残留 TripMap / `testmanagerd` を終了し、全 Simulator を shutdown して再生成した後、専用 QA scheme が test method まで到達 |
@@ -71,9 +71,9 @@ regular / narrow の画像寸法と主要ボタン、Wikimedia attribution の k
 PhotosPicker の実操作には、QA 実行環境の写真ライブラリに選択可能な画像が1枚以上必要である。通常
 `TripMap-macOS` scheme では UI test を skip し、60件の deterministic test だけを実行する。
 2026-07-24 はQA schemeに欠けていた専用コンパイル条件を `Debug-QA` として追加し、DerivedData や
-外部フラグに依存しない automation mode へ復旧した。Venue image 6項目と Activity Card操作3項目の
-合計9 test が failure 0 で成功した。最終再実行の結果 bundle は
-`DerivedData-VenueImageUITest/Logs/Test/Test-TripMap-VenueImage-QA-2026.07.24_10-18-48-+0900.xcresult`。
+外部フラグに依存しない automation mode へ復旧した。Venue image 6項目、Activity Card操作3項目、
+duration suggestion 2項目の合計11 test が failure 0 で成功した。最終再実行の結果 bundle は
+`DerivedData-VenueImageUITest/Logs/Test/Test-TripMap-VenueImage-QA-2026.07.24_10-35-12-+0900.xcresult`。
 
 Look Around の可用性は地点単位で変化する。今回の probe では東京駅と東京タワーは取得不能、
 渋谷スクランブル交差点は取得可能だったため、QA fixture は渋谷を採用した。地名の知名度だけで

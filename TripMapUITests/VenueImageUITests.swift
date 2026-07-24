@@ -15,14 +15,13 @@ final class VenueImageUITests: XCTestCase {
         ]
         app.launch()
 
+        let expectedLabel = "渋谷スクランブル交差点 周辺の Look Around 画像"
         let venueImage = app.descendants(matching: .any)
             .matching(identifier: "venue-image")
+            .matching(NSPredicate(format: "label == %@", expectedLabel))
             .firstMatch
         XCTAssertTrue(venueImage.waitForExistence(timeout: 15))
-        XCTAssertEqual(
-            venueImage.label,
-            "渋谷スクランブル交差点 周辺の Look Around 画像"
-        )
+        XCTAssertEqual(venueImage.label, expectedLabel)
     }
 
     @MainActor
@@ -68,11 +67,13 @@ final class VenueImageUITests: XCTestCase {
         ]
         app.launch()
 
+        let expectedLabel = "那覇空港 の Wikimedia Commons 画像"
         let venueImage = app.descendants(matching: .any)
             .matching(identifier: "venue-image")
+            .matching(NSPredicate(format: "label == %@", expectedLabel))
             .firstMatch
         XCTAssertTrue(venueImage.waitForExistence(timeout: 15))
-        XCTAssertEqual(venueImage.label, "那覇空港 の Wikimedia Commons 画像")
+        XCTAssertEqual(venueImage.label, expectedLabel)
         XCTAssertTrue(
             app.links.matching(
                 NSPredicate(format: "label BEGINSWITH %@", "Wikimedia Commons の画像。作者")
@@ -122,6 +123,47 @@ final class VenueImageUITests: XCTestCase {
 
         XCTAssertTrue(app.menuItems["予定を編集"].firstMatch.waitForExistence(timeout: 5))
         XCTAssertTrue(app.menuItems["予定を削除"].firstMatch.exists)
+    }
+
+    @MainActor
+    func testCategoryDurationSuggestionAppliesWhenUnset() {
+        let app = launchUserImageFixture()
+        let activityCard = app.buttons["activity-3"].firstMatch
+
+        XCTAssertTrue(activityCard.waitForExistence(timeout: 15))
+        activityCard.doubleClick()
+
+        let suggestion = app.buttons["duration-suggestion"].firstMatch
+        XCTAssertTrue(suggestion.waitForExistence(timeout: 10))
+        XCTAssertEqual(suggestion.label, "おすすめの所要時間：1時間30分")
+        suggestion.click()
+
+        XCTAssertFalse(suggestion.exists)
+        XCTAssertTrue(
+            app.staticTexts["所要時間 1時間30分"].firstMatch
+                .waitForExistence(timeout: 5)
+        )
+    }
+
+    @MainActor
+    func testDurationSuggestionDoesNotReplaceExistingDuration() {
+        let app = launchUserImageFixture()
+        let activityCard = app.buttons["activity-1"].firstMatch
+
+        XCTAssertTrue(activityCard.waitForExistence(timeout: 15))
+        activityCard.doubleClick()
+
+        XCTAssertTrue(
+            app.descendants(matching: .any)
+                .matching(identifier: "activity-editor")
+                .firstMatch
+                .waitForExistence(timeout: 10)
+        )
+        XCTAssertFalse(app.buttons["duration-suggestion"].firstMatch.exists)
+        XCTAssertTrue(
+            app.staticTexts["所要時間 45分"].firstMatch
+                .waitForExistence(timeout: 5)
+        )
     }
 
     @MainActor

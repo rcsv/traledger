@@ -382,6 +382,9 @@ Venue 検索は Editor 内の独立セクションに置く。検索結果選択
 合わせるかを提案してもよいが、自動変更しない。
 
 標準所要時間はカテゴリ別の提案として出し、未設定時だけワンタップで採用できるようにする。
+2026-07-24 時点の初期値は、移動30分、食事60分、宿泊30分、観光90分、体験120分、買い物60分
+とする。`その他`には一律の根拠がないため提案しない。提案は自動適用せず、既存の所要時間を
+カテゴリ変更やEditor表示だけで上書きしない。
 
 ### 8.5 Activity の操作
 
@@ -986,7 +989,7 @@ Gate 文書には次を記載する。
 - View 再描画に対する task ownership を改善済み
 - Wikimedia 取得結果を Card 内で保持する補正を実装済み
 - resolver の依存性注入と lifecycle regression test は実装済み
-- macOS の通常60テスト、macOS QA build、iOS generic Simulator build は成功
+- macOS の通常61テスト、macOS QA build、iOS generic Simulator build は成功
 - 渋谷スクランブル交差点の Look Around と、那覇空港の Wikimedia fallback は
   実サービス smoke test で成功
 - QA Trip の Library 表示は実画面確認済み
@@ -994,7 +997,7 @@ Gate 文書には次を記載する。
 - 残留 TripMap / `testmanagerd` の終了と全 Simulator shutdown により macOS UI automation mode は復旧済み
 - `Debug-QA` build configuration により、専用 QA scheme が外部 Swift flag や古い DerivedData に
   依存せず `TRIPMAP_QA` を有効化するよう修正済み
-- 専用 QA scheme の9テストが成功し、渋谷 Look Around、那覇 Wikimedia と帰属リンク、
+- 専用 QA scheme の11テストが成功し、渋谷 Look Around、那覇 Wikimedia と帰属リンク、
   native PhotosPicker でのユーザー画像選択、seed なし再起動後の永続化を確認済み
 - CoreSimulator は復旧し、iOS generic Simulator build は成功
 - macOS 1180×720 / 700×720 の regular / narrow と、176×99 / 88×88 の画像適応を確認済み
@@ -1021,7 +1024,7 @@ P1 以降の platform expansion Gate として扱う。
 ### P1 — Activity Input UX
 
 - Double-click / Return / Context Menu — implemented and UI-tested on macOS
-- Category duration suggestion
+- Category duration suggestion — implemented for create/edit; explicit apply and existing-value preservation UI-tested
 - Venue search section
 - Drag reorder
 - Undo / Redo
@@ -1140,13 +1143,12 @@ P1 以降の platform expansion Gate として扱う。
 
 次の実装担当者は、この順序で作業する。
 
-1. Activity Editor の category duration suggestion を実装する。
-2. Activity Editor の Venue search section を確認し、不足する情報階層だけを補う。
-3. Activity Card の drag reorder と Undo / Redo を一つの編集トランザクションとして設計する。
-4. iPhone quick edit を実装し、Dynamic Type と片手操作を確認する。
-5. Doctor issue から対象 Activity Editor へ移動する。
-6. Travel Leg の Domain 仕様を ADR として先に確定する。
-7. iPadOS adaptive workspace を追加し、iPad viewport を確認する。
+1. Activity Editor の Venue search section を確認し、不足する情報階層だけを補う。
+2. Activity Card の drag reorder と Undo / Redo を一つの編集トランザクションとして設計する。
+3. iPhone quick edit を実装し、Dynamic Type と片手操作を確認する。
+4. Doctor issue から対象 Activity Editor へ移動する。
+5. Travel Leg の Domain 仕様を ADR として先に確定する。
+6. iPadOS adaptive workspace を追加し、iPad viewport を確認する。
 
 新しい外部画像 provider、評価データ、独自サーバー、AI、CloudKit は、それぞれの Research Gate
 なしに開始しない。

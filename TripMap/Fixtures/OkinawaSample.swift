@@ -136,6 +136,8 @@ enum VenueImageQAFixture {
                     sequence: 1,
                     title: "Look Aroundを確認",
                     startTime: date(2026, 11, 1, 9, 0),
+                    category: .sightseeing,
+                    durationMinutes: 45,
                     note: nil,
                     place: place(
                         id: "A11E0000-0000-4000-8000-000000000021",
@@ -164,6 +166,7 @@ enum VenueImageQAFixture {
                     sequence: 3,
                     title: "ユーザー画像を確認",
                     startTime: date(2026, 11, 1, 13, 0),
+                    category: .sightseeing,
                     note: nil,
                     place: place(
                         id: "A11E0000-0000-4000-8000-000000000023",

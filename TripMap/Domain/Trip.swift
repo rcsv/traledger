@@ -53,6 +53,18 @@ enum ActivityCategory: String, CaseIterable, Identifiable, Codable, Sendable {
         case .other: "ellipsis.circle"
         }
     }
+
+    var suggestedDurationMinutes: Int? {
+        switch self {
+        case .transport: 30
+        case .restaurant: 60
+        case .accommodation: 30
+        case .sightseeing: 90
+        case .activity: 120
+        case .shopping: 60
+        case .other: nil
+        }
+    }
 }
 
 struct Activity: Identifiable, Hashable, Sendable {
