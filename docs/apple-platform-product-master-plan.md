@@ -1244,10 +1244,16 @@ container、server schema はまだ追加しない。
 
 ### P9 — System Experiences
 
-- App Intents
+- App Intents — shared Now / Next projection を使う読み取り専用「次の予定を確認」と
+  App Shortcut を実装済み
 - Spotlight / Handoff
 - Today / Next Widget
 - 必要性を確認した場合だけ Live Activity
+
+P9 の情報公開境界と検証項目は [`ADR 0012`](adr/0012-system-experiences-read-only-first.md) と
+[`P9 System Experience Gate Matrix`](qa/system-experience-gate-matrix.md) を正とする。
+Widget extension は main app の private SwiftData store を直接読めると仮定せず、App Group と
+既存 store migration の判断を先に行う。
 
 完了条件:
 
@@ -1276,6 +1282,8 @@ container、server schema はまだ追加しない。
 3. Memory の PhotosPicker、保存、再表示、削除と Trip Card 集計を、安定した Simulator または実機で確認する。
 4. local reminder の permission / delivery / timezone change gate を、安定した Simulator または実機で確認する。
 5. Now / Next、Reservation、Offline review、Travel Leg route detail の実画面 viewport gate を、安定した Simulator が利用可能になった時点で再開する。
+6. P9 の読み取り専用 App Intent を安定 OS の Siri / Shortcuts で確認後、versioned deep link
+   contract を定義し、Spotlight / Handoff を同じ projection へ接続する。
 
 Travel Leg calculation states、iPadOS adaptive workspace、Activity progress / iPhone Quick Edit
 第二段階、Travel Leg preference editor / explicit retry、Guide Now / Next pure projection、P7 Memory

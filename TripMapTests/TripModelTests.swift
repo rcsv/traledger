@@ -1517,6 +1517,78 @@ final class TripModelTests: XCTestCase {
         )
     }
 
+    func testSystemExperienceProjectionUsesTheSharedNowNextSourceWithoutPrivateFields() throws {
+        var trip = OkinawaSample.trip
+        trip.days[0].activities[0].durationMinutes = 60
+        trip.days[0].activities[1].reservation = ReservationReference(
+            id: UUID(),
+            kind: .transport,
+            title: "非表示の予約",
+            confirmationCode: "SECRET-2048",
+            url: nil,
+            note: "非表示のメモ"
+        )
+        let now = localDate(2026, 10, 9, 12, 0, timeZoneIdentifier: "Asia/Tokyo")
+
+        let summary = try XCTUnwrap(
+            TripSystemExperienceProjection.currentSummary(for: [trip], now: now)
+        )
+
+        XCTAssertEqual(summary.tripID, trip.id)
+        XCTAssertEqual(summary.daySequence, 1)
+        XCTAssertEqual(summary.nowActivity?.id, trip.days[0].activities[0].id)
+        XCTAssertEqual(summary.nextActivity?.id, trip.days[0].activities[1].id)
+        XCTAssertTrue(summary.spokenSummary.contains("那覇空港に到着"))
+        XCTAssertTrue(summary.spokenSummary.contains("13時00分"))
+        XCTAssertTrue(summary.spokenSummary.contains("瀬底島へ移動"))
+        XCTAssertFalse(summary.spokenSummary.contains("SECRET-2048"))
+        XCTAssertFalse(summary.spokenSummary.contains("非表示のメモ"))
+        XCTAssertFalse(summary.spokenSummary.contains("非表示の予約"))
+    }
+
+    func testSystemExperienceProjectionPrefersAnActiveActivityAcrossTrips() throws {
+        var active = OkinawaSample.trip
+        active.title = "進行中のTrip"
+        active.days[0].activities[0].durationMinutes = 60
+        let nextOnly = Trip(
+            id: UUID(uuidString: "A11E0000-0000-4000-8000-00000000BB01")!,
+            title: "次の予定だけのTrip",
+            dateRange: active.dateRange,
+            timeZoneIdentifier: active.timeZoneIdentifier,
+            days: active.days.map { day in
+                Day(
+                    id: day.id,
+                    sequence: day.sequence,
+                    date: day.date,
+                    title: day.title,
+                    activities: day.activities.map { activity in
+                        var copy = activity
+                        copy.durationMinutes = nil
+                        return copy
+                    }
+                )
+            }
+        )
+        let now = localDate(2026, 10, 9, 12, 0, timeZoneIdentifier: "Asia/Tokyo")
+
+        let summary = try XCTUnwrap(
+            TripSystemExperienceProjection.currentSummary(
+                for: [nextOnly, active],
+                now: now
+            )
+        )
+
+        XCTAssertEqual(summary.tripID, active.id)
+        XCTAssertNotNil(summary.nowActivity)
+
+        XCTAssertNil(
+            TripSystemExperienceProjection.currentSummary(
+                for: [nextOnly],
+                now: localDate(2026, 10, 8, 12, 0, timeZoneIdentifier: "Asia/Tokyo")
+            )
+        )
+    }
+
     func testReservationEditingNormalizesAndValidatesLocalReference() throws {
         let trip = OkinawaSample.trip
         let activityID = trip.days[0].activities[0].id

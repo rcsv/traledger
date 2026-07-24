@@ -173,6 +173,85 @@ enum GuideTimelineProjection {
     }
 }
 
+struct TripSystemExperienceSummary: Hashable, Sendable {
+    let tripID: Trip.ID
+    let tripTitle: String
+    let timeZoneIdentifier: String
+    let daySequence: Int
+    let nowActivity: Activity?
+    let nextActivity: Activity?
+
+    var spokenSummary: String {
+        let nowText = nowActivity.map { "現在は \(activityDescription($0))" }
+        let nextText = nextActivity.map { "次は \(activityDescription($0))" }
+        switch (nowText, nextText) {
+        case let (.some(nowText), .some(nextText)):
+            return "\(tripTitle)。\(nowText)。\(nextText)です。"
+        case let (.some(nowText), .none):
+            return "\(tripTitle)。\(nowText)です。"
+        case let (.none, .some(nextText)):
+            return "\(tripTitle)。\(nextText)です。"
+        case (.none, .none):
+            return "\(tripTitle)の今日の予定は終了しています。"
+        }
+    }
+
+    private func activityDescription(_ activity: Activity) -> String {
+        var components: [String] = []
+        if let startTime = activity.startTime {
+            let formatter = DateFormatter()
+            formatter.locale = Locale(identifier: "ja_JP")
+            formatter.timeZone = TimeZone(identifier: timeZoneIdentifier)
+            formatter.dateFormat = "H時mm分"
+            components.append(formatter.string(from: startTime))
+        }
+        components.append(activity.title)
+        if let venueName = activity.place?.name {
+            components.append(venueName)
+        }
+        return components.joined(separator: "、")
+    }
+}
+
+enum TripSystemExperienceProjection {
+    static func currentSummary(
+        for trips: [Trip],
+        now: Date = Date()
+    ) -> TripSystemExperienceSummary? {
+        trips.compactMap { trip -> TripSystemExperienceSummary? in
+            guard let today = GuideTimelineProjection.todaySummary(for: trip, now: now),
+                  today.nowActivity != nil || today.nextActivity != nil else {
+                return nil
+            }
+            return TripSystemExperienceSummary(
+                tripID: trip.id,
+                tripTitle: trip.title,
+                timeZoneIdentifier: trip.timeZoneIdentifier,
+                daySequence: today.day.sequence,
+                nowActivity: today.nowActivity,
+                nextActivity: today.nextActivity
+            )
+        }
+        .sorted(by: summaryOrder)
+        .first
+    }
+
+    private static func summaryOrder(
+        _ lhs: TripSystemExperienceSummary,
+        _ rhs: TripSystemExperienceSummary
+    ) -> Bool {
+        if (lhs.nowActivity != nil) != (rhs.nowActivity != nil) {
+            return lhs.nowActivity != nil
+        }
+        let lhsTime = lhs.nowActivity?.startTime ?? lhs.nextActivity?.startTime ?? .distantFuture
+        let rhsTime = rhs.nowActivity?.startTime ?? rhs.nextActivity?.startTime ?? .distantFuture
+        if lhsTime != rhsTime {
+            return lhsTime < rhsTime
+        }
+        return lhs.tripID.uuidString < rhs.tripID.uuidString
+    }
+}
+
 enum GuideOnlineDependency: Hashable, Sendable {
     case reservationLink(activityID: Activity.ID, reservationID: ReservationReference.ID)
     case travelEstimate(TravelLegID)
