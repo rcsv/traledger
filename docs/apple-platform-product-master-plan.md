@@ -667,7 +667,8 @@ confirmation code は通知や Widget に無条件表示しない。
 
 2026-07-24 時点で Activity に一件の `ReservationReference` を持つ最小 Domain と
 `StoredReservationReference` を実装した。種類、予約名、confirmation code、HTTPS URL、メモを
-Activity Quick Edit から保存し、Card に予約名を表示する。空白正規化、安全でない URL の拒否、
+Activity Quick Edit から保存し、Card に予約名を表示する。選択 Activity の予約 sheet だけが
+confirmation code、URL、メモを開示し、コピーと外部 Web 遷移を明示操作に限定する。空白正規化、安全でない URL の拒否、
 SwiftData round-trip、cascade ownership の境界は
 [`ADR 0007`](adr/0007-reservation-offline-boundary.md) を正とする。
 
@@ -1253,7 +1254,7 @@ platform expansion 記録として分離する。
 
 次の実装担当者は、この順序で作業する。
 
-1. Reservation の URL open / confirmation code copy を、意図しない露出を避けて Guide に配置する。
+1. P7 Memory minimum slice を、既存 Activity progress とユーザー画像を再利用する前提で定義する。
 2. local reminder の permission / delivery / timezone change gate を、安定した Simulator または実機で確認する。
 3. Now / Next、Reservation、Offline review、Travel Leg route detail の実画面 viewport gate を、安定した Simulator が利用可能になった時点で再開する。
 

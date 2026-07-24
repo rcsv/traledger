@@ -49,9 +49,13 @@ therefore not the source of truth for this review.
 
 - Reservation editing lives inside the existing one-handed Activity Quick Edit.
 - Activity Cards show the reservation title and kind symbol.
+- Selecting an Activity exposes a separate read-only reservation sheet. Only
+  that explicit action reveals the confirmation code, URL, and reservation
+  note.
+- Opening the HTTPS URL and copying the confirmation code are explicit buttons.
+  Copying uses the system clipboard and the sheet tells the user that copied
+  content remains there.
 - Guide toolbar exposes a read-only offline review.
-- Opening a reservation URL and explicit copy actions are later presentation
-  work; the persisted fields and safety boundary do not depend on them.
 
 ## Verification
 

@@ -1,6 +1,7 @@
 #if os(iOS)
 import MapKit
 import SwiftUI
+import UIKit
 import UserNotifications
 
 struct GuideView: View {
@@ -20,6 +21,7 @@ struct GuideView: View {
     @State private var mode: Mode = .map
     @State private var quickEditTarget: GuideQuickEditTarget?
     @State private var travelLegEditTarget: TravelLegID?
+    @State private var reservationTarget: GuideReservationTarget?
     @State private var isOfflineReviewPresented = false
     @State private var errorMessage: String?
     #if TRIPMAP_QA
@@ -67,7 +69,7 @@ struct GuideView: View {
         .navigationBarTitleDisplayMode(.inline)
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if !usesRegularWorkspace {
-                compactQuickEditButton
+                compactActionBar
             }
         }
         .toolbar {
@@ -75,6 +77,14 @@ struct GuideView: View {
                 isOfflineReviewPresented = true
             }
             .accessibilityIdentifier("guide-offline-review-button")
+
+            if let selectedActivityID = interaction.selectedActivityID,
+               activityAndDay(for: selectedActivityID)?.0.reservation != nil {
+                Button("予約を表示", systemImage: "ticket") {
+                    reservationTarget = GuideReservationTarget(activityID: selectedActivityID)
+                }
+                .accessibilityIdentifier("guide-reservation-toolbar-button")
+            }
 
             if usesRegularWorkspace,
                let selectedActivityID = interaction.selectedActivityID {
@@ -113,6 +123,17 @@ struct GuideView: View {
                 ContentUnavailableView(
                     "移動区間を読み込めません",
                     systemImage: "arrow.trianglehead.swap",
+                    description: Text("シートを閉じて、もう一度お試しください。")
+                )
+            }
+        }
+        .sheet(item: $reservationTarget) { target in
+            if let reservation = activityAndDay(for: target.activityID)?.0.reservation {
+                GuideReservationSheet(reservation: reservation)
+            } else {
+                ContentUnavailableView(
+                    "予約参照を読み込めません",
+                    systemImage: "ticket",
                     description: Text("シートを閉じて、もう一度お試しください。")
                 )
             }
@@ -265,17 +286,31 @@ struct GuideView: View {
     }
 
     @ViewBuilder
-    private var compactQuickEditButton: some View {
+    private var compactActionBar: some View {
         if let selectedActivityID = interaction.selectedActivityID {
-            Button {
-                presentQuickEdit(selectedActivityID)
-            } label: {
-                Label("クイック編集", systemImage: "pencil")
-                    .frame(maxWidth: .infinity)
+            HStack {
+                if activityAndDay(for: selectedActivityID)?.0.reservation != nil {
+                    Button {
+                        reservationTarget = GuideReservationTarget(activityID: selectedActivityID)
+                    } label: {
+                        Label("予約", systemImage: "ticket")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.large)
+                    .accessibilityIdentifier("guide-reservation-button")
+                }
+
+                Button {
+                    presentQuickEdit(selectedActivityID)
+                } label: {
+                    Label("クイック編集", systemImage: "pencil")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .accessibilityIdentifier("guide-quick-edit-button")
             }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
-            .accessibilityIdentifier("guide-quick-edit-button")
             .padding(.horizontal)
             .padding(.vertical, 8)
             .background(.regularMaterial)
@@ -712,6 +747,79 @@ private struct TodaySummaryCard: View {
 private struct GuideQuickEditTarget: Identifiable {
     let activityID: Activity.ID
     var id: Activity.ID { activityID }
+}
+
+private struct GuideReservationTarget: Identifiable {
+    let activityID: Activity.ID
+    var id: Activity.ID { activityID }
+}
+
+private struct GuideReservationSheet: View {
+    let reservation: ReservationReference
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var didCopyConfirmationCode = false
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    Label(reservation.title, systemImage: reservation.kind.systemImage)
+                        .font(.headline)
+                    LabeledContent("種類", value: reservation.kind.displayName)
+                }
+
+                if let confirmationCode = reservation.confirmationCode {
+                    Section("確認番号") {
+                        Text(confirmationCode)
+                            .font(.body.monospaced())
+                            .textSelection(.enabled)
+                        Button(
+                            didCopyConfirmationCode ? "コピーしました" : "確認番号をコピー",
+                            systemImage: didCopyConfirmationCode ? "checkmark" : "doc.on.doc"
+                        ) {
+                            UIPasteboard.general.string = confirmationCode
+                            didCopyConfirmationCode = true
+                        }
+                        .accessibilityIdentifier("reservation-copy-confirmation-code")
+                    }
+                }
+
+                if let url = reservation.url {
+                    Section {
+                        Link(destination: url) {
+                            Label("予約ページを開く", systemImage: "safari")
+                        }
+                        .accessibilityIdentifier("reservation-open-url")
+                    } footer: {
+                        Text("TripMapを離れてWebサイトを開きます。")
+                    }
+                }
+
+                if let note = reservation.note {
+                    Section("メモ") {
+                        Text(note)
+                            .textSelection(.enabled)
+                    }
+                }
+
+                Section {
+                    Text("確認番号はこの画面を開いた時だけ表示します。コピーした内容はシステムのクリップボードに残ります。")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .navigationTitle("予約")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("完了") { dismiss() }
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+        .accessibilityIdentifier("guide-reservation-sheet")
+    }
 }
 
 private struct TravelLegEditSheet: View {
