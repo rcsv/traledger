@@ -25,6 +25,7 @@ struct GuideView: View {
     @State private var reservationTarget: GuideReservationTarget?
     @State private var isOfflineReviewPresented = false
     @State private var isMemoryPresented = false
+    @State private var isTripRenamePresented = false
     @State private var errorMessage: String?
     #if TRIPMAP_QA
     @State private var didOpenQuickEditFromLaunchArgument = false
@@ -86,6 +87,13 @@ struct GuideView: View {
                 isMemoryPresented = true
             }
             .accessibilityIdentifier("guide-memory-button")
+
+            Menu("Trip", systemImage: "ellipsis.circle") {
+                Button("旅行名を変更", systemImage: "square.and.pencil") {
+                    isTripRenamePresented = true
+                }
+                .accessibilityIdentifier("guide-trip-rename-button")
+            }
 
             if let selectedActivityID = interaction.selectedActivityID,
                activityAndDay(for: selectedActivityID)?.0.reservation != nil {
@@ -167,6 +175,11 @@ struct GuideView: View {
                 },
                 onApplyMutation: onApplyMutation
             )
+        }
+        .sheet(isPresented: $isTripRenamePresented) {
+            GuideTripRenameSheet(title: trip.title) { title in
+                updateTripTitle(title)
+            }
         }
         .alert("操作を完了できませんでした", isPresented: Binding(
             get: { errorMessage != nil },
@@ -548,6 +561,28 @@ struct GuideView: View {
         }
     }
 
+    private func updateTripTitle(_ title: String) -> Bool {
+        do {
+            let mutation = TripMutation.renameTrip(title)
+            let persistenceError: String?
+            if let onApplyMutation {
+                persistenceError = onApplyMutation(mutation)
+            } else {
+                persistenceError = onApplyPlan(
+                    try mutation.applying(to: trip)
+                )
+            }
+            if let persistenceError {
+                errorMessage = persistenceError
+                return false
+            }
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
+
     private func updateTravelLeg(
         legID: TravelLegID,
         transportType: TravelTransportType,
@@ -614,6 +649,46 @@ struct GuideView: View {
             errorMessage = error.localizedDescription
             return false
         }
+    }
+}
+
+private struct GuideTripRenameSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var title: String
+    let onSave: (String) -> Bool
+
+    init(title: String, onSave: @escaping (String) -> Bool) {
+        _title = State(initialValue: title)
+        self.onSave = onSave
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                TextField("旅行名", text: $title)
+                    .textInputAutocapitalization(.sentences)
+                    .accessibilityIdentifier("guide-trip-title-field")
+            }
+            .navigationTitle("旅行名を変更")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("キャンセル") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("保存") {
+                        if onSave(title) {
+                            dismiss()
+                        }
+                    }
+                    .disabled(
+                        title
+                            .trimmingCharacters(in: .whitespacesAndNewlines)
+                            .isEmpty
+                    )
+                }
+            }
+        }
+        .presentationDetents([.medium])
     }
 }
 

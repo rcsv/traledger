@@ -109,7 +109,9 @@ Domain snapshots by stable UUID.
 Local preconditions completed on 2026-07-25:
 
 - C01 Trip rename owns only the normalized title. A local test preserves a
-  concurrent Activity append and rejects a blank title.
+  concurrent Activity append and rejects a blank title. The mutation is
+  reachable from macOS Overview and the iPhone/iPad Guide Trip menu; mobile
+  viewport confirmation remains an environment gate.
 - C03 has a scoped Memory intent that owns completion, photo, and reflection.
 - C02/C09 Plan and Guide Activity edits have separate field ownership; Guide
   owns progress, reservation, and reminder without replaying planning fields.
