@@ -455,6 +455,7 @@ struct PlanView: View {
             destination = .day(dayID)
             interaction.selectDay(dayID, in: trip)
             interaction.selectActivity(activityID, source: .list, in: trip)
+            activityEditor = ActivityEditorTarget(activityID: activityID)
         case .trip, .participants:
             destination = .overview
         }
@@ -993,7 +994,8 @@ private struct TripDoctorSummary: View {
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
-                        .accessibilityHint(issue.target.dayID == nil ? "" : "該当する予定を表示します")
+                        .accessibilityIdentifier(issueAccessibilityIdentifier(issue))
+                        .accessibilityHint(issueAccessibilityHint(issue))
                     }
                 }
                 .padding(.vertical, 4)
@@ -1002,6 +1004,30 @@ private struct TripDoctorSummary: View {
             Label("旅程チェック", systemImage: "stethoscope")
         }
         .accessibilityIdentifier("trip-doctor-summary")
+    }
+
+    private func issueAccessibilityIdentifier(_ issue: TripDoctorIssue) -> String {
+        switch issue.target {
+        case .activity(let activityID, _):
+            "doctor-issue-\(issue.code.rawValue)-activity-\(activityID.uuidString)"
+        case .day(let dayID):
+            "doctor-issue-\(issue.code.rawValue)-day-\(dayID.uuidString)"
+        case .trip:
+            "doctor-issue-\(issue.code.rawValue)-trip"
+        case .participants:
+            "doctor-issue-\(issue.code.rawValue)-participants"
+        }
+    }
+
+    private func issueAccessibilityHint(_ issue: TripDoctorIssue) -> String {
+        switch issue.target {
+        case .activity:
+            "該当する予定の編集画面を開きます"
+        case .day:
+            "該当する日を表示します"
+        case .trip, .participants:
+            ""
+        }
     }
 }
 

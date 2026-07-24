@@ -236,6 +236,34 @@ final class VenueImageUITests: XCTestCase {
     }
 
     @MainActor
+    func testDoctorActivityIssueOpensTargetEditor() {
+        let app = launchUserImageFixture()
+        let overview = app.descendants(matching: .any)
+            .matching(identifier: "trip-overview")
+            .firstMatch
+
+        XCTAssertTrue(overview.waitForExistence(timeout: 15))
+        overview.click()
+
+        let issue = app.buttons.matching(
+            NSPredicate(
+                format: "identifier BEGINSWITH %@",
+                "doctor-issue-missingActivityDuration-activity-"
+            )
+        ).firstMatch
+        XCTAssertTrue(issue.waitForExistence(timeout: 10))
+        XCTAssertTrue(issue.label.contains("ユーザー画像を確認"))
+        issue.click()
+
+        let editor = app.descendants(matching: .any)
+            .matching(identifier: "activity-editor")
+            .firstMatch
+        XCTAssertTrue(editor.waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["duration-suggestion"].firstMatch.exists)
+        XCTAssertTrue(app.buttons["保存"].firstMatch.exists)
+    }
+
+    @MainActor
     func testWikimediaAttributionReceivesKeyboardFocus() {
         let app = XCUIApplication()
         app.launchArguments = [

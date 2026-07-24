@@ -559,6 +559,12 @@ Doctor は TripMap の中核差別化機能とする。
 - Activity では対象 Activity の issue だけを出す。
 - suggestion がある場合は具体的な編集入口を提供する。
 
+2026-07-24 時点で、Overview の Doctor issue は target に応じて修正入口へ遷移する。
+Activity issue は対象 Day と Activity を選択して Activity Editor を直接開き、Day issue は対象 Day、
+Trip / Participant issue は Overview に留まる。Doctor 自身は値を変更せず、保存は通常の Editor 経路
+だけで行う。所要時間未設定 issue から正しい Activity Editor とカテゴリ別提案が開くことを
+macOS UI automation で確認済みである。
+
 ### 11.3 禁止事項
 
 - Doctor 自身が旅程を自動変更しない。
@@ -1070,7 +1076,7 @@ P1 以降の platform expansion Gate として扱う。
 
 - Overview grouping
 - Day / Activity local issue
-- issue から editor deep link
+- issue から editor deep link — Activity target の Day / Activity 選択と Editor 表示を実装、UI-tested
 - warning / info / calculating / unavailable
 
 完了条件:
@@ -1175,10 +1181,9 @@ P1 以降の platform expansion Gate として扱う。
 
 次の実装担当者は、この順序で作業する。
 
-1. Doctor issue から対象 Activity Editor へ移動する。
-2. Travel Leg の Domain 仕様を ADR として先に確定する。
-3. iPadOS adaptive workspace を追加し、iPad viewport を確認する。
-4. Activity の完了 / スキップ状態を Domain として定義し、iPhone quick edit の第二段階を実装する。
+1. Travel Leg の Domain 仕様を ADR として先に確定する。
+2. iPadOS adaptive workspace を追加し、iPad viewport を確認する。
+3. Activity の完了 / スキップ状態を Domain として定義し、iPhone quick edit の第二段階を実装する。
 
 新しい外部画像 provider、評価データ、独自サーバー、AI、CloudKit は、それぞれの Research Gate
 なしに開始しない。
