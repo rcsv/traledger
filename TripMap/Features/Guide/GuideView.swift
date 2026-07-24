@@ -263,7 +263,8 @@ struct GuideView: View {
         activityID: Activity.ID,
         startTime: Date?,
         note: String?,
-        place: PlaceSnapshot?
+        place: PlaceSnapshot?,
+        progress: ActivityProgress
     ) -> Bool {
         guard let (activity, _) = activityAndDay(for: activityID) else {
             errorMessage = "編集対象の予定が見つかりませんでした。"
@@ -271,7 +272,7 @@ struct GuideView: View {
         }
 
         do {
-            let updated = try TripPlanEditor.updateActivity(
+            let edited = try TripPlanEditor.updateActivity(
                 in: trip,
                 activityID: activityID,
                 title: activity.title,
@@ -280,6 +281,11 @@ struct GuideView: View {
                 durationMinutes: activity.durationMinutes,
                 note: note,
                 place: place
+            )
+            let updated = try TripPlanEditor.setActivityProgress(
+                in: edited,
+                activityID: activityID,
+                progress: progress
             )
             if let persistenceError = onApplyPlan(updated) {
                 errorMessage = persistenceError
@@ -303,20 +309,21 @@ private struct GuideQuickEditSheet: View {
     let activity: Activity
     let day: Day
     let timeZoneIdentifier: String
-    let onSave: (Activity.ID, Date?, String?, PlaceSnapshot?) -> Bool
+    let onSave: (Activity.ID, Date?, String?, PlaceSnapshot?, ActivityProgress) -> Bool
 
     @Environment(\.dismiss) private var dismiss
     @State private var hasStartTime: Bool
     @State private var startTime: Date
     @State private var note: String
     @State private var place: PlaceSnapshot?
+    @State private var progress: ActivityProgress
     @State private var isVenueSearchPresented = false
 
     init(
         activity: Activity,
         day: Day,
         timeZoneIdentifier: String,
-        onSave: @escaping (Activity.ID, Date?, String?, PlaceSnapshot?) -> Bool
+        onSave: @escaping (Activity.ID, Date?, String?, PlaceSnapshot?, ActivityProgress) -> Bool
     ) {
         self.activity = activity
         self.day = day
@@ -326,6 +333,7 @@ private struct GuideQuickEditSheet: View {
         _startTime = State(initialValue: activity.startTime ?? day.date)
         _note = State(initialValue: activity.note ?? "")
         _place = State(initialValue: activity.place)
+        _progress = State(initialValue: activity.progress)
         #if TRIPMAP_QA
         _isVenueSearchPresented = State(
             initialValue: ProcessInfo.processInfo.arguments.contains("-tripmap-open-guide-venue-search")
@@ -347,6 +355,18 @@ private struct GuideQuickEditSheet: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section("進行状況") {
+                    Picker("進行状況", selection: $progress) {
+                        ForEach(ActivityProgress.allCases) { progress in
+                            Label(progress.displayName, systemImage: progress.systemImage)
+                                .tag(progress)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .accessibilityIdentifier("guide-activity-progress-picker")
+                }
+
                 Section("時刻") {
                     Toggle("開始時刻を設定", isOn: $hasStartTime)
                     if hasStartTime {
@@ -395,7 +415,7 @@ private struct GuideQuickEditSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("保存") {
-                        if onSave(activity.id, editedStartTime, note, place) {
+                        if onSave(activity.id, editedStartTime, note, place, progress) {
                             dismiss()
                         }
                     }

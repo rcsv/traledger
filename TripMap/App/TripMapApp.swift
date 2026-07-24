@@ -75,6 +75,12 @@ private enum DebugFixtureSeeder {
             fixture.days[0].activities[activityIndex].place?.imageData =
                 VenueImageQAFixture.preseededUserImageData
         }
+        if ProcessInfo.processInfo.arguments.contains("-tripmap-activity-progress-qa") {
+            fixture.days[0].activities[0].progress = .completed
+            fixture.days[0].activities[0].progressUpdatedAt = Date(timeIntervalSince1970: 1_800_000_000)
+            fixture.days[0].activities[1].progress = .skipped
+            fixture.days[0].activities[1].progressUpdatedAt = Date(timeIntervalSince1970: 1_800_000_060)
+        }
 
         let fixtureID = fixture.id
         let descriptor = FetchDescriptor<StoredTrip>(

@@ -261,6 +261,13 @@ private struct ActivityCard: View {
                         .foregroundStyle(.primary)
                         .multilineTextAlignment(.leading)
 
+                    if activity.progress != .planned {
+                        Label(activity.progress.displayName, systemImage: activity.progress.systemImage)
+                            .font(.caption.bold())
+                            .foregroundStyle(activity.progress == .completed ? Color.green : Color.secondary)
+                            .accessibilityIdentifier("activity-progress-\(activity.progress.rawValue)")
+                    }
+
                     if activity.category != nil || activity.durationMinutes != nil {
                         HStack(spacing: 10) {
                             if let category = activity.category {

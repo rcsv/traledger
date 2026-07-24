@@ -1099,7 +1099,8 @@ platform expansion 記録として分離する。
 - iPhone quick edit — start time, short note, and Venue reset/search implemented; one-handed entry, standard Dynamic Type, Accessibility XXL, and adaptive Venue search visually verified
 - Activity progress Domain — `planned / completed / skipped`、変更時刻、複製時 reset、
   Doctor / Travel Leg 非連動の境界を ADR 0005 として定義し、永続化テスト済み
-- iPhone completion / skipped state — persistent Domain を利用する Quick Edit 第二段階を次に実装
+- iPhone completion / skipped state — Quick Edit の三値 segmented control と、
+  Card 上の文字 + SF Symbol 表示を実装。標準文字サイズ / Accessibility XXL で実画面確認済み
 
 完了条件:
 
@@ -1157,7 +1158,7 @@ platform expansion 記録として分離する。
 ### P6 — Guide Readiness
 
 - Now / Next
-- completed / skipped — Domain と SwiftData 永続化を実装済み、Guide UI は進行中
+- completed / skipped — Domain、SwiftData 永続化、Guide Quick Edit / Card 表示を実装済み
 - reservation reference
 - local notification
 - offline review
@@ -1216,11 +1217,12 @@ platform expansion 記録として分離する。
 
 次の実装担当者は、この順序で作業する。
 
-1. Activity の完了 / スキップ状態を Domain として定義し、永続化・正規化・Doctor との境界を ADR に残す。
-2. iPhone quick edit の第二段階として、上記状態を片手で変更できる操作を追加する。
-3. Travel Leg の transport type と明示的な refresh / retry 操作を設計し、取得不能状態を維持したまま編集可能にする。
+1. Travel Leg の transport type と明示的な refresh / retry 操作を設計し、取得不能状態を維持したまま編集可能にする。
+2. Activity progress を用いた Now / Next projection を、時刻から状態を書き換えない純粋な派生表示として定義する。
+3. Guide の offline review と予約参照の最小 Domain を定義する。
 
-Travel Leg calculation states と iPadOS adaptive workspace は 2026-07-24 に実装・代表 viewport 確認済み。
+Travel Leg calculation states、iPadOS adaptive workspace、Activity progress / iPhone Quick Edit
+第二段階は 2026-07-24 に実装・代表 viewport 確認済み。
 
 新しい外部画像 provider、評価データ、独自サーバー、AI、CloudKit は、それぞれの Research Gate
 なしに開始しない。
