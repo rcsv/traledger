@@ -13,7 +13,9 @@ private enum PlanDestination: Hashable {
 
 struct PlanView: View {
     @Query private var participantAssignments: [StoredTripParticipant]
+    @Environment(\.undoManager) private var undoManager
     @StateObject private var travelLoad = TripTravelLoadModel()
+    @StateObject private var planUndo = PlanUndoCoordinator()
     let trip: Trip
     let onApplyPlan: (Trip) -> String?
     @State private var destination: PlanDestination
@@ -128,6 +130,13 @@ struct PlanView: View {
         // continue behind it instead of reserving a separate white strip.
         .toolbarBackground(.hidden, for: .windowToolbar)
         .frame(minWidth: isMapVisible ? 1000 : 760, minHeight: 620)
+        .onAppear {
+            planUndo.configure(
+                undoManager: undoManager,
+                applyPlan: onApplyPlan,
+                onError: { errorMessage = $0 }
+            )
+        }
         .onChange(of: trip) { _, trip in
             interaction.reconcile(with: trip)
             focusPendingVenue(in: trip)
@@ -391,6 +400,13 @@ struct PlanView: View {
                 },
                 onDeleteActivity: { activityID in
                     pendingActivityDeletion = ActivityEditorTarget(activityID: activityID)
+                },
+                onMoveActivity: { activityID, targetActivityID in
+                    moveActivity(
+                        in: day.id,
+                        activityID: activityID,
+                        relativeTo: targetActivityID
+                    )
                 }
             )
         }
@@ -576,6 +592,30 @@ struct PlanView: View {
         }
     }
 
+    private func moveActivity(
+        in dayID: Day.ID,
+        activityID: Activity.ID,
+        relativeTo targetActivityID: Activity.ID
+    ) {
+        do {
+            let updated = try TripPlanEditor.moveActivity(
+                in: trip,
+                dayID: dayID,
+                activityID: activityID,
+                relativeTo: targetActivityID
+            )
+            guard updated != trip, apply(updated) else { return }
+            planUndo.registerTransition(
+                from: trip,
+                to: updated,
+                actionName: "予定の並べ替え"
+            )
+            interaction.selectActivity(activityID, source: .list, in: updated)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
     @discardableResult
     private func apply(_ updated: Trip) -> Bool {
         errorMessage = onApplyPlan(updated)
@@ -591,6 +631,52 @@ struct PlanView: View {
 
         interaction.focusActivity(activityID, in: trip)
         pendingVenueFocusActivityID = nil
+    }
+}
+
+@MainActor
+private final class PlanUndoCoordinator: ObservableObject {
+    private weak var undoManager: UndoManager?
+    private var applyPlan: ((Trip) -> String?)?
+    private var onError: ((String) -> Void)?
+
+    func configure(
+        undoManager: UndoManager?,
+        applyPlan: @escaping (Trip) -> String?,
+        onError: @escaping (String) -> Void
+    ) {
+        self.undoManager = undoManager
+        self.applyPlan = applyPlan
+        self.onError = onError
+    }
+
+    func registerTransition(from previous: Trip, to updated: Trip, actionName: String) {
+        registerRestore(
+            desired: previous,
+            inverse: updated,
+            actionName: actionName
+        )
+    }
+
+    private func registerRestore(desired: Trip, inverse: Trip, actionName: String) {
+        guard let undoManager else { return }
+        undoManager.registerUndo(withTarget: self) { target in
+            target.restore(desired, inverse: inverse, actionName: actionName)
+        }
+        undoManager.setActionName(actionName)
+    }
+
+    private func restore(_ desired: Trip, inverse: Trip, actionName: String) {
+        guard let applyPlan else { return }
+        if let message = applyPlan(desired) {
+            onError?(message)
+            return
+        }
+        registerRestore(
+            desired: inverse,
+            inverse: desired,
+            actionName: actionName
+        )
     }
 }
 

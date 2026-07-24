@@ -173,6 +173,41 @@ enum TripPlanEditor {
         return copy
     }
 
+    static func moveActivity(
+        in trip: Trip,
+        dayID: Day.ID,
+        activityID: Activity.ID,
+        relativeTo targetActivityID: Activity.ID
+    ) throws -> Trip {
+        guard let dayIndex = trip.days.firstIndex(where: { $0.id == dayID }) else {
+            throw TripPlanEditingError.targetDayNotFound
+        }
+        let ordered = trip.days[dayIndex].orderedActivities
+        guard let sourceIndex = ordered.firstIndex(where: { $0.id == activityID }),
+              let targetIndex = ordered.firstIndex(where: { $0.id == targetActivityID }) else {
+            throw TripPlanEditingError.activityNotFound
+        }
+        guard sourceIndex != targetIndex else { return trip }
+
+        var reordered = ordered
+        let movedActivity = reordered.remove(at: sourceIndex)
+        guard let adjustedTargetIndex = reordered.firstIndex(where: { $0.id == targetActivityID }) else {
+            throw TripPlanEditingError.activityNotFound
+        }
+        let insertionIndex = sourceIndex < targetIndex
+            ? adjustedTargetIndex + 1
+            : adjustedTargetIndex
+        reordered.insert(movedActivity, at: insertionIndex)
+
+        var copy = trip
+        copy.days[dayIndex].activities = reordered.enumerated().map { index, activity in
+            var updated = activity
+            updated.sequence = index + 1
+            return updated
+        }
+        return copy
+    }
+
     static func replicateDayActivities(
         in trip: Trip,
         from sourceDayID: Day.ID,

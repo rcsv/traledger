@@ -403,6 +403,18 @@ macOS / iPadOS:
 - Context Menu に編集、複製、別 Day へ移動、削除
 - Drag and Drop で並べ替え
 
+2026-07-24 時点で、Activity Card 右端の明示的なハンドルから同じ Day 内の別カードへ
+Drag and Drop し、移動方向に応じて対象カードの前後へ挿入する。カード全面は選択、ダブルクリック、
+Return の操作面として維持する。ポインタを使わない場合は Context Menu と accessibility action の
+`前へ移動` / `後へ移動` を使い、いずれも同じ Domain 操作と永続化経路を通す。
+順序変更は全 Activity の `sequence` を連続値へ正規化し、保存成功後に一つの Undo 操作として
+登録する。Command-Z と Shift-Command-Z の Undo / Redo は実画面テスト済みである。
+現行の Codex 同一画面 UI automation では、長押しドラッグ開始時に Codex ウィンドウを割り込み要素
+として処理した後で座標イベントを送るため、ポインタ Drag and Drop の自動証跡だけは取得できない。
+ハンドルの表示と Accessibility tree、前後移動、永続化、Undo / Redo は確認済みである。P1 Gate を
+最終的に閉じる前に、Codex が画面へ重ならない独立した Xcode runner でハンドルからカードへの
+pointer smoke test を一度実施する。
+
 iPhone:
 
 - タップで詳細または選択
@@ -1032,8 +1044,8 @@ P1 以降の platform expansion Gate として扱う。
 - Double-click / Return / Context Menu — implemented and UI-tested on macOS
 - Category duration suggestion — implemented for create/edit; explicit apply and existing-value preservation UI-tested
 - Venue search section — implemented with explicit states, adaptive layout, and initial-state UI test
-- Drag reorder
-- Undo / Redo
+- Drag reorder — implemented with an explicit handle, shared context/accessibility alternatives, and Domain normalization; isolated pointer smoke pending
+- Undo / Redo — implemented and UI-tested for Activity reorder
 - iPhone quick edit
 
 完了条件:
@@ -1149,11 +1161,10 @@ P1 以降の platform expansion Gate として扱う。
 
 次の実装担当者は、この順序で作業する。
 
-1. Activity Card の drag reorder と Undo / Redo を一つの編集トランザクションとして設計する。
-2. iPhone quick edit を実装し、Dynamic Type と片手操作を確認する。
-3. Doctor issue から対象 Activity Editor へ移動する。
-4. Travel Leg の Domain 仕様を ADR として先に確定する。
-5. iPadOS adaptive workspace を追加し、iPad viewport を確認する。
+1. iPhone quick edit を実装し、Dynamic Type と片手操作を確認する。
+2. Doctor issue から対象 Activity Editor へ移動する。
+3. Travel Leg の Domain 仕様を ADR として先に確定する。
+4. iPadOS adaptive workspace を追加し、iPad viewport を確認する。
 
 新しい外部画像 provider、評価データ、独自サーバー、AI、CloudKit は、それぞれの Research Gate
 なしに開始しない。

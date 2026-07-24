@@ -866,6 +866,39 @@ final class TripModelTests: XCTestCase {
         XCTAssertNoThrow(try StoredTrip(validatingSnapshot: updated))
     }
 
+    func testMovingActivityAcrossTargetRenumbersTheWholeDay() throws {
+        let trip = OkinawaSample.trip
+        let day = trip.orderedDays[1]
+        let originalIDs = day.orderedActivities.map(\.id)
+
+        let movedLater = try TripPlanEditor.moveActivity(
+            in: trip,
+            dayID: day.id,
+            activityID: originalIDs[0],
+            relativeTo: originalIDs[2]
+        )
+        let laterIDs = try XCTUnwrap(
+            movedLater.days.first(where: { $0.id == day.id })
+        ).orderedActivities.map(\.id)
+        XCTAssertEqual(laterIDs, [originalIDs[1], originalIDs[2], originalIDs[0]])
+
+        let restored = try TripPlanEditor.moveActivity(
+            in: movedLater,
+            dayID: day.id,
+            activityID: originalIDs[0],
+            relativeTo: originalIDs[1]
+        )
+        let restoredDay = try XCTUnwrap(
+            restored.days.first(where: { $0.id == day.id })
+        )
+        XCTAssertEqual(restoredDay.orderedActivities.map(\.id), originalIDs)
+        XCTAssertEqual(
+            restoredDay.orderedActivities.map(\.sequence),
+            Array(1...restoredDay.activities.count)
+        )
+        XCTAssertNoThrow(try StoredTrip(validatingSnapshot: restored))
+    }
+
     func testChangingTimeZonePreservesLocalDatesAndActivityTimes() throws {
         let trip = OkinawaSample.trip
         let updated = try TripPlanEditor.changeTimeZone(in: trip, to: "America/Los_Angeles")

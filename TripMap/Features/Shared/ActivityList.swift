@@ -8,6 +8,7 @@ struct ActivityList: View {
     let onAddActivity: (() -> Void)?
     let onEditActivity: ((Activity.ID) -> Void)?
     let onDeleteActivity: ((Activity.ID) -> Void)?
+    let onMoveActivity: ((Activity.ID, Activity.ID) -> Void)?
 
     init(
         day: Day,
@@ -16,7 +17,8 @@ struct ActivityList: View {
         onSelectActivity: @escaping (Activity.ID) -> Void,
         onAddActivity: (() -> Void)? = nil,
         onEditActivity: ((Activity.ID) -> Void)? = nil,
-        onDeleteActivity: ((Activity.ID) -> Void)? = nil
+        onDeleteActivity: ((Activity.ID) -> Void)? = nil,
+        onMoveActivity: ((Activity.ID, Activity.ID) -> Void)? = nil
     ) {
         self.day = day
         self.selectedActivityID = selectedActivityID
@@ -25,6 +27,7 @@ struct ActivityList: View {
         self.onAddActivity = onAddActivity
         self.onEditActivity = onEditActivity
         self.onDeleteActivity = onDeleteActivity
+        self.onMoveActivity = onMoveActivity
     }
 
     var body: some View {
@@ -45,7 +48,7 @@ struct ActivityList: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 10) {
-                        ForEach(day.orderedActivities) { activity in
+                        ForEach(Array(day.orderedActivities.enumerated()), id: \.element.id) { index, activity in
                             ActivityCard(
                                 activity: activity,
                                 isSelected: selectedActivityID == activity.id,
@@ -56,9 +59,27 @@ struct ActivityList: View {
                                 },
                                 onDelete: onDeleteActivity.map { delete in
                                     { select(activity.id); delete(activity.id) }
+                                },
+                                moveEarlier: moveAction(for: activity, targetIndex: index - 1),
+                                moveLater: moveAction(for: activity, targetIndex: index + 1),
+                                onDropActivity: onMoveActivity.map { move in
+                                    { sourceID in move(sourceID, activity.id) }
                                 }
                             )
                             .id(activity.id)
+                            .overlay(alignment: .trailing) {
+                                if onMoveActivity != nil {
+                                    Image(systemName: "line.3.horizontal")
+                                        .font(.body.weight(.semibold))
+                                        .foregroundStyle(.secondary)
+                                        .frame(width: 28, height: 44)
+                                        .contentShape(Rectangle())
+                                        .draggable(activity.id.uuidString)
+                                        .accessibilityLabel("予定を並べ替え")
+                                        .accessibilityIdentifier("activity-drag-\(activity.sequence)")
+                                        .padding(.trailing, 8)
+                                }
+                            }
                         }
                     }
                     .padding()
@@ -79,6 +100,18 @@ struct ActivityList: View {
             onSelectActivity(activityID)
         }
     }
+
+    private func moveAction(for activity: Activity, targetIndex: Int) -> (() -> Void)? {
+        guard let onMoveActivity,
+              day.orderedActivities.indices.contains(targetIndex) else {
+            return nil
+        }
+        let targetID = day.orderedActivities[targetIndex].id
+        return {
+            select(activity.id)
+            onMoveActivity(activity.id, targetID)
+        }
+    }
 }
 
 private struct ActivityCard: View {
@@ -88,6 +121,9 @@ private struct ActivityCard: View {
     let onSelect: () -> Void
     let onEdit: (() -> Void)?
     let onDelete: (() -> Void)?
+    let moveEarlier: (() -> Void)?
+    let moveLater: (() -> Void)?
+    let onDropActivity: ((Activity.ID) -> Void)?
 
     var body: some View {
         Button(action: onSelect) {
@@ -152,6 +188,7 @@ private struct ActivityCard: View {
                 Spacer(minLength: 0)
             }
             .padding(12)
+            .padding(.trailing, onDropActivity == nil ? 0 : 28)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
                 isSelected ? Color.accentColor.opacity(0.12) : Color.secondary.opacity(0.07),
@@ -165,7 +202,17 @@ private struct ActivityCard: View {
         .buttonStyle(.plain)
         .accessibilityIdentifier("activity-\(activity.sequence)")
         .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .modifier(ActivityDropModifier(activityID: activity.id, onDropActivity: onDropActivity))
         .contextMenu {
+            if let moveEarlier {
+                Button("前へ移動", systemImage: "arrow.up", action: moveEarlier)
+            }
+            if let moveLater {
+                Button("後へ移動", systemImage: "arrow.down", action: moveLater)
+            }
+            if moveEarlier != nil || moveLater != nil {
+                Divider()
+            }
             if let onEdit {
                 Button("予定を編集", systemImage: "pencil", action: onEdit)
             }
@@ -175,6 +222,12 @@ private struct ActivityCard: View {
             }
         }
         .accessibilityActions {
+            if let moveEarlier {
+                Button("前へ移動", action: moveEarlier)
+            }
+            if let moveLater {
+                Button("後へ移動", action: moveLater)
+            }
             if let onEdit {
                 Button("予定を編集", action: onEdit)
             }
@@ -203,5 +256,28 @@ private struct ActivityCard: View {
         if hours == 0 { return "\(minutes)分" }
         if remainder == 0 { return "\(hours)時間" }
         return "\(hours)時間\(remainder)分"
+    }
+}
+
+private struct ActivityDropModifier: ViewModifier {
+    let activityID: Activity.ID
+    let onDropActivity: ((Activity.ID) -> Void)?
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if let onDropActivity {
+            content
+                .dropDestination(for: String.self) { identifiers, _ in
+                    guard let identifier = identifiers.first,
+                          let sourceID = UUID(uuidString: identifier),
+                          sourceID != activityID else {
+                        return false
+                    }
+                    onDropActivity(sourceID)
+                    return true
+                }
+        } else {
+            content
+        }
     }
 }

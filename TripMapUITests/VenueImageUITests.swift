@@ -119,10 +119,59 @@ final class VenueImageUITests: XCTestCase {
         let activityCard = app.buttons["activity-3"].firstMatch
 
         XCTAssertTrue(activityCard.waitForExistence(timeout: 15))
+        XCTAssertTrue(
+            app.descendants(matching: .any)
+                .matching(identifier: "activity-drag-3")
+                .firstMatch.exists
+        )
         activityCard.rightClick()
 
         XCTAssertTrue(app.menuItems["予定を編集"].firstMatch.waitForExistence(timeout: 5))
         XCTAssertTrue(app.menuItems["予定を削除"].firstMatch.exists)
+    }
+
+    @MainActor
+    func testActivityCardReorderSupportsUndoAndRedo() {
+        let app = launchUserImageFixture()
+        let activityCard = app.buttons["activity-3"].firstMatch
+
+        XCTAssertTrue(activityCard.waitForExistence(timeout: 15))
+        activityCard.rightClick()
+        let moveEarlier = app.menuItems["前へ移動"].firstMatch
+        XCTAssertTrue(moveEarlier.waitForExistence(timeout: 5))
+        moveEarlier.click()
+
+        XCTAssertTrue(
+            app.buttons.matching(
+                NSPredicate(
+                    format: "identifier == %@ AND label CONTAINS %@",
+                    "activity-2",
+                    "ユーザー画像を確認"
+                )
+            ).firstMatch.waitForExistence(timeout: 10)
+        )
+
+        app.typeKey("z", modifierFlags: .command)
+        XCTAssertTrue(
+            app.buttons.matching(
+                NSPredicate(
+                    format: "identifier == %@ AND label CONTAINS %@",
+                    "activity-3",
+                    "ユーザー画像を確認"
+                )
+            ).firstMatch.waitForExistence(timeout: 10)
+        )
+
+        app.typeKey("z", modifierFlags: [.command, .shift])
+        XCTAssertTrue(
+            app.buttons.matching(
+                NSPredicate(
+                    format: "identifier == %@ AND label CONTAINS %@",
+                    "activity-2",
+                    "ユーザー画像を確認"
+                )
+            ).firstMatch.waitForExistence(timeout: 10)
+        )
     }
 
     @MainActor
