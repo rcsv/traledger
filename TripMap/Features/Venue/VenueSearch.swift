@@ -35,6 +35,9 @@ final class VenueSearchModel: NSObject, ObservableObject, @preconcurrency MKLoca
     @Published private(set) var completions: [MKLocalSearchCompletion] = []
     @Published private(set) var results: [VenueSearchResult] = []
     @Published private(set) var errorMessage: String?
+    @Published private(set) var isCompleting = false
+    @Published private(set) var isResolving = false
+    @Published private(set) var didResolveSearch = false
 
     private let completer = MKLocalSearchCompleter()
     private var activeSearch: MKLocalSearch?
@@ -51,22 +54,26 @@ final class VenueSearchModel: NSObject, ObservableObject, @preconcurrency MKLoca
         errorMessage = nil
         completions = []
         results = []
+        isCompleting = false
+        isResolving = false
+        didResolveSearch = false
         activeSearch?.cancel()
         activeSearch = nil
         completer.cancel()
 
         let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmedQuery.isEmpty {
-        } else {
-            completer.queryFragment = trimmedQuery
-        }
+        guard !trimmedQuery.isEmpty else { return }
+        isCompleting = true
+        completer.queryFragment = trimmedQuery
     }
 
     func completerDidUpdateResults(_ completer: MKLocalSearchCompleter) {
+        isCompleting = false
         completions = completer.results
     }
 
     func completer(_ completer: MKLocalSearchCompleter, didFailWithError error: Error) {
+        isCompleting = false
         errorMessage = error.localizedDescription
     }
 
@@ -74,7 +81,11 @@ final class VenueSearchModel: NSObject, ObservableObject, @preconcurrency MKLoca
         searchGeneration += 1
         let generation = searchGeneration
         errorMessage = nil
+        completions = []
         results = []
+        isCompleting = false
+        isResolving = true
+        didResolveSearch = false
         activeSearch?.cancel()
 
         let search = MKLocalSearch(request: MKLocalSearch.Request(completion: completion))
@@ -83,6 +94,8 @@ final class VenueSearchModel: NSObject, ObservableObject, @preconcurrency MKLoca
             guard let self, self.searchGeneration == generation else { return }
             self.results = response?.mapItems.map(VenueSearchResult.init) ?? []
             self.errorMessage = error?.localizedDescription
+            self.isResolving = false
+            self.didResolveSearch = true
             self.activeSearch = nil
         }
     }

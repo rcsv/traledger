@@ -167,6 +167,26 @@ final class VenueImageUITests: XCTestCase {
     }
 
     @MainActor
+    func testActivityEditorOpensVenueSearchWithClearInitialState() {
+        let app = launchUserImageFixture()
+        let activityCard = app.buttons["activity-3"].firstMatch
+
+        XCTAssertTrue(activityCard.waitForExistence(timeout: 15))
+        activityCard.doubleClick()
+
+        let venueSearchButton = app.buttons["venue-search-button"].firstMatch
+        XCTAssertTrue(venueSearchButton.waitForExistence(timeout: 10))
+        venueSearchButton.click()
+
+        XCTAssertTrue(
+            app.searchFields["施設名または住所"].firstMatch
+                .waitForExistence(timeout: 10)
+        )
+        XCTAssertTrue(app.staticTexts["場所を検索"].firstMatch.exists)
+        XCTAssertFalse(app.buttons["この場所を設定"].firstMatch.isEnabled)
+    }
+
+    @MainActor
     func testWikimediaAttributionReceivesKeyboardFocus() {
         let app = XCUIApplication()
         app.launchArguments = [

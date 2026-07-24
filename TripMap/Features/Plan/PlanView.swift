@@ -690,6 +690,7 @@ private struct ActivityEditorSheet: View {
                     Button(place == nil ? "場所を検索" : "場所を変更", systemImage: "magnifyingglass") {
                         isVenueSearchPresented = true
                     }
+                    .accessibilityIdentifier("venue-search-button")
                 }
             }
             .navigationTitle("予定を編集")
@@ -732,46 +733,32 @@ private struct VenueSearchSheet: View {
     @State private var selectedResult: VenueSearchResult?
 
     var body: some View {
-        NavigationStack {
-            HSplitView {
-                List {
-                    if !search.results.isEmpty {
-                        Section("検索結果") {
-                            ForEach(search.results) { result in
-                                resultButton(result)
-                            }
-                        }
-                    } else if !search.completions.isEmpty {
-                        Section("候補") {
-                            ForEach(search.completions, id: \.self) { completion in
-                                Button {
-                                    search.resolve(completion)
-                                } label: {
-                                    completionLabel(completion)
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                    } else {
-                        ContentUnavailableView(
-                            "場所を検索",
-                            systemImage: "magnifyingglass",
-                            description: Text("施設名または住所を入力してください。")
-                        )
-                    }
-                }
-                .frame(minWidth: 290)
-                .searchable(text: $query, prompt: "施設名または住所")
-                .onChange(of: query) { _, value in
-                    selectedResult = nil
-                    search.update(query: value)
-                }
-
-                venuePreview
-                    .frame(minWidth: 360)
+        sheetContent
+            .alert("場所を検索できませんでした", isPresented: Binding(
+                get: { search.errorMessage != nil },
+                set: { if !$0 { search.report(error: nil) } }
+            )) {
+                Button("OK") { search.report(error: nil) }
+            } message: {
+                Text(search.errorMessage ?? "不明なエラー")
             }
-            .navigationTitle("場所を検索")
-            .toolbar {
+    }
+
+    @ViewBuilder
+    private var sheetContent: some View {
+        #if os(macOS)
+        navigationContent
+            .frame(minWidth: 740, minHeight: 500)
+        #else
+        navigationContent
+        #endif
+    }
+
+    private var navigationContent: some View {
+        NavigationStack {
+            adaptiveContent
+                .navigationTitle("場所を検索")
+                .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("キャンセル") { dismiss() }
                 }
@@ -784,14 +771,76 @@ private struct VenueSearchSheet: View {
                 }
             }
         }
-        .frame(minWidth: 740, minHeight: 500)
-        .alert("場所を検索できませんでした", isPresented: Binding(
-            get: { search.errorMessage != nil },
-            set: { if !$0 { search.report(error: nil) } }
-        )) {
-            Button("OK") { search.report(error: nil) }
-        } message: {
-            Text(search.errorMessage ?? "不明なエラー")
+    }
+
+    @ViewBuilder
+    private var adaptiveContent: some View {
+        #if os(macOS)
+        HSplitView {
+            searchResults
+                .frame(minWidth: 290)
+            venuePreview
+                .frame(minWidth: 360)
+        }
+        #else
+        VStack(spacing: 0) {
+            searchResults
+            Divider()
+            venuePreview
+                .frame(minHeight: 220)
+        }
+        #endif
+    }
+
+    private var searchResults: some View {
+        List {
+            if search.isResolving {
+                ProgressView("場所を確認中…")
+                    .frame(maxWidth: .infinity, alignment: .center)
+            } else if !search.results.isEmpty {
+                Section("検索結果") {
+                    ForEach(search.results) { result in
+                        resultButton(result)
+                    }
+                }
+            } else if search.didResolveSearch {
+                ContentUnavailableView(
+                    "場所が見つかりません",
+                    systemImage: "mappin.slash",
+                    description: Text("別の施設名や住所で検索してください。")
+                )
+            } else if !search.completions.isEmpty {
+                Section("候補") {
+                    ForEach(search.completions, id: \.self) { completion in
+                        Button {
+                            search.resolve(completion)
+                        } label: {
+                            completionLabel(completion)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            } else if search.isCompleting {
+                ProgressView("候補を検索中…")
+                    .frame(maxWidth: .infinity, alignment: .center)
+            } else if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                ContentUnavailableView(
+                    "場所を検索",
+                    systemImage: "magnifyingglass",
+                    description: Text("施設名または住所を入力してください。")
+                )
+            } else {
+                ContentUnavailableView(
+                    "候補がありません",
+                    systemImage: "magnifyingglass",
+                    description: Text("入力を変えてもう一度検索してください。")
+                )
+            }
+        }
+        .searchable(text: $query, prompt: "施設名または住所")
+        .onChange(of: query) { _, value in
+            selectedResult = nil
+            search.update(query: value)
         }
     }
 
@@ -806,6 +855,7 @@ private struct VenueSearchSheet: View {
         }
         .buttonStyle(.plain)
         .listRowBackground(selectedResult?.id == result.id ? Color.accentColor.opacity(0.16) : Color.clear)
+        .accessibilityAddTraits(selectedResult?.id == result.id ? .isSelected : [])
     }
 
     private func completionLabel(_ completion: MKLocalSearchCompletion) -> some View {

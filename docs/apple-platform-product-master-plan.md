@@ -381,6 +381,12 @@ Activity Editor は一つの編集フローとして次を扱う。
 Venue 検索は Editor 内の独立セクションに置く。検索結果選択後に、Activity タイトルを Venue 名へ
 合わせるかを提案してもよいが、自動変更しない。
 
+検索画面は初期案内、候補取得中、候補、検索中、検索結果なし、失敗を区別して表示する。
+macOS は候補一覧と選択内容のプレビューを左右に並べ、iPhone は同じ情報を縦に並べる。
+Venue を選択するまで確定操作は無効にし、検索画面を開いただけでは Activity を変更しない。
+この構造と初期空状態は 2026-07-24 に macOS UI automation で確認済みであり、iOS target も
+同じ実装でコンパイルを確認済みである。
+
 標準所要時間はカテゴリ別の提案として出し、未設定時だけワンタップで採用できるようにする。
 2026-07-24 時点の初期値は、移動30分、食事60分、宿泊30分、観光90分、体験120分、買い物60分
 とする。`その他`には一律の根拠がないため提案しない。提案は自動適用せず、既存の所要時間を
@@ -1025,7 +1031,7 @@ P1 以降の platform expansion Gate として扱う。
 
 - Double-click / Return / Context Menu — implemented and UI-tested on macOS
 - Category duration suggestion — implemented for create/edit; explicit apply and existing-value preservation UI-tested
-- Venue search section
+- Venue search section — implemented with explicit states, adaptive layout, and initial-state UI test
 - Drag reorder
 - Undo / Redo
 - iPhone quick edit
@@ -1143,12 +1149,11 @@ P1 以降の platform expansion Gate として扱う。
 
 次の実装担当者は、この順序で作業する。
 
-1. Activity Editor の Venue search section を確認し、不足する情報階層だけを補う。
-2. Activity Card の drag reorder と Undo / Redo を一つの編集トランザクションとして設計する。
-3. iPhone quick edit を実装し、Dynamic Type と片手操作を確認する。
-4. Doctor issue から対象 Activity Editor へ移動する。
-5. Travel Leg の Domain 仕様を ADR として先に確定する。
-6. iPadOS adaptive workspace を追加し、iPad viewport を確認する。
+1. Activity Card の drag reorder と Undo / Redo を一つの編集トランザクションとして設計する。
+2. iPhone quick edit を実装し、Dynamic Type と片手操作を確認する。
+3. Doctor issue から対象 Activity Editor へ移動する。
+4. Travel Leg の Domain 仕様を ADR として先に確定する。
+5. iPadOS adaptive workspace を追加し、iPad viewport を確認する。
 
 新しい外部画像 provider、評価データ、独自サーバー、AI、CloudKit は、それぞれの Research Gate
 なしに開始しない。

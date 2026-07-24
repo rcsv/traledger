@@ -69,11 +69,12 @@ QA scheme は `Debug-QA` build configuration を使用し、`TRIPMAP_QA` を自�
 から既存ライブラリ画像を選び、ユーザー画像への更新と seed なしの再起動後の永続化を確認する。
 regular / narrow の画像寸法と主要ボタン、Wikimedia attribution の keyboard focus も回帰試験に含む。
 PhotosPicker の実操作には、QA 実行環境の写真ライブラリに選択可能な画像が1枚以上必要である。通常
-`TripMap-macOS` scheme では UI test を skip し、60件の deterministic test だけを実行する。
+`TripMap-macOS` scheme では UI test を skip し、61件の deterministic test だけを実行する。
 2026-07-24 はQA schemeに欠けていた専用コンパイル条件を `Debug-QA` として追加し、DerivedData や
 外部フラグに依存しない automation mode へ復旧した。Venue image 6項目、Activity Card操作3項目、
-duration suggestion 2項目の合計11 test が failure 0 で成功した。最終再実行の結果 bundle は
-`DerivedData-VenueImageUITest/Logs/Test/Test-TripMap-VenueImage-QA-2026.07.24_10-35-12-+0900.xcresult`。
+duration suggestion 2項目、Venue search初期状態1項目の合計12 test が failure 0 で成功した。
+最終再実行の結果 bundle は
+`DerivedData-VenueImageUITest/Logs/Test/Test-TripMap-VenueImage-QA-2026.07.24_10-45-27-+0900.xcresult`。
 
 Look Around の可用性は地点単位で変化する。今回の probe では東京駅と東京タワーは取得不能、
 渋谷スクランブル交差点は取得可能だったため、QA fixture は渋谷を採用した。地名の知名度だけで
