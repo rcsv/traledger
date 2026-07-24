@@ -156,6 +156,28 @@ enum TripPlanEditor {
         return copy
     }
 
+    static func setActivityProgress(
+        in trip: Trip,
+        activityID: Activity.ID,
+        progress: ActivityProgress,
+        at changeDate: Date = Date()
+    ) throws -> Trip {
+        guard let dayIndex = trip.days.firstIndex(where: { day in
+            day.activities.contains(where: { $0.id == activityID })
+        }), let activityIndex = trip.days[dayIndex].activities.firstIndex(where: { $0.id == activityID }) else {
+            throw TripPlanEditingError.activityNotFound
+        }
+        guard trip.days[dayIndex].activities[activityIndex].progress != progress else {
+            return trip
+        }
+
+        var copy = trip
+        copy.days[dayIndex].activities[activityIndex].progress = progress
+        copy.days[dayIndex].activities[activityIndex].progressUpdatedAt =
+            progress == .planned ? nil : changeDate
+        return copy
+    }
+
     static func deleteActivity(in trip: Trip, activityID: Activity.ID) throws -> Trip {
         guard let dayIndex = trip.days.firstIndex(where: { day in
             day.activities.contains(where: { $0.id == activityID })

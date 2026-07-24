@@ -66,6 +66,8 @@ final class StoredActivity {
     var categoryRawValue: String?
     var durationMinutes: Int?
     var note: String?
+    var progressRawValue: String = ActivityProgress.planned.rawValue
+    var progressUpdatedAt: Date?
     var day: StoredDay?
     @Relationship(deleteRule: .cascade, inverse: \StoredPlaceSnapshot.activity)
     var place: StoredPlaceSnapshot?
@@ -78,6 +80,8 @@ final class StoredActivity {
         categoryRawValue: String?,
         durationMinutes: Int?,
         note: String?,
+        progressRawValue: String = ActivityProgress.planned.rawValue,
+        progressUpdatedAt: Date? = nil,
         place: StoredPlaceSnapshot?
     ) {
         self.id = id
@@ -87,6 +91,8 @@ final class StoredActivity {
         self.categoryRawValue = categoryRawValue
         self.durationMinutes = durationMinutes
         self.note = note
+        self.progressRawValue = progressRawValue
+        self.progressUpdatedAt = progressUpdatedAt
         self.place = place
     }
 }
@@ -311,6 +317,8 @@ extension StoredTrip {
                     }
                     storedActivity.categoryRawValue = domainActivity.category?.rawValue
                     storedActivity.durationMinutes = domainActivity.durationMinutes
+                    storedActivity.progressRawValue = domainActivity.progress.rawValue
+                    storedActivity.progressUpdatedAt = domainActivity.progressUpdatedAt
                     switch (domainActivity.place, storedActivity.place) {
                     case let (domainPlace?, storedPlace?) where domainPlace.id == storedPlace.id:
                         storedPlace.apply(domainPlace)
@@ -414,11 +422,17 @@ private extension StoredActivity {
             categoryRawValue: activity.category?.rawValue,
             durationMinutes: activity.durationMinutes,
             note: activity.note,
+            progressRawValue: activity.progress.rawValue,
+            progressUpdatedAt: activity.progressUpdatedAt,
             place: activity.place.map(StoredPlaceSnapshot.init(snapshot:))
         )
     }
 
     func snapshot(localDate: LocalDate, timeZone: TimeZone) -> Activity? {
+        guard let progress = ActivityProgress(rawValue: progressRawValue),
+              (progress == .planned) == (progressUpdatedAt == nil) else {
+            return nil
+        }
         let startTime: Date?
         if let startMinuteOfDay {
             guard let localTime = LocalTime(minuteOfDay: startMinuteOfDay),
@@ -435,7 +449,9 @@ private extension StoredActivity {
             category: categoryRawValue.flatMap(ActivityCategory.init(rawValue:)),
             durationMinutes: durationMinutes,
             note: note,
-            place: place?.snapshot
+            place: place?.snapshot,
+            progress: progress,
+            progressUpdatedAt: progressUpdatedAt
         )
     }
 }

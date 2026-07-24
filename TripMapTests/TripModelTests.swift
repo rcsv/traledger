@@ -960,6 +960,68 @@ final class TripModelTests: XCTestCase {
         XCTAssertNil(withoutPlace.days[0].activities[1].place)
     }
 
+    func testActivityProgressIsExplicitIdempotentAndReversible() throws {
+        let trip = OkinawaSample.trip
+        let activity = trip.orderedDays[0].orderedActivities[0]
+        let completionDate = Date(timeIntervalSince1970: 1_800_000_000)
+
+        let completed = try TripPlanEditor.setActivityProgress(
+            in: trip,
+            activityID: activity.id,
+            progress: .completed,
+            at: completionDate
+        )
+        let completedActivity = try XCTUnwrap(
+            completed.orderedDays[0].orderedActivities.first(where: { $0.id == activity.id })
+        )
+        XCTAssertEqual(completedActivity.progress, .completed)
+        XCTAssertEqual(completedActivity.progressUpdatedAt, completionDate)
+
+        let repeated = try TripPlanEditor.setActivityProgress(
+            in: completed,
+            activityID: activity.id,
+            progress: .completed,
+            at: completionDate.addingTimeInterval(60)
+        )
+        XCTAssertEqual(
+            repeated.orderedDays[0].orderedActivities.first(where: { $0.id == activity.id })?.progressUpdatedAt,
+            completionDate
+        )
+
+        let planned = try TripPlanEditor.setActivityProgress(
+            in: repeated,
+            activityID: activity.id,
+            progress: .planned
+        )
+        let plannedActivity = try XCTUnwrap(
+            planned.orderedDays[0].orderedActivities.first(where: { $0.id == activity.id })
+        )
+        XCTAssertEqual(plannedActivity.progress, .planned)
+        XCTAssertNil(plannedActivity.progressUpdatedAt)
+    }
+
+    func testReplicatedActivitiesResetExecutionProgress() throws {
+        var trip = OkinawaSample.trip
+        let sourceDay = trip.orderedDays[0]
+        let targetDay = trip.orderedDays[1]
+        trip.days[0].activities[0].progress = .skipped
+        trip.days[0].activities[0].progressUpdatedAt = Date(timeIntervalSince1970: 1_800_000_000)
+
+        let replicated = try TripPlanEditor.replicateDayActivities(
+            in: trip,
+            from: sourceDay.id,
+            to: [targetDay.id]
+        )
+        let firstReplicaSequence = targetDay.activities.count + 1
+        let replica = try XCTUnwrap(
+            replicated.days.first(where: { $0.id == targetDay.id })?
+                .activities.first(where: { $0.sequence == firstReplicaSequence })
+        )
+
+        XCTAssertEqual(replica.progress, .planned)
+        XCTAssertNil(replica.progressUpdatedAt)
+    }
+
     func testDeletingActivityRenumbersRemainingActivities() throws {
         let trip = OkinawaSample.trip
         let day = trip.orderedDays[1]
@@ -1211,6 +1273,35 @@ final class TripModelTests: XCTestCase {
         XCTAssertEqual(reloaded.defaultCurrencyCode, "USD")
         XCTAssertEqual(reloaded.coverImageData, Data([0x01, 0x02, 0x03]))
         XCTAssertEqual(updatedPlace.imageData, Data([0x0A, 0x0B]))
+    }
+
+    @MainActor
+    func testStoredTripPersistsActivityProgressAfterPlanUpdate() throws {
+        let container = try TripMapStore.makeContainer(inMemoryOnly: true)
+        let context = container.mainContext
+        let storedTrip = try StoredTrip(validatingSnapshot: OkinawaSample.trip)
+        context.insert(storedTrip)
+        try context.save()
+
+        let activityID = OkinawaSample.trip.orderedDays[0].orderedActivities[0].id
+        let changeDate = Date(timeIntervalSince1970: 1_800_000_000)
+        let updated = try TripPlanEditor.setActivityProgress(
+            in: OkinawaSample.trip,
+            activityID: activityID,
+            progress: .skipped,
+            at: changeDate
+        )
+        try storedTrip.applyPlan(updated, in: context)
+        try context.save()
+
+        let reloaded = try XCTUnwrap(
+            try ModelContext(container).fetch(FetchDescriptor<StoredTrip>()).first?.snapshot
+        )
+        let activity = try XCTUnwrap(
+            reloaded.orderedDays[0].orderedActivities.first(where: { $0.id == activityID })
+        )
+        XCTAssertEqual(activity.progress, .skipped)
+        XCTAssertEqual(activity.progressUpdatedAt, changeDate)
     }
 
     @MainActor

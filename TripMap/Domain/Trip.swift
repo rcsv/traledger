@@ -67,6 +67,30 @@ enum ActivityCategory: String, CaseIterable, Identifiable, Codable, Sendable {
     }
 }
 
+enum ActivityProgress: String, CaseIterable, Identifiable, Codable, Sendable {
+    case planned
+    case completed
+    case skipped
+
+    var id: Self { self }
+
+    var displayName: String {
+        switch self {
+        case .planned: "未着手"
+        case .completed: "完了"
+        case .skipped: "スキップ"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .planned: "circle"
+        case .completed: "checkmark.circle.fill"
+        case .skipped: "forward.circle.fill"
+        }
+    }
+}
+
 struct Activity: Identifiable, Hashable, Sendable {
     let id: UUID
     var sequence: Int
@@ -76,6 +100,8 @@ struct Activity: Identifiable, Hashable, Sendable {
     var durationMinutes: Int? = nil
     var note: String?
     var place: PlaceSnapshot?
+    var progress: ActivityProgress = .planned
+    var progressUpdatedAt: Date? = nil
 }
 
 struct ExternalPlaceImage: Hashable, Sendable {

@@ -1097,7 +1097,9 @@ platform expansion 記録として分離する。
 - Drag reorder — implemented with an explicit handle, shared context/accessibility alternatives, and Domain normalization; isolated pointer smoke pending
 - Undo / Redo — implemented and UI-tested for Activity reorder
 - iPhone quick edit — start time, short note, and Venue reset/search implemented; one-handed entry, standard Dynamic Type, Accessibility XXL, and adaptive Venue search visually verified
-- iPhone completion / skipped state — deferred until a persistent Activity status Domain is specified
+- Activity progress Domain — `planned / completed / skipped`、変更時刻、複製時 reset、
+  Doctor / Travel Leg 非連動の境界を ADR 0005 として定義し、永続化テスト済み
+- iPhone completion / skipped state — persistent Domain を利用する Quick Edit 第二段階を次に実装
 
 完了条件:
 
@@ -1155,7 +1157,7 @@ platform expansion 記録として分離する。
 ### P6 — Guide Readiness
 
 - Now / Next
-- completed / skipped
+- completed / skipped — Domain と SwiftData 永続化を実装済み、Guide UI は進行中
 - reservation reference
 - local notification
 - offline review
