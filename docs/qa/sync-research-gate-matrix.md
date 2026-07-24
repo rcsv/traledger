@@ -134,6 +134,9 @@ Local preconditions completed on 2026-07-25:
 - Day replication uses pre-generated Activity/Place UUIDs and an expected
   source Activity UUID order. Local tests preserve a concurrent target append,
   copy the latest source fields, and reject a changed source structure.
+- Day swap records both Activity UUID orders and moves existing relationships.
+  Local tests preserve a concurrent Activity field edit and unrelated Trip
+  field, while an append/delete/reorder on either Day rejects the stale swap.
 - in-memory tests prove independent local fields survive scoped Cover, Venue
   image, and Memory writes.
 

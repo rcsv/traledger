@@ -39,6 +39,7 @@ The first mutation set owns:
   mutation for Undo/Redo;
 - Day Activity replication with caller-generated Activity/Place UUIDs and the
   source Activity UUID order observed by the initiating UI;
+- Day plan swap with the Activity UUID order observed for both Days;
 - user-selected Venue image;
 - derived external Venue image metadata;
 - Activity progress and its change timestamp;
@@ -55,9 +56,9 @@ same-field conflict policy. A mutation can preserve independent local fields,
 but CloudKit activation remains blocked until schema migration and the
 three-device matrix are complete.
 
-Trip title/date metadata and Day swap still use `applyPlan`. Those paths must
-become scoped operations or gain proven field-level merge behavior before
-development sync is enabled.
+Trip title/date metadata still uses `applyPlan`. That path must become a scoped
+operation or gain proven field-level merge behavior before development sync is
+enabled.
 
 Activity append generates its UUID before persistence and assigns sequence
 against the latest Day, so concurrent appends survive. Activity delete requires
@@ -74,8 +75,13 @@ all destination Activity and Place UUIDs before persistence. It reapplies the
 latest source fields only when that source structure is unchanged, appends the
 copies to the latest target Days, and therefore preserves target Activities
 added after the sheet opened. A changed source structure rejects the stale
-intent. Day swap still relocates multiple identities and needs an explicit
-concurrent-order policy.
+intent.
+
+Day swap records both complete Activity UUID orders. When both structures still
+match, it swaps the latest Day titles and existing Activity relationships
+without replaying Activity fields or unrelated Trip fields. An append, delete,
+or reorder on either Day rejects the stale swap. Cross-replica ordering still
+needs an explicit convergence policy.
 
 Changing time zone is validated against the latest Domain snapshot but writes
 only `timeZoneIdentifier`. Local day codes and minute-of-day storage remain
@@ -110,6 +116,8 @@ been cleared.
 - Day replication preserves target-side appends, copies the latest source
   fields into stable caller-generated identities, and rejects a changed source
   Activity structure.
+- Day swap moves existing identities and latest fields, preserves unrelated
+  Trip fields, and rejects a changed Activity structure on either Day.
 - Venue image intents carry the Place UUID observed by their initiating UI.
   A replaced or cleared Venue rejects the stale result, so an old Look
   Around/Wikimedia task cannot decorate the new Venue.
@@ -118,8 +126,8 @@ been cleared.
 - Memory completion and its content persist as one intent.
 - Reminder reconciliation after a Guide mutation uses the latest persisted
   snapshot.
-- Day swap and remaining metadata edits stay on the old full-snapshot path
-  until scoped designs are introduced.
+- Trip title/date metadata stays on the old full-snapshot path until a scoped
+  design is introduced.
 
 ## Verification
 
@@ -142,6 +150,8 @@ In-memory SwiftData regression tests must prove that:
 - Day replication preserves a target append, uses its pre-generated
   Activity/Place UUIDs, copies current source fields, and rejects a source
   whose Activity UUID order changed;
+- Day swap preserves a concurrent Activity field edit and unrelated Trip field,
+  moves the existing Activity identities, and rejects a changed Day structure;
 - a user Venue image changes only its owned image field;
 - an external image result for a replaced Place UUID is rejected;
 - Memory completion preserves an unrelated Activity edit and normalizes the

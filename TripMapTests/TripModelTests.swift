@@ -2606,6 +2606,132 @@ final class TripModelTests: XCTestCase {
     }
 
     @MainActor
+    func testScopedDaySwapMovesLatestPayloadWithoutReplayingOtherFields() throws {
+        let container = try TripMapStore.makeContainer(inMemoryOnly: true)
+        let context = container.mainContext
+        let firstDay = OkinawaSample.trip.orderedDays[0]
+        let secondDay = OkinawaSample.trip.orderedDays[1]
+        let firstActivity = try XCTUnwrap(
+            firstDay.orderedActivities.first(where: { $0.startTime != nil })
+        )
+        let mutation = TripMutation.swapDayPlans(
+            SwapDayPlansMutation(
+                firstDayID: firstDay.id,
+                expectedFirstActivityIDs:
+                    firstDay.orderedActivities.map(\.id),
+                secondDayID: secondDay.id,
+                expectedSecondActivityIDs:
+                    secondDay.orderedActivities.map(\.id)
+            )
+        )
+        let stored = try StoredTrip(validatingSnapshot: OkinawaSample.trip)
+        context.insert(stored)
+        try context.save()
+
+        var concurrent = try XCTUnwrap(stored.snapshot)
+        concurrent.coverImageData = Data([0x53, 0x57, 0x41, 0x50])
+        let firstIndex = try XCTUnwrap(
+            concurrent.days.firstIndex(where: { $0.id == firstDay.id })
+        )
+        let activityIndex = try XCTUnwrap(
+            concurrent.days[firstIndex].activities.firstIndex(
+                where: { $0.id == firstActivity.id }
+            )
+        )
+        concurrent.days[firstIndex]
+            .activities[activityIndex].note = "入れ替え直前の最新メモ"
+        try stored.applyPlan(concurrent, in: context)
+        try context.save()
+
+        try stored.applyMutation(mutation, in: context)
+        try context.save()
+
+        let snapshot = try XCTUnwrap(stored.snapshot)
+        let updatedFirst = try XCTUnwrap(
+            snapshot.days.first(where: { $0.id == firstDay.id })
+        )
+        let updatedSecond = try XCTUnwrap(
+            snapshot.days.first(where: { $0.id == secondDay.id })
+        )
+        XCTAssertEqual(
+            updatedFirst.orderedActivities.map(\.id),
+            secondDay.orderedActivities.map(\.id)
+        )
+        XCTAssertEqual(
+            updatedSecond.orderedActivities.map(\.id),
+            firstDay.orderedActivities.map(\.id)
+        )
+        XCTAssertEqual(
+            updatedSecond.activities.first(
+                where: { $0.id == firstActivity.id }
+            )?.note,
+            "入れ替え直前の最新メモ"
+        )
+        XCTAssertEqual(snapshot.coverImageData, concurrent.coverImageData)
+        let timeZone = try XCTUnwrap(
+            TimeZone(identifier: snapshot.timeZoneIdentifier)
+        )
+        let movedTime = try XCTUnwrap(
+            updatedSecond.activities.first(
+                where: { $0.id == firstActivity.id }
+            )?.startTime
+        )
+        XCTAssertEqual(
+            LocalDate(date: movedTime, timeZone: timeZone),
+            LocalDate(date: updatedSecond.date, timeZone: timeZone)
+        )
+    }
+
+    @MainActor
+    func testScopedDaySwapRejectsAChangedDayStructure() throws {
+        let container = try TripMapStore.makeContainer(inMemoryOnly: true)
+        let context = container.mainContext
+        let firstDay = OkinawaSample.trip.orderedDays[0]
+        let secondDay = OkinawaSample.trip.orderedDays[1]
+        let mutation = TripMutation.swapDayPlans(
+            SwapDayPlansMutation(
+                firstDayID: firstDay.id,
+                expectedFirstActivityIDs:
+                    firstDay.orderedActivities.map(\.id),
+                secondDayID: secondDay.id,
+                expectedSecondActivityIDs:
+                    secondDay.orderedActivities.map(\.id)
+            )
+        )
+        let stored = try StoredTrip(validatingSnapshot: OkinawaSample.trip)
+        context.insert(stored)
+        try context.save()
+
+        let changed = try TripPlanEditor.appendActivity(
+            in: try XCTUnwrap(stored.snapshot),
+            to: secondDay.id,
+            activityID: UUID(),
+            title: "入れ替え先への同時追加",
+            startTime: nil,
+            category: nil,
+            durationMinutes: nil
+        )
+        try stored.applyPlan(changed, in: context)
+        try context.save()
+
+        XCTAssertThrowsError(
+            try stored.applyMutation(mutation, in: context)
+        ) { error in
+            XCTAssertEqual(
+                error as? TripPlanEditingError,
+                .activityChangedDay
+            )
+        }
+        let snapshot = try XCTUnwrap(stored.snapshot)
+        XCTAssertEqual(
+            snapshot.days.first(
+                where: { $0.id == firstDay.id }
+            )?.orderedActivities.map(\.id),
+            firstDay.orderedActivities.map(\.id)
+        )
+    }
+
+    @MainActor
     func testScopedDayReplicationRejectsAChangedSourceStructure() throws {
         let container = try TripMapStore.makeContainer(inMemoryOnly: true)
         let context = container.mainContext

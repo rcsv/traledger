@@ -754,6 +754,22 @@ extension StoredTrip {
                     )
                 }
             }
+        case .swapDayPlans(let mutation):
+            let firstDay = try storedDay(mutation.firstDayID)
+            let secondDay = try storedDay(mutation.secondDayID)
+            guard let desiredFirst = updated.days.first(
+                where: { $0.id == mutation.firstDayID }
+            ), let desiredSecond = updated.days.first(
+                where: { $0.id == mutation.secondDayID }
+            ) else {
+                throw TripPlanEditingError.targetDayNotFound
+            }
+            let firstActivities = firstDay.activities
+            let secondActivities = secondDay.activities
+            firstDay.title = desiredFirst.title
+            secondDay.title = desiredSecond.title
+            firstDay.activities = secondActivities
+            secondDay.activities = firstActivities
         case .setVenueUserImage(let activityID, _, _):
             let stored = try storedActivity(activityID)
             let desired = try updatedActivity(activityID)

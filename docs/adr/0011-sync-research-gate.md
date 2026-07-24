@@ -179,8 +179,8 @@ The first conflict-risk reduction landed on 2026-07-25:
 
 - `TripMutation` expresses Cover, user Venue image, external Venue image,
   field-owned Plan/Guide Activity edits, travel-leg preference, Activity
-  append/delete/move/progress, Day replication, mutation-aware reorder Undo,
-  Memory, currency, and time-zone intents;
+  append/delete/move/progress, Day replication/swap, mutation-aware reorder
+  Undo, Memory, currency, and time-zone intents;
 - `StoredTrip.applyMutation` reapplies an intent to the latest valid local
   snapshot and writes only its owned fields;
 - Venue image intents require the initiating Place UUID and reject stale results
@@ -189,9 +189,9 @@ The first conflict-risk reduction landed on 2026-07-25:
 - in-memory persistence tests prove that unrelated edits survive Cover, Venue
   image, and Memory writes.
 
-This is not the Stage 2 exit. Trip title/date metadata and Day swap still use
-`applyPlan`. Same-field resolution, delete-versus-edit policy, concurrent
-reorder policy, and real replica convergence also remain unproven.
+This is not the Stage 2 exit. Trip title/date metadata still uses `applyPlan`.
+Same-field resolution, delete-versus-edit policy, concurrent reorder policy,
+and real replica convergence also remain unproven.
 
 ## Data and UX rules
 

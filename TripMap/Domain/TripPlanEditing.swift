@@ -129,6 +129,13 @@ struct ReplicateDayActivitiesMutation: Equatable, Sendable {
     let targets: [DayReplicationTargetMutation]
 }
 
+struct SwapDayPlansMutation: Equatable, Sendable {
+    let firstDayID: Day.ID
+    let expectedFirstActivityIDs: [Activity.ID]
+    let secondDayID: Day.ID
+    let expectedSecondActivityIDs: [Activity.ID]
+}
+
 enum TripMutation: Equatable, Sendable {
     case setCoverImage(Data?)
     case setDefaultCurrencyCode(String)
@@ -140,6 +147,7 @@ enum TripMutation: Equatable, Sendable {
     case deleteActivity(DeleteActivityMutation)
     case moveActivity(MoveActivityMutation)
     case replicateDayActivities(ReplicateDayActivitiesMutation)
+    case swapDayPlans(SwapDayPlansMutation)
     case setVenueUserImage(
         activityID: Activity.ID,
         placeID: PlaceSnapshot.ID,
@@ -261,6 +269,11 @@ enum TripMutation: Equatable, Sendable {
             return try TripPlanEditor.replicateDayActivities(
                 in: trip,
                 mutation: replication
+            )
+        case .swapDayPlans(let swap):
+            return try TripPlanEditor.swapDayPlans(
+                in: trip,
+                mutation: swap
             )
         case let .setVenueUserImage(activityID, placeID, imageData):
             return try updatingPlace(
@@ -861,6 +874,33 @@ enum TripPlanEditor {
             activity(on: copy.days[secondIndex].date, matching: $0, timeZone: timeZone)
         }
         return copy
+    }
+
+    static func swapDayPlans(
+        in trip: Trip,
+        mutation: SwapDayPlansMutation
+    ) throws -> Trip {
+        guard mutation.firstDayID != mutation.secondDayID else {
+            throw TripPlanEditingError.sameDay
+        }
+        guard let first = trip.days.first(
+            where: { $0.id == mutation.firstDayID }
+        ), let second = trip.days.first(
+            where: { $0.id == mutation.secondDayID }
+        ) else {
+            throw TripPlanEditingError.targetDayNotFound
+        }
+        guard first.orderedActivities.map(\.id)
+                == mutation.expectedFirstActivityIDs,
+              second.orderedActivities.map(\.id)
+                == mutation.expectedSecondActivityIDs else {
+            throw TripPlanEditingError.activityChangedDay
+        }
+        return try swapDayPlans(
+            in: trip,
+            firstDayID: mutation.firstDayID,
+            secondDayID: mutation.secondDayID
+        )
     }
 
     private static func activity(on dayDate: Date, matching activity: Activity, timeZone: TimeZone) -> Activity {

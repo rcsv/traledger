@@ -536,6 +536,28 @@ struct PlanView: View {
 
     private func applySwap(first: Day.ID, second: Day.ID) {
         do {
+            if let onApplyMutation {
+                guard let firstDay = trip.days.first(
+                    where: { $0.id == first }
+                ), let secondDay = trip.days.first(
+                    where: { $0.id == second }
+                ) else {
+                    throw TripPlanEditingError.targetDayNotFound
+                }
+                errorMessage = onApplyMutation(
+                    .swapDayPlans(
+                        SwapDayPlansMutation(
+                            firstDayID: first,
+                            expectedFirstActivityIDs:
+                                firstDay.orderedActivities.map(\.id),
+                            secondDayID: second,
+                            expectedSecondActivityIDs:
+                                secondDay.orderedActivities.map(\.id)
+                        )
+                    )
+                )
+                return
+            }
             apply(try TripPlanEditor.swapDayPlans(in: trip, firstDayID: first, secondDayID: second))
         } catch {
             errorMessage = error.localizedDescription

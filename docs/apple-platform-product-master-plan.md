@@ -1235,7 +1235,8 @@ platform expansion 記録として分離する。
   Activity追加・削除も安定UUIDと親Day前提条件を使う限定保存へ移行済み。
   Activity並べ替えとUndo/Redoも前後アンカー型mutationへ移行済み。Day複製はコピー元の
   Activity ID順を前提条件とし、コピー先IDを事前生成する限定保存へ移行済み。
-  Trip title/date と Day入れ替えは full-snapshot write が残るため、移行後に三端末 matrix を実施
+  Day入れ替えも両DayのActivity ID順を前提条件とし、既存Activityを移動する限定保存へ移行済み。
+  Trip title/date は full-snapshot write が残るため、移行後に三端末 matrix を実施
 - image quota — 1600px / 2MiB encoded ceiling と Cover・Venue・Memory 別 Trip inventory、
   25MiB soft threshold、置換量を考慮した非破壊 confirmation UX を実装済み。
   device format と実画面 gate は継続
