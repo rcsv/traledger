@@ -987,16 +987,23 @@ Gate 文書には次を記載する。
 - QA Trip の Library 表示は実画面確認済み
 - macOS UI test target と専用 QA scheme は追加済み
 - 残留 TripMap / `testmanagerd` の終了と全 Simulator shutdown により macOS UI automation mode は復旧済み
-- 専用 QA scheme の3テストが成功し、渋谷 Look Around、那覇 Wikimedia と帰属リンク、
+- 専用 QA scheme の6テストが成功し、渋谷 Look Around、那覇 Wikimedia と帰属リンク、
   native PhotosPicker でのユーザー画像選択、seed なし再起動後の永続化を確認済み
 - CoreSimulator は復旧し、iOS generic Simulator build は成功
+- macOS 1180×720 / 700×720 の regular / narrow と、176×99 / 88×88 の画像適応を確認済み
+- Wikimedia attribution は keyboard focus 可能で、Tab 到達 UI test が成功
+- VoiceOver を実際にオンにして論理的な Accessibility tree 順を確認し、確認後はオフへ復元済み
+- iPhone 17 Pro / iOS 27 Simulator で那覇 Wikimedia とユーザー画像優先を実画面確認済み
+- Accessibility XXL では Venue 情報と帰属を省略せず、操作を縦配置する adaptive layout を実装・確認済み
 
 残作業:
 
-- narrow / regular viewport
-- 明示的な VoiceOver 読み上げ順と keyboard による attribution link 操作
-- iPhone Simulator での同一代表経路の実画面確認
-- iPadOS target と adaptive workspace の追加後、iPad viewport を確認
+- iPhone Simulator で live Look Around 成功を再現し、同一代表経路の最後の実画面証跡を得る
+- Xcode 27 beta が iOS 17 SwiftData に存在しない symbol を参照する問題を、安定版 Xcode または
+  修正済み beta で再確認する
+
+iPadOS target と adaptive workspace は現行 shipping target の Venue Image Gate から分離し、
+P1 以降の platform expansion Gate として扱う。
 
 完了条件:
 
@@ -1124,15 +1131,13 @@ Gate 文書には次を記載する。
 
 次の実装担当者は、この順序で作業する。
 
-1. macOS で Venue Card の regular / narrow viewport を確認する。
-2. VoiceOver の読み上げ順と keyboard による Wikimedia attribution link 操作を確認する。
-3. iPhone Simulator で Look Around、Wikimedia、ユーザー画像の代表経路を実画面確認する。
-4. `Docs/place-card-spec.md` に残る証跡を追加し、Venue Image Gate を閉じる。
-5. Venue Card Gate が閉じた後、Activity Card の double-click / Return / Context Menu を実装する。
-6. Activity Editor の duration suggestion を実装する。
-7. Doctor issue から対象 Activity Editor へ移動する。
-8. Travel Leg の Domain 仕様を ADR として先に確定する。
-9. iPadOS adaptive workspace を追加し、iPad viewport を確認する。
+1. 安定版または修正済み Xcode の iPhone Simulator で渋谷 live Look Around を再確認する。
+2. 成功証跡を `docs/place-card-spec.md` に追加し、Venue Image Gate を閉じる。
+3. Venue Image Gate が閉じた後、Activity Card の double-click / Return / Context Menu を実装する。
+4. Activity Editor の duration suggestion を実装する。
+5. Doctor issue から対象 Activity Editor へ移動する。
+6. Travel Leg の Domain 仕様を ADR として先に確定する。
+7. iPadOS adaptive workspace を追加し、iPad viewport を確認する。
 
 P0 が閉じる前に新しい外部画像 provider、評価データ、独自サーバー、AI、CloudKit を始めない。
 

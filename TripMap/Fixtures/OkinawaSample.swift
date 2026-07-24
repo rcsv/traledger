@@ -80,6 +80,18 @@ enum OkinawaSample {
 
 #if TRIPMAP_QA
 enum VenueImageQAFixture {
+    static let tripID = UUID(uuidString: "A11E0000-0000-4000-8000-000000000000")!
+    static let dayID = UUID(uuidString: "A11E0000-0000-4000-8000-000000000001")!
+    static let lookAroundActivityID = UUID(uuidString: "A11E0000-0000-4000-8000-000000000011")!
+    static let wikimediaActivityID = UUID(uuidString: "A11E0000-0000-4000-8000-000000000012")!
+    static let userImageActivityID = UUID(uuidString: "A11E0000-0000-4000-8000-000000000013")!
+
+    // A deterministic copy of the app icon used only to make user-image rendering
+    // visually unambiguous on platforms where Venue Card editing is unavailable.
+    static let preseededUserImageData = Data(
+        base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAAHgAAAB4CAYAAAA5ZDbSAAAAAXNSR0IArs4c6QAAADhlWElmTU0AKgAAAAgAAYdpAAQAAAABAAAAGgAAAAAAAqACAAQAAAABAAAAeKADAAQAAAABAAAAeAAAAAArKnfUAAAEQ0lEQVR4Ae2dMWsUQRSA5w4l2lvYCBFSCIdBMbH2D6SwsEqXnyDkB6QW7NPYWaVMkU4UbfQiomDlgVFbrTUYL2Z3SdjM7g253cfbd+++K/Tmze3Me9+3uyxkhu1tbe8dBz5uCfTdVkZhOQEEOz8REIxg5wScl8cVjGDnBJyXxxWMYOcEnJfHFexc8CXr9fXHR2H1025YOtjPUx0troTh8loY982nbgKteUqrH3fDYPT6DNbgS/H97Z2HZzG+TCZg/ha99K24csslnF7N5Rjf6wmYF7zw93cl87pY5UcEcgLmBeOpHQEEt+Nn/mi1h6x+vxce3L0RBjevhSsLF5/21049w831+/UdhqN/Do/C568/w8sPP8J4rPNn+IuTbgkuk3vv1vWWo8z24dmJfcrgxfvvKsWo3aKzK5dPQUCThZrgaW7L3k8ETRZqgr1Ls1ofgq2aEcoLwUIgrQ6DYKtmhPJCsBBIq8Mg2KoZobwQLATS6jAItmpGKC8EC4G0OgyCrZoRygvBQiCtDoNgq2aE8kKwEEirwyDYqhmhvBAsBNLqMAi2akYoLwQLgbQ6DIKtmhHKC8FCIK0OoyY4WzLKpyCgyUJNcLYemE9BQJOF2rroVyeLvbPPtAvfCyQ+/i0vfNeqSE3wv5OV/Nli72kXfG9MIPHk+bsJPYTLBNRu0eVJ+a5HAMF6rDuZCcGdYNebFMF6rDuZSe0hq+n20bD+phbMZm3UdrD8FM32UduuGmXH9tFG2GbvILaPzp6zqTJm++hUuPhxigBP0Sk6DvoQ7EBiqgQEp+g46EOwA4mpEhCcouOgD8EOJKZKQHCKjoM+BDuQmCoBwSk6DvoQ7EBiqgQEp+g46EOwA4mpEhCcouOgD8EOJKZKQHCKjoM+BDuQmCoBwSk6DvoQ7EBiqgQ1wZpbJlMFW+jTZKEmWHPLpAWJqRw0WagtfGf7aAjlhe+pE0CyT01w4+2jO49r63326GltnOB5Amq36PPT0tIigGAt0h3Ng+COwGtNi2At0h3No/aQ1XT7KG8fbXdmqAnm7aMhf60ubx9td8LOxNFsH50JTc2TZPtoc3YcGRHgKToC4q2JYG9Go3oQHAHx1kSwN6NRPQiOgHhrItib0ageBEdAvDUR7M1oVA+CIyDemgj2ZjSqB8EREG9NBHszGtWD4AiItyaCvRmN6kFwBMRbE8HejEb1IDgC4q2JYG9Go3rUBGtumYxqNNfUZKEmWHPLpDmjUUKaLNTWRbN9lO2j0XleNDdqoyHw9tEJYKKw2i06mpemEgEEK4Huahrzgg8vX62wqYtVfkQgJ2Be8GhxpaKqLlb5EYGcgNpTdFPew9tr+aFLB/v5/5nc4XIRazrmPB3X29reO56nguetVvO36HkTIl0vgqWJGhsPwcaESKeDYGmixsZDsDEh0ukgWJqosfEQbEyIdDoIliZqbDwEGxMinc5/DX3CXn1YKHkAAAAASUVORK5CYII="
+    )!
+
     static let trip: Trip = {
         let calendar = Calendar(identifier: .gregorian)
         let timeZone = TimeZone(identifier: "Asia/Tokyo")!
@@ -114,13 +126,13 @@ enum VenueImageQAFixture {
         }
 
         let day = Day(
-            id: UUID(uuidString: "A11E0000-0000-4000-8000-000000000001")!,
+            id: dayID,
             sequence: 1,
             date: date(2026, 11, 1),
             title: "Venue image QA",
             activities: [
                 Activity(
-                    id: UUID(uuidString: "A11E0000-0000-4000-8000-000000000011")!,
+                    id: lookAroundActivityID,
                     sequence: 1,
                     title: "Look Aroundを確認",
                     startTime: date(2026, 11, 1, 9, 0),
@@ -134,7 +146,7 @@ enum VenueImageQAFixture {
                     )
                 ),
                 Activity(
-                    id: UUID(uuidString: "A11E0000-0000-4000-8000-000000000012")!,
+                    id: wikimediaActivityID,
                     sequence: 2,
                     title: "Wikimediaを確認",
                     startTime: date(2026, 11, 1, 11, 0),
@@ -148,7 +160,7 @@ enum VenueImageQAFixture {
                     )
                 ),
                 Activity(
-                    id: UUID(uuidString: "A11E0000-0000-4000-8000-000000000013")!,
+                    id: userImageActivityID,
                     sequence: 3,
                     title: "ユーザー画像を確認",
                     startTime: date(2026, 11, 1, 13, 0),
@@ -165,7 +177,7 @@ enum VenueImageQAFixture {
         )
 
         return Trip(
-            id: UUID(uuidString: "A11E0000-0000-4000-8000-000000000000")!,
+            id: tripID,
             title: "Venue Image QA",
             dateRange: date(2026, 11, 1)...date(2026, 11, 1),
             timeZoneIdentifier: timeZone.identifier,

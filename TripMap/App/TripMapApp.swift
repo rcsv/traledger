@@ -67,15 +67,24 @@ struct TripMapApp: App {
 @MainActor
 private enum DebugFixtureSeeder {
     static func seedVenueImageTripIfNeeded(in container: ModelContainer) throws {
-        let fixtureID = VenueImageQAFixture.trip.id
+        var fixture = VenueImageQAFixture.trip
+        if ProcessInfo.processInfo.arguments.contains("-tripmap-venue-image-qa-preseed-user-image"),
+           let activityIndex = fixture.days[0].activities.firstIndex(
+               where: { $0.id == VenueImageQAFixture.userImageActivityID }
+           ) {
+            fixture.days[0].activities[activityIndex].place?.imageData =
+                VenueImageQAFixture.preseededUserImageData
+        }
+
+        let fixtureID = fixture.id
         let descriptor = FetchDescriptor<StoredTrip>(
             predicate: #Predicate<StoredTrip> { $0.id == fixtureID }
         )
         if let storedTrip = try container.mainContext.fetch(descriptor).first {
-            try storedTrip.applyPlan(VenueImageQAFixture.trip, in: container.mainContext)
+            try storedTrip.applyPlan(fixture, in: container.mainContext)
         } else {
             container.mainContext.insert(
-                try StoredTrip(validatingSnapshot: VenueImageQAFixture.trip)
+                try StoredTrip(validatingSnapshot: fixture)
             )
         }
         try container.mainContext.save()

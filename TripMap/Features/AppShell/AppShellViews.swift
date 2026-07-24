@@ -32,6 +32,9 @@ struct MobileAppShellView: View {
 private struct TripsTabView: View {
     @State private var scope: TripLibraryScope = .upcoming
     @State private var path: [UUID] = []
+    #if TRIPMAP_QA
+    @State private var didOpenVenueImageQA = false
+    #endif
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -44,6 +47,16 @@ private struct TripsTabView: View {
                 TripGuideWorkspaceView(tripID: tripID)
             }
         }
+        #if TRIPMAP_QA
+        .task {
+            guard !didOpenVenueImageQA,
+                  ProcessInfo.processInfo.arguments.contains("-tripmap-open-venue-image-qa") else {
+                return
+            }
+            didOpenVenueImageQA = true
+            path = [VenueImageQAFixture.tripID]
+        }
+        #endif
     }
 }
 
@@ -56,7 +69,10 @@ private struct TripGuideWorkspaceView: View {
 
     var body: some View {
         if let trip = storedTrips.first?.snapshot {
-            GuideView(trip: trip)
+            GuideView(
+                trip: trip,
+                initialActivityID: venueImageQAInitialActivityID
+            )
                 .id(trip.id)
         } else {
             ContentUnavailableView(
@@ -65,6 +81,24 @@ private struct TripGuideWorkspaceView: View {
                 description: Text("旅行一覧へ戻って別のTripを選んでください。")
             )
         }
+    }
+
+    private var venueImageQAInitialActivityID: Activity.ID? {
+        #if TRIPMAP_QA
+        let arguments = ProcessInfo.processInfo.arguments
+        guard arguments.contains("-tripmap-open-venue-image-qa") else {
+            return nil
+        }
+        if arguments.contains("-tripmap-venue-image-qa-wikimedia") {
+            return VenueImageQAFixture.wikimediaActivityID
+        }
+        if arguments.contains("-tripmap-venue-image-qa-user") {
+            return VenueImageQAFixture.userImageActivityID
+        }
+        return VenueImageQAFixture.lookAroundActivityID
+        #else
+        return nil
+        #endif
     }
 }
 #endif
@@ -213,12 +247,12 @@ struct MacTripWorkspaceView: View {
             return nil
         }
         if arguments.contains("-tripmap-venue-image-qa-wikimedia") {
-            return UUID(uuidString: "A11E0000-0000-4000-8000-000000000012")
+            return VenueImageQAFixture.wikimediaActivityID
         }
         if arguments.contains("-tripmap-venue-image-qa-user") {
-            return UUID(uuidString: "A11E0000-0000-4000-8000-000000000013")
+            return VenueImageQAFixture.userImageActivityID
         }
-        return UUID(uuidString: "A11E0000-0000-4000-8000-000000000011")
+        return VenueImageQAFixture.lookAroundActivityID
         #else
         return nil
         #endif
@@ -233,6 +267,11 @@ struct MacTripWorkspaceView: View {
         await Task.yield()
         NSApplication.shared.activate()
         for window in NSApplication.shared.windows where window.title == VenueImageQAFixture.trip.title {
+            if ProcessInfo.processInfo.arguments.contains("-tripmap-venue-image-qa-narrow") {
+                window.setContentSize(NSSize(width: 700, height: 720))
+            } else if ProcessInfo.processInfo.arguments.contains("-tripmap-venue-image-qa-regular") {
+                window.setContentSize(NSSize(width: 1180, height: 720))
+            }
             window.level = .floating
             window.makeKeyAndOrderFront(nil)
         }

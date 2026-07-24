@@ -13,9 +13,13 @@ struct GuideView: View {
     @State private var interaction: TripInteractionState
     @State private var mode: Mode = .map
 
-    init(trip: Trip) {
+    init(trip: Trip, initialActivityID: Activity.ID? = nil) {
         self.trip = trip
-        _interaction = State(initialValue: TripInteractionState(trip: trip))
+        var initialInteraction = TripInteractionState(trip: trip)
+        if let initialActivityID {
+            initialInteraction.selectActivity(initialActivityID, source: .map, in: trip)
+        }
+        _interaction = State(initialValue: initialInteraction)
     }
 
     private var selectedDay: Day? {

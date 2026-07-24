@@ -301,21 +301,30 @@ private struct PlaceDetailOverlay: View {
     @State private var imageError: String?
     @StateObject private var venueResolution = PlaceResolutionModel()
     @StateObject private var imageResolution = VenueImageResolutionModel()
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            ViewThatFits(in: .horizontal) {
-                venueSummary(imageSize: CGSize(width: 176, height: 99))
-                    .frame(minWidth: 400, alignment: .leading)
-                venueSummary(imageSize: CGSize(width: 88, height: 88))
+            if dynamicTypeSize.isAccessibilitySize {
+                venueSummary(imageSize: CGSize(width: 72, height: 72))
+            } else {
+                ViewThatFits(in: .horizontal) {
+                    venueSummary(imageSize: CGSize(width: 176, height: 99))
+                        .frame(minWidth: 400, alignment: .leading)
+                    venueSummary(imageSize: CGSize(width: 88, height: 88))
+                }
             }
 
             imageAttribution
 
-            ViewThatFits(in: .horizontal) {
-                regularActions
-                    .frame(minWidth: allowsImageEditing ? 400 : 270)
-                compactActions
+            if dynamicTypeSize.isAccessibilitySize {
+                accessibilityActions
+            } else {
+                ViewThatFits(in: .horizontal) {
+                    regularActions
+                        .frame(minWidth: allowsImageEditing ? 400 : 270)
+                    compactActions
+                }
             }
         }
         .padding(12)
@@ -384,7 +393,7 @@ private struct PlaceDetailOverlay: View {
 
                 Text(place.name)
                     .font(.headline.weight(.semibold))
-                    .lineLimit(2)
+                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
 
                 if let category = venueCategory {
                     Label(category, systemImage: "tag")
@@ -395,7 +404,7 @@ private struct PlaceDetailOverlay: View {
                 Text(place.address)
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                    .lineLimit(2)
+                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -407,8 +416,11 @@ private struct PlaceDetailOverlay: View {
             Link(destination: image.sourcePageURL) {
                 Text("Wikimedia Commons · \(image.authorName) · \(image.licenseName)")
                     .font(.caption2)
-                    .lineLimit(1)
+                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
+                    .fixedSize(horizontal: false, vertical: true)
             }
+            .focusable()
+            .accessibilityIdentifier("wikimedia-attribution")
             .accessibilityLabel("Wikimedia Commons の画像。作者 \(image.authorName)、ライセンス \(image.licenseName)")
         }
     }
@@ -435,10 +447,24 @@ private struct PlaceDetailOverlay: View {
         .font(.caption)
     }
 
+    private var accessibilityActions: some View {
+        VStack(spacing: 8) {
+            if allowsImageEditing {
+                imagePicker
+            }
+            ResolvedMapsButton(place: place, resolvedMapItem: venueResolution.mapItem)
+                .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.bordered)
+        .font(.caption)
+    }
+
     private var imagePicker: some View {
-        PhotosPicker(selection: $pickerItem, matching: .images) {
+        let titleLineLimit: Int? = dynamicTypeSize.isAccessibilitySize ? nil : 1
+
+        return PhotosPicker(selection: $pickerItem, matching: .images) {
             Label("画像を変更", systemImage: "photo")
-                .lineLimit(1)
+                .lineLimit(titleLineLimit)
                 .frame(maxWidth: .infinity)
         }
         .frame(maxWidth: .infinity)

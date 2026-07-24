@@ -2,7 +2,7 @@
 
 Date: 2026-07-24
 
-Status: Product direction adopted and implemented; macOS three-source UI verification passed, cross-device Gate pending
+Status: Product direction adopted and implemented; macOS Gate passed, iPhone live Look Around evidence pending
 
 Related documents:
 
@@ -14,7 +14,8 @@ Research Gate 0 の製品判断は限定採用で完了している。一方、�
 2026-07-24 に実サービスを使う smoke test で Look Around 成功と Wikimedia fallback を確認し、
 ユーザー画像優先と非同期ライフサイクルは決定的テストで確認した。さらに macOS の専用 QA scheme で、
 Venue Card 上の Look Around、Wikimedia fallback、PhotosPicker ユーザー画像の三経路を実画面確認した。
-最終 Gate は、regular / narrow、明示的な VoiceOver 操作、iPhone 実画面の確認まで未完了とする。
+その後 regular / narrow、VoiceOver、keyboard、iPhone の Wikimedia／ユーザー画像、Accessibility XXL
+まで確認した。最終 Gate は iPhone Simulator 上の live Look Around 成功証跡だけを未完了とする。
 
 ## 2026-07-24 verification evidence
 
@@ -33,8 +34,14 @@ Venue Card 上の Look Around、Wikimedia fallback、PhotosPicker ユーザー�
 | 那覇 Wikimedia fallback の Venue Card | Pass | `venue-image` が「那覇空港 の Wikimedia Commons 画像」として表示され、作者・license の帰属リンクも存在 |
 | PhotosPicker ユーザー画像 | Pass | native PhotosPicker で既存ライブラリ画像を選択し、「沖縄美ら海水族館 の選択された画像」へ更新 |
 | ユーザー画像の再起動後優先 | Pass | seed なしでアプリを再起動しても選択画像が復元され、外部画像へ戻らないことを確認 |
-| macOS regular / narrow と明示的 VoiceOver 操作 | Pending | 三経路の source label と帰属リンクは Accessibility tree で確認済み。幅別レイアウトと VoiceOver 読み上げ順は未確認 |
-| iPhone / iPad の再実画面確認 | Pending | CoreSimulator は復旧し generic iOS Simulator build は成功。iPhone の同一実画面 matrix は未実行、iPad は target 追加後に実施 |
+| macOS regular / narrow | Pass | QA window を 1180×720 / 700×720 で起動し、画像が 176×99 / 88×88 に適応し、画像変更・Maps ボタンが操作可能であることを UI test で確認 |
+| macOS keyboard | Pass | Wikimedia attribution を明示的に focusable とし、Tab だけで `hasKeyboardFocus` へ到達する UI test が成功 |
+| macOS VoiceOver | Pass | 実際に VoiceOver をオンにした状態で、画像、Venue 情報、Wikimedia 帰属リンク、操作ボタンが Accessibility tree 上の論理順で公開されることを確認。確認後は VoiceOver をオフへ復元 |
+| iPhone Wikimedia fallback | Pass | iPhone 17 Pro / iOS 27 Simulator で那覇空港画像、Venue 情報、作者・license 帰属、Maps ボタンを実画面確認 |
+| iPhone ユーザー画像優先 | Pass | QA 専用の永続化済み画像を持つ fixture で、選択画像が表示され Wikimedia 帰属が出ないことを実画面確認 |
+| iPhone Accessibility XXL | Pass | Accessibility Extra Extra Large で Venue 名、住所、Wikimedia 作者・license、Maps ボタンを省略せず表示。Card は縦方向へ適応 |
+| iPhone live Look Around | Pending | iOS 27 Simulator の渋谷は実行時に `nil` となり正常に Wikimedia へ fallback。iOS 17 Simulator は Xcode 27 beta が生成する SwiftData symbol の起動時リンクエラーで実行不能 |
+| iPad | Deferred | 現行 project に iPadOS target がないため、adaptive workspace の target 追加時に別 Gate として確認 |
 
 live smoke test は通常テストへ外部通信依存を持ち込まないよう、
 `OTHER_SWIFT_FLAGS='$(inherited) -D TRIPMAP_LIVE_VENUE_IMAGE_QA'` を指定した場合だけ
@@ -54,11 +61,12 @@ xcodebuild -project TripMap.xcodeproj \
 この UI test は QA Trip を直接開き、渋谷の Look Around 画像ラベル、那覇の Wikimedia 画像ラベル、
 作者・license の帰属リンクを実アプリの Accessibility tree で確認する。さらに native PhotosPicker
 から既存ライブラリ画像を選び、ユーザー画像への更新と seed なしの再起動後の永続化を確認する。
+regular / narrow の画像寸法と主要ボタン、Wikimedia attribution の keyboard focus も回帰試験に含む。
 PhotosPicker の実操作には、QA 実行環境の写真ライブラリに選択可能な画像が1枚以上必要である。通常
 `TripMap-macOS` scheme では UI test を skip し、60件の deterministic test だけを実行する。
 2026-07-24 は残留プロセスと Simulator 状態をリセットして automation mode を復旧し、専用 scheme の
-3 test が failure 0 で成功した。最終再実行の結果 bundle は
-`DerivedData-VenueImageUITest/Logs/Test/Test-TripMap-VenueImage-QA-2026.07.24_08-02-15-+0900.xcresult`。
+6 test が failure 0 で成功した。最終再実行の結果 bundle は
+`DerivedData-VenueImageUITest/Logs/Test/Test-TripMap-VenueImage-QA-2026.07.24_09-10-00-+0900.xcresult`。
 
 Look Around の可用性は地点単位で変化する。今回の probe では東京駅と東京タワーは取得不能、
 渋谷スクランブル交差点は取得可能だったため、QA fixture は渋谷を採用した。地名の知名度だけで
