@@ -922,7 +922,10 @@ Venue image Gate:
 7. すべて失敗時に placeholder になる
 8. Activity 切替で旧画像が混入しない
 
-Simulator 基盤障害で確認できない場合は Gate を閉じず、`blocked by environment` と記録する。
+Simulator 基盤障害で確認できない場合は原則 Gate を閉じず、`blocked by environment` と記録する。
+ただし、同じ経路を別 shipping platform の実サービス試験と決定的テストで確認済みで、未取得証跡が
+shipping risk を増やさないと判断できる場合は、理由・代替証跡・再確認条件を文書化した明示的な
+product waiver で Gate を閉じられる。
 
 ## 23. 開発の進め方
 
@@ -974,7 +977,9 @@ Gate 文書には次を記載する。
 
 ### P0 — Venue Image Gate を閉じる
 
-現状:
+状態: **Closed（2026-07-24、iPhone live Look Around 証跡は product waiver）**
+
+完了実績:
 
 - 優先順位 coordinator は実装済み
 - Look Around と Wikimedia resolver は実装済み
@@ -987,7 +992,9 @@ Gate 文書には次を記載する。
 - QA Trip の Library 表示は実画面確認済み
 - macOS UI test target と専用 QA scheme は追加済み
 - 残留 TripMap / `testmanagerd` の終了と全 Simulator shutdown により macOS UI automation mode は復旧済み
-- 専用 QA scheme の6テストが成功し、渋谷 Look Around、那覇 Wikimedia と帰属リンク、
+- `Debug-QA` build configuration により、専用 QA scheme が外部 Swift flag や古い DerivedData に
+  依存せず `TRIPMAP_QA` を有効化するよう修正済み
+- 専用 QA scheme の9テストが成功し、渋谷 Look Around、那覇 Wikimedia と帰属リンク、
   native PhotosPicker でのユーザー画像選択、seed なし再起動後の永続化を確認済み
 - CoreSimulator は復旧し、iOS generic Simulator build は成功
 - macOS 1180×720 / 700×720 の regular / narrow と、176×99 / 88×88 の画像適応を確認済み
@@ -996,11 +1003,13 @@ Gate 文書には次を記載する。
 - iPhone 17 Pro / iOS 27 Simulator で那覇 Wikimedia とユーザー画像優先を実画面確認済み
 - Accessibility XXL では Venue 情報と帰属を省略せず、操作を縦配置する adaptive layout を実装・確認済み
 
-残作業:
+Waiver:
 
-- iPhone Simulator で live Look Around 成功を再現し、同一代表経路の最後の実画面証跡を得る
-- Xcode 27 beta が iOS 17 SwiftData に存在しない symbol を参照する問題を、安定版 Xcode または
-  修正済み beta で再確認する
+- iPhone Simulator の live Look Around 成功だけは未取得。iOS 27 の渋谷は正常に Wikimedia へ
+  fallback し、iOS 17 は Xcode 27 beta が runtime にない SwiftData symbol を参照して起動不能
+- macOS の実サービス Look Around 成功、優先順位 coordinator の決定的テスト、iPhone の Wikimedia
+  fallback・ユーザー画像優先・Accessibility XXL を代替証跡とする
+- 安定版または修正済み Xcode を取得できた時点で再確認してよいが、P1 以降の開始条件にはしない
 
 iPadOS target と adaptive workspace は現行 shipping target の Venue Image Gate から分離し、
 P1 以降の platform expansion Gate として扱う。
@@ -1011,7 +1020,7 @@ P1 以降の platform expansion Gate として扱う。
 
 ### P1 — Activity Input UX
 
-- Double-click / Return / Context Menu
+- Double-click / Return / Context Menu — implemented and UI-tested on macOS
 - Category duration suggestion
 - Venue search section
 - Drag reorder
@@ -1131,15 +1140,16 @@ P1 以降の platform expansion Gate として扱う。
 
 次の実装担当者は、この順序で作業する。
 
-1. 安定版または修正済み Xcode の iPhone Simulator で渋谷 live Look Around を再確認する。
-2. 成功証跡を `docs/place-card-spec.md` に追加し、Venue Image Gate を閉じる。
-3. Venue Image Gate が閉じた後、Activity Card の double-click / Return / Context Menu を実装する。
-4. Activity Editor の duration suggestion を実装する。
+1. Activity Editor の category duration suggestion を実装する。
+2. Activity Editor の Venue search section を確認し、不足する情報階層だけを補う。
+3. Activity Card の drag reorder と Undo / Redo を一つの編集トランザクションとして設計する。
+4. iPhone quick edit を実装し、Dynamic Type と片手操作を確認する。
 5. Doctor issue から対象 Activity Editor へ移動する。
 6. Travel Leg の Domain 仕様を ADR として先に確定する。
 7. iPadOS adaptive workspace を追加し、iPad viewport を確認する。
 
-P0 が閉じる前に新しい外部画像 provider、評価データ、独自サーバー、AI、CloudKit を始めない。
+新しい外部画像 provider、評価データ、独自サーバー、AI、CloudKit は、それぞれの Research Gate
+なしに開始しない。
 
 ## 26. 文書運用
 

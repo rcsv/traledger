@@ -113,6 +113,8 @@ struct PlanView: View {
                         Button("予定を編集", systemImage: "pencil") {
                             activityEditor = ActivityEditorTarget(activityID: selectedActivity.id)
                         }
+                        .keyboardShortcut(.return, modifiers: [])
+                        .help("選択中の予定を編集 (Return)")
                         Menu("予定", systemImage: "ellipsis.circle") {
                             Button("予定を削除", systemImage: "trash", role: .destructive) {
                                 pendingActivityDeletion = ActivityEditorTarget(activityID: selectedActivity.id)
@@ -383,7 +385,13 @@ struct PlanView: View {
                 selectedActivityID: interaction.selectedActivityID,
                 doctorIssues: doctorReport.issues(forDay: day.id),
                 onSelectActivity: selectActivityFromList,
-                onAddActivity: { isActivityCreationPresented = true }
+                onAddActivity: { isActivityCreationPresented = true },
+                onEditActivity: { activityID in
+                    activityEditor = ActivityEditorTarget(activityID: activityID)
+                },
+                onDeleteActivity: { activityID in
+                    pendingActivityDeletion = ActivityEditorTarget(activityID: activityID)
+                }
             )
         }
     }
@@ -689,6 +697,7 @@ private struct ActivityEditorSheet: View {
                     }
                 }
             }
+            .accessibilityIdentifier("activity-editor")
             .navigationTitle("予定を編集")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

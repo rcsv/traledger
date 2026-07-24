@@ -6,19 +6,25 @@ struct ActivityList: View {
     let doctorIssues: [TripDoctorIssue]
     let onSelectActivity: (Activity.ID) -> Void
     let onAddActivity: (() -> Void)?
+    let onEditActivity: ((Activity.ID) -> Void)?
+    let onDeleteActivity: ((Activity.ID) -> Void)?
 
     init(
         day: Day,
         selectedActivityID: Activity.ID?,
         doctorIssues: [TripDoctorIssue] = [],
         onSelectActivity: @escaping (Activity.ID) -> Void,
-        onAddActivity: (() -> Void)? = nil
+        onAddActivity: (() -> Void)? = nil,
+        onEditActivity: ((Activity.ID) -> Void)? = nil,
+        onDeleteActivity: ((Activity.ID) -> Void)? = nil
     ) {
         self.day = day
         self.selectedActivityID = selectedActivityID
         self.doctorIssues = doctorIssues
         self.onSelectActivity = onSelectActivity
         self.onAddActivity = onAddActivity
+        self.onEditActivity = onEditActivity
+        self.onDeleteActivity = onDeleteActivity
     }
 
     var body: some View {
@@ -43,12 +49,15 @@ struct ActivityList: View {
                             ActivityCard(
                                 activity: activity,
                                 isSelected: selectedActivityID == activity.id,
-                                doctorIssues: doctorIssues.filter { $0.target.activityID == activity.id }
-                            ) {
-                                withAnimation(.snappy) {
-                                    onSelectActivity(activity.id)
+                                doctorIssues: doctorIssues.filter { $0.target.activityID == activity.id },
+                                onSelect: { select(activity.id) },
+                                onEdit: onEditActivity.map { edit in
+                                    { select(activity.id); edit(activity.id) }
+                                },
+                                onDelete: onDeleteActivity.map { delete in
+                                    { select(activity.id); delete(activity.id) }
                                 }
-                            }
+                            )
                             .id(activity.id)
                         }
                     }
@@ -64,16 +73,24 @@ struct ActivityList: View {
             .accessibilityIdentifier("activity-list")
         }
     }
+
+    private func select(_ activityID: Activity.ID) {
+        withAnimation(.snappy) {
+            onSelectActivity(activityID)
+        }
+    }
 }
 
 private struct ActivityCard: View {
     let activity: Activity
     let isSelected: Bool
     let doctorIssues: [TripDoctorIssue]
-    let action: () -> Void
+    let onSelect: () -> Void
+    let onEdit: (() -> Void)?
+    let onDelete: (() -> Void)?
 
     var body: some View {
-        Button(action: action) {
+        Button(action: onSelect) {
             HStack(alignment: .top, spacing: 12) {
                 Text("\(activity.sequence)")
                     .font(.caption.bold())
@@ -148,6 +165,36 @@ private struct ActivityCard: View {
         .buttonStyle(.plain)
         .accessibilityIdentifier("activity-\(activity.sequence)")
         .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .contextMenu {
+            if let onEdit {
+                Button("予定を編集", systemImage: "pencil", action: onEdit)
+            }
+            if let onDelete {
+                Divider()
+                Button("予定を削除", systemImage: "trash", role: .destructive, action: onDelete)
+            }
+        }
+        .accessibilityActions {
+            if let onEdit {
+                Button("予定を編集", action: onEdit)
+            }
+            if let onDelete {
+                Button("予定を削除", role: .destructive, action: onDelete)
+            }
+        }
+        #if os(macOS)
+        .simultaneousGesture(
+            TapGesture(count: 2).onEnded {
+                onEdit?()
+            }
+        )
+        .onKeyPress(.return) {
+            guard let onEdit else { return .ignored }
+            onEdit()
+            return .handled
+        }
+        .help(onEdit == nil ? "予定を選択" : "ダブルクリックまたはReturnキーで編集")
+        #endif
     }
 
     private func formattedDuration(_ minutes: Int) -> String {

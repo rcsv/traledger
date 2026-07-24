@@ -10,14 +10,14 @@
          </BuildActionEntry>
       </BuildActionEntries>
    </BuildAction>
-   <TestAction buildConfiguration="Debug" shouldUseLaunchSchemeArgsEnv="YES">
+   <TestAction buildConfiguration="Debug-QA" shouldUseLaunchSchemeArgsEnv="YES">
       <Testables>
          <TestableReference skipped="NO" parallelizable="NO">
             <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="A50000000000000000000004" BuildableName="TripMapUITests.xctest" BlueprintName="TripMapUITests" ReferencedContainer="container:TripMap.xcodeproj"/>
          </TestableReference>
       </Testables>
    </TestAction>
-   <LaunchAction buildConfiguration="Debug" useCustomWorkingDirectory="NO" ignoresPersistentStateOnLaunch="YES" debugDocumentVersioning="YES" debugServiceExtension="internal" allowLocationSimulation="YES">
+   <LaunchAction buildConfiguration="Debug-QA" useCustomWorkingDirectory="NO" ignoresPersistentStateOnLaunch="YES" debugDocumentVersioning="YES" debugServiceExtension="internal" allowLocationSimulation="YES">
       <BuildableProductRunnable runnableDebuggingMode="0">
          <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="A50000000000000000000002" BuildableName="TripMap.app" BlueprintName="TripMap-macOS" ReferencedContainer="container:TripMap.xcodeproj"/>
       </BuildableProductRunnable>

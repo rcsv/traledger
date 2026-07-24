@@ -81,6 +81,50 @@ final class VenueImageUITests: XCTestCase {
     }
 
     @MainActor
+    func testActivityCardDoubleClickOpensEditor() {
+        let app = launchUserImageFixture()
+        let activityCard = app.buttons["activity-3"].firstMatch
+
+        XCTAssertTrue(activityCard.waitForExistence(timeout: 15))
+        activityCard.doubleClick()
+
+        let editor = app.descendants(matching: .any)
+            .matching(identifier: "activity-editor")
+            .firstMatch
+        XCTAssertTrue(editor.waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["保存"].firstMatch.exists)
+    }
+
+    @MainActor
+    func testActivityCardReturnOpensEditor() {
+        let app = launchUserImageFixture()
+        let activityCard = app.buttons["activity-3"].firstMatch
+
+        XCTAssertTrue(activityCard.waitForExistence(timeout: 15))
+        activityCard.click()
+        activityCard.typeKey(.return, modifierFlags: [])
+
+        XCTAssertTrue(
+            app.descendants(matching: .any)
+                .matching(identifier: "activity-editor")
+                .firstMatch
+                .waitForExistence(timeout: 10)
+        )
+    }
+
+    @MainActor
+    func testActivityCardContextMenuOffersEditAndDelete() {
+        let app = launchUserImageFixture()
+        let activityCard = app.buttons["activity-3"].firstMatch
+
+        XCTAssertTrue(activityCard.waitForExistence(timeout: 15))
+        activityCard.rightClick()
+
+        XCTAssertTrue(app.menuItems["予定を編集"].firstMatch.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.menuItems["予定を削除"].firstMatch.exists)
+    }
+
+    @MainActor
     func testWikimediaAttributionReceivesKeyboardFocus() {
         let app = XCUIApplication()
         app.launchArguments = [
@@ -180,6 +224,21 @@ final class VenueImageUITests: XCTestCase {
             "-tripmap-venue-image-qa-user"
         ] + additionalArguments
         app.launch()
+        openVenueImageFixtureIfNeeded(in: app)
         return app
+    }
+
+    @MainActor
+    private func openVenueImageFixtureIfNeeded(in app: XCUIApplication) {
+        let userImageActivity = app.buttons["activity-3"].firstMatch
+        guard !userImageActivity.waitForExistence(timeout: 5) else { return }
+
+        let fixtureTrip = app.buttons[
+            "trip-A11E0000-0000-4000-8000-000000000000"
+        ].firstMatch
+        if fixtureTrip.waitForExistence(timeout: 5) {
+            app.activate()
+            fixtureTrip.click()
+        }
     }
 }
