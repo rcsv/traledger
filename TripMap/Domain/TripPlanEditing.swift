@@ -12,6 +12,7 @@ enum TripPlanEditingError: LocalizedError, Equatable {
     case invalidTravelLegReference
     case invalidReservationTitle
     case invalidReservationURL
+    case reminderRequiresStartTime
     case invalidTimeZone
 
     var errorDescription: String? {
@@ -27,6 +28,7 @@ enum TripPlanEditingError: LocalizedError, Equatable {
         case .invalidTravelLegReference: "編集対象の移動区間が見つかりません。"
         case .invalidReservationTitle: "予約名を入力してください。"
         case .invalidReservationURL: "予約URLにはHTTPSのリンクを入力してください。"
+        case .reminderRequiresStartTime: "リマインダーを設定するには開始時刻が必要です。"
         case .invalidTimeZone: "タイムゾーンを確認してください。"
         }
     }
@@ -214,6 +216,25 @@ enum TripPlanEditor {
 
         var copy = trip
         copy.days[dayIndex].activities[activityIndex].reservation = normalizedReservation
+        return copy
+    }
+
+    static func setActivityReminder(
+        in trip: Trip,
+        activityID: Activity.ID,
+        leadTime: ActivityReminderLeadTime?
+    ) throws -> Trip {
+        guard let dayIndex = trip.days.firstIndex(where: { day in
+            day.activities.contains(where: { $0.id == activityID })
+        }), let activityIndex = trip.days[dayIndex].activities.firstIndex(where: { $0.id == activityID }) else {
+            throw TripPlanEditingError.activityNotFound
+        }
+        guard leadTime == nil || trip.days[dayIndex].activities[activityIndex].startTime != nil else {
+            throw TripPlanEditingError.reminderRequiresStartTime
+        }
+
+        var copy = trip
+        copy.days[dayIndex].activities[activityIndex].reminderLeadTime = leadTime
         return copy
     }
 

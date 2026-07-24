@@ -671,6 +671,11 @@ Activity Quick Edit から保存し、Card に予約名を表示する。空白�
 SwiftData round-trip、cascade ownership の境界は
 [`ADR 0007`](adr/0007-reservation-offline-boundary.md) を正とする。
 
+2026-07-24 時点で、開始時刻を持つ Activity に一件だけ明示設定できる local reminder を実装した。
+未設定、時刻なし、完了、スキップ、過去の Activity は通知予定を生成しない。保存成功後に Trip 単位で
+pending request を同期し、新規に有効化した操作だけが通知許可を要求する。通知内容を一般タイトルと
+Activity 名に限定する境界は [`ADR 0009`](adr/0009-explicit-activity-reminders.md) を正とする。
+
 ## 13. Apple フレームワーク採用方針
 
 ### 13.1 現在の中核
@@ -1191,7 +1196,7 @@ platform expansion 記録として分離する。
 - Now / Next — pure Domain projection、Today 初期選択、Summary / Card 表示を実装済み。実画面 gate は保留
 - completed / skipped — Domain、SwiftData 永続化、Guide Quick Edit / Card 表示を実装済み
 - reservation reference — Activity Domain、SwiftData、Quick Edit、Card 表示を実装済み
-- local notification
+- local notification — explicit Activity reminder Domain / SwiftData / UserNotifications sync を実装済み
 - offline review — local inventory / online edge projection と Guide sheet を実装済み
 
 完了条件:
@@ -1248,8 +1253,8 @@ platform expansion 記録として分離する。
 
 次の実装担当者は、この順序で作業する。
 
-1. Guide の local notification を、ユーザーが明示設定した reminder だけに限定して設計する。
-2. Reservation の URL open / confirmation code copy を、意図しない露出を避けて Guide に配置する。
+1. Reservation の URL open / confirmation code copy を、意図しない露出を避けて Guide に配置する。
+2. local reminder の permission / delivery / timezone change gate を、安定した Simulator または実機で確認する。
 3. Now / Next、Reservation、Offline review、Travel Leg route detail の実画面 viewport gate を、安定した Simulator が利用可能になった時点で再開する。
 
 Travel Leg calculation states、iPadOS adaptive workspace、Activity progress / iPhone Quick Edit

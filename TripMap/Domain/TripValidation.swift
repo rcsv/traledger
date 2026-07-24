@@ -8,6 +8,7 @@ enum TripValidationIssue: Equatable, Sendable {
     case invalidActivitySequence(Day.ID)
     case invalidActivityDuration(Activity.ID)
     case invalidActivityProgress(Activity.ID)
+    case invalidActivityReminder(Activity.ID)
     case invalidReservationReference(Activity.ID)
     case invalidCoordinate(Activity.ID)
     case invalidTravelLegPreference(TravelLegID)
@@ -56,6 +57,9 @@ extension Trip {
                 }
                 if (activity.progress == .planned) != (activity.progressUpdatedAt == nil) {
                     issues.append(.invalidActivityProgress(activity.id))
+                }
+                if activity.reminderLeadTime != nil, activity.startTime == nil {
+                    issues.append(.invalidActivityReminder(activity.id))
                 }
                 if let reservation = activity.reservation {
                     let title = reservation.title.trimmingCharacters(in: .whitespacesAndNewlines)

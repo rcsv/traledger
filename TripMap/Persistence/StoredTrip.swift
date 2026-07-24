@@ -72,6 +72,7 @@ final class StoredActivity {
     var note: String?
     var progressRawValue: String = ActivityProgress.planned.rawValue
     var progressUpdatedAt: Date?
+    var reminderLeadTimeMinutes: Int?
     var day: StoredDay?
     @Relationship(deleteRule: .cascade, inverse: \StoredPlaceSnapshot.activity)
     var place: StoredPlaceSnapshot?
@@ -88,6 +89,7 @@ final class StoredActivity {
         note: String?,
         progressRawValue: String = ActivityProgress.planned.rawValue,
         progressUpdatedAt: Date? = nil,
+        reminderLeadTimeMinutes: Int? = nil,
         place: StoredPlaceSnapshot?,
         reservation: StoredReservationReference? = nil
     ) {
@@ -100,6 +102,7 @@ final class StoredActivity {
         self.note = note
         self.progressRawValue = progressRawValue
         self.progressUpdatedAt = progressUpdatedAt
+        self.reminderLeadTimeMinutes = reminderLeadTimeMinutes
         self.place = place
         self.reservation = reservation
     }
@@ -407,6 +410,7 @@ extension StoredTrip {
                     storedActivity.durationMinutes = domainActivity.durationMinutes
                     storedActivity.progressRawValue = domainActivity.progress.rawValue
                     storedActivity.progressUpdatedAt = domainActivity.progressUpdatedAt
+                    storedActivity.reminderLeadTimeMinutes = domainActivity.reminderLeadTime?.rawValue
                     switch (domainActivity.place, storedActivity.place) {
                     case let (domainPlace?, storedPlace?) where domainPlace.id == storedPlace.id:
                         storedPlace.apply(domainPlace)
@@ -569,6 +573,7 @@ private extension StoredActivity {
             note: activity.note,
             progressRawValue: activity.progress.rawValue,
             progressUpdatedAt: activity.progressUpdatedAt,
+            reminderLeadTimeMinutes: activity.reminderLeadTime?.rawValue,
             place: activity.place.map(StoredPlaceSnapshot.init(snapshot:)),
             reservation: activity.reservation.map(StoredReservationReference.init(snapshot:))
         )
@@ -594,6 +599,15 @@ private extension StoredActivity {
         } else {
             reservationSnapshot = nil
         }
+        let reminderLeadTime: ActivityReminderLeadTime?
+        if let reminderLeadTimeMinutes {
+            guard let snapshot = ActivityReminderLeadTime(rawValue: reminderLeadTimeMinutes) else {
+                return nil
+            }
+            reminderLeadTime = snapshot
+        } else {
+            reminderLeadTime = nil
+        }
         return Activity(
             id: id,
             sequence: sequence,
@@ -605,7 +619,8 @@ private extension StoredActivity {
             place: place?.snapshot,
             progress: progress,
             progressUpdatedAt: progressUpdatedAt,
-            reservation: reservationSnapshot
+            reservation: reservationSnapshot,
+            reminderLeadTime: reminderLeadTime
         )
     }
 }

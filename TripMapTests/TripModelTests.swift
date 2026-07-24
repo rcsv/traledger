@@ -1512,6 +1512,119 @@ final class TripModelTests: XCTestCase {
         )
     }
 
+    func testActivityReminderRequiresStartTimeAndCanBeCleared() throws {
+        let trip = OkinawaSample.trip
+        let activity = try XCTUnwrap(
+            trip.orderedDays.flatMap(\.orderedActivities).first(where: { $0.startTime != nil })
+        )
+        let reminded = try TripPlanEditor.setActivityReminder(
+            in: trip,
+            activityID: activity.id,
+            leadTime: .thirtyMinutes
+        )
+        XCTAssertEqual(
+            reminded.days.flatMap(\.activities).first(where: { $0.id == activity.id })?.reminderLeadTime,
+            .thirtyMinutes
+        )
+
+        let cleared = try TripPlanEditor.setActivityReminder(
+            in: reminded,
+            activityID: activity.id,
+            leadTime: nil
+        )
+        XCTAssertNil(
+            cleared.days.flatMap(\.activities).first(where: { $0.id == activity.id })?.reminderLeadTime
+        )
+
+        let withoutTime = try TripPlanEditor.updateActivity(
+            in: trip,
+            activityID: activity.id,
+            title: activity.title,
+            startTime: nil,
+            category: activity.category,
+            durationMinutes: activity.durationMinutes,
+            note: activity.note,
+            place: activity.place
+        )
+        XCTAssertThrowsError(
+            try TripPlanEditor.setActivityReminder(
+                in: withoutTime,
+                activityID: activity.id,
+                leadTime: .fifteenMinutes
+            )
+        ) { error in
+            XCTAssertEqual(error as? TripPlanEditingError, .reminderRequiresStartTime)
+        }
+    }
+
+    func testReminderProjectionIncludesOnlyFuturePlannedExplicitIntent() throws {
+        var trip = OkinawaSample.trip
+        let activities = trip.orderedDays.flatMap(\.orderedActivities)
+            .filter { $0.startTime != nil }
+        let first = try XCTUnwrap(activities.first)
+        let second = try XCTUnwrap(activities.dropFirst().first)
+        trip = try TripPlanEditor.setActivityReminder(
+            in: trip,
+            activityID: first.id,
+            leadTime: .oneHour
+        )
+        trip = try TripPlanEditor.setActivityReminder(
+            in: trip,
+            activityID: second.id,
+            leadTime: .atStart
+        )
+        trip = try TripPlanEditor.setActivityProgress(
+            in: trip,
+            activityID: second.id,
+            progress: .completed,
+            at: try XCTUnwrap(second.startTime)
+        )
+
+        let startTime = try XCTUnwrap(first.startTime)
+        let now = startTime.addingTimeInterval(-2 * 60 * 60)
+        let schedules = ActivityReminderProjection.pendingSchedules(for: trip, now: now)
+        let schedule = try XCTUnwrap(schedules.first)
+        XCTAssertEqual(schedules.count, 1)
+        XCTAssertEqual(schedule.activityID, first.id)
+        XCTAssertEqual(schedule.fireDate, startTime.addingTimeInterval(-60 * 60))
+        XCTAssertEqual(schedule.activityTitle, first.title)
+        XCTAssertTrue(
+            schedule.id.hasPrefix(ActivityReminderProjection.identifierPrefix(for: trip.id))
+        )
+        XCTAssertTrue(
+            ActivityReminderProjection.pendingSchedules(
+                for: trip,
+                now: startTime
+            ).allSatisfy { $0.activityID != first.id }
+        )
+    }
+
+    @MainActor
+    func testStoredTripRoundTripsActivityReminder() throws {
+        let container = try TripMapStore.makeContainer(inMemoryOnly: true)
+        let context = container.mainContext
+        let activity = try XCTUnwrap(
+            OkinawaSample.trip.orderedDays.flatMap(\.orderedActivities)
+                .first(where: { $0.startTime != nil })
+        )
+        let updated = try TripPlanEditor.setActivityReminder(
+            in: OkinawaSample.trip,
+            activityID: activity.id,
+            leadTime: .oneDay
+        )
+        context.insert(try StoredTrip(validatingSnapshot: updated))
+        try context.save()
+
+        let snapshot = try XCTUnwrap(
+            try ModelContext(container).fetch(FetchDescriptor<StoredTrip>()).first?.snapshot
+        )
+        XCTAssertEqual(
+            snapshot.days.flatMap(\.activities)
+                .first(where: { $0.id == activity.id })?.reminderLeadTime,
+            .oneDay
+        )
+    }
+
     @MainActor
     func testParticipantRoundTripUsesLocalStore() throws {
         let container = try TripMapStore.makeContainer(inMemoryOnly: true)

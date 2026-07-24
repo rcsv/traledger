@@ -221,3 +221,42 @@ enum GuideOfflineReview {
         )
     }
 }
+
+struct ActivityReminderSchedule: Identifiable, Hashable, Sendable {
+    let id: String
+    let activityID: Activity.ID
+    let fireDate: Date
+    let activityTitle: String
+}
+
+enum ActivityReminderProjection {
+    static func identifierPrefix(for tripID: Trip.ID) -> String {
+        "tripmap.activity-reminder.\(tripID.uuidString)."
+    }
+
+    static func pendingSchedules(
+        for trip: Trip,
+        now: Date = Date()
+    ) -> [ActivityReminderSchedule] {
+        let prefix = identifierPrefix(for: trip.id)
+        return trip.orderedDays
+            .flatMap(\.orderedActivities)
+            .compactMap { activity in
+                guard activity.progress == .planned,
+                      let startTime = activity.startTime,
+                      let leadTime = activity.reminderLeadTime else {
+                    return nil
+                }
+                let fireDate = startTime.addingTimeInterval(
+                    -TimeInterval(leadTime.rawValue * 60)
+                )
+                guard fireDate > now else { return nil }
+                return ActivityReminderSchedule(
+                    id: prefix + activity.id.uuidString,
+                    activityID: activity.id,
+                    fireDate: fireDate,
+                    activityTitle: activity.title
+                )
+            }
+    }
+}

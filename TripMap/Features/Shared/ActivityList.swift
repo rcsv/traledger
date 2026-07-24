@@ -313,6 +313,16 @@ private struct ActivityCard: View {
                             .accessibilityIdentifier("activity-reservation")
                     }
 
+                    if let reminderLeadTime = activity.reminderLeadTime {
+                        Label(
+                            "通知: \(reminderLeadTime.displayName)",
+                            systemImage: "bell.fill"
+                        )
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .accessibilityIdentifier("activity-reminder")
+                    }
+
                     if let note = activity.note {
                         Text(note)
                             .font(.subheadline)

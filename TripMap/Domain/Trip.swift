@@ -92,6 +92,28 @@ enum ActivityProgress: String, CaseIterable, Identifiable, Codable, Sendable {
     }
 }
 
+enum ActivityReminderLeadTime: Int, CaseIterable, Identifiable, Codable, Sendable {
+    case atStart = 0
+    case fiveMinutes = 5
+    case fifteenMinutes = 15
+    case thirtyMinutes = 30
+    case oneHour = 60
+    case oneDay = 1_440
+
+    var id: Self { self }
+
+    var displayName: String {
+        switch self {
+        case .atStart: "開始時刻"
+        case .fiveMinutes: "5分前"
+        case .fifteenMinutes: "15分前"
+        case .thirtyMinutes: "30分前"
+        case .oneHour: "1時間前"
+        case .oneDay: "1日前"
+        }
+    }
+}
+
 enum ReservationKind: String, CaseIterable, Identifiable, Codable, Sendable {
     case accommodation
     case transport
@@ -143,6 +165,7 @@ struct Activity: Identifiable, Hashable, Sendable {
     var progress: ActivityProgress = .planned
     var progressUpdatedAt: Date? = nil
     var reservation: ReservationReference? = nil
+    var reminderLeadTime: ActivityReminderLeadTime? = nil
 }
 
 struct ExternalPlaceImage: Hashable, Sendable {

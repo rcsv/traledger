@@ -1,6 +1,7 @@
 #if os(iOS)
 import MapKit
 import SwiftUI
+import UserNotifications
 
 struct GuideView: View {
     private enum Mode: String, CaseIterable, Identifiable {
@@ -119,7 +120,7 @@ struct GuideView: View {
         .sheet(isPresented: $isOfflineReviewPresented) {
             GuideOfflineReviewSheet(report: GuideOfflineReview.report(for: trip))
         }
-        .alert("変更を保存できませんでした", isPresented: Binding(
+        .alert("操作を完了できませんでした", isPresented: Binding(
             get: { errorMessage != nil },
             set: { if !$0 { errorMessage = nil } }
         )) {
@@ -390,7 +391,8 @@ struct GuideView: View {
         note: String?,
         place: PlaceSnapshot?,
         progress: ActivityProgress,
-        reservation: ReservationReference?
+        reservation: ReservationReference?,
+        reminderLeadTime: ActivityReminderLeadTime?
     ) -> Bool {
         guard let (activity, _) = activityAndDay(for: activityID) else {
             errorMessage = "編集対象の予定が見つかりませんでした。"
@@ -413,16 +415,33 @@ struct GuideView: View {
                 activityID: activityID,
                 progress: progress
             )
-            let updated = try TripPlanEditor.setReservation(
+            let withReservation = try TripPlanEditor.setReservation(
                 in: withProgress,
                 activityID: activityID,
                 reservation: reservation
+            )
+            let updated = try TripPlanEditor.setActivityReminder(
+                in: withReservation,
+                activityID: activityID,
+                leadTime: reminderLeadTime
             )
             if let persistenceError = onApplyPlan(updated) {
                 errorMessage = persistenceError
                 return false
             }
             interaction.selectActivity(activityID, source: .list, in: updated)
+            let shouldRequestAuthorization = activity.reminderLeadTime == nil
+                && reminderLeadTime != nil
+            Task {
+                do {
+                    try await GuideReminderScheduler.sync(
+                        trip: updated,
+                        requestingAuthorization: shouldRequestAuthorization
+                    )
+                } catch {
+                    errorMessage = error.localizedDescription
+                }
+            }
             return true
         } catch {
             errorMessage = error.localizedDescription
@@ -908,7 +927,15 @@ private struct GuideQuickEditSheet: View {
     let activity: Activity
     let day: Day
     let timeZoneIdentifier: String
-    let onSave: (Activity.ID, Date?, String?, PlaceSnapshot?, ActivityProgress, ReservationReference?) -> Bool
+    let onSave: (
+        Activity.ID,
+        Date?,
+        String?,
+        PlaceSnapshot?,
+        ActivityProgress,
+        ReservationReference?,
+        ActivityReminderLeadTime?
+    ) -> Bool
 
     @Environment(\.dismiss) private var dismiss
     @State private var hasStartTime: Bool
@@ -916,6 +943,8 @@ private struct GuideQuickEditSheet: View {
     @State private var note: String
     @State private var place: PlaceSnapshot?
     @State private var progress: ActivityProgress
+    @State private var hasReminder: Bool
+    @State private var reminderLeadTime: ActivityReminderLeadTime
     @State private var hasReservation: Bool
     @State private var reservationKind: ReservationKind
     @State private var reservationTitle: String
@@ -928,7 +957,15 @@ private struct GuideQuickEditSheet: View {
         activity: Activity,
         day: Day,
         timeZoneIdentifier: String,
-        onSave: @escaping (Activity.ID, Date?, String?, PlaceSnapshot?, ActivityProgress, ReservationReference?) -> Bool
+        onSave: @escaping (
+            Activity.ID,
+            Date?,
+            String?,
+            PlaceSnapshot?,
+            ActivityProgress,
+            ReservationReference?,
+            ActivityReminderLeadTime?
+        ) -> Bool
     ) {
         self.activity = activity
         self.day = day
@@ -939,6 +976,8 @@ private struct GuideQuickEditSheet: View {
         _note = State(initialValue: activity.note ?? "")
         _place = State(initialValue: activity.place)
         _progress = State(initialValue: activity.progress)
+        _hasReminder = State(initialValue: activity.reminderLeadTime != nil)
+        _reminderLeadTime = State(initialValue: activity.reminderLeadTime ?? .fifteenMinutes)
         _hasReservation = State(initialValue: activity.reservation != nil)
         _reservationKind = State(initialValue: activity.reservation?.kind ?? .other)
         _reservationTitle = State(initialValue: activity.reservation?.title ?? "")
@@ -987,6 +1026,26 @@ private struct GuideQuickEditSheet: View {
                             displayedComponents: .hourAndMinute
                         )
                         .environment(\.timeZone, tripTimeZone)
+                    }
+                }
+
+                Section {
+                    Toggle("通知を設定", isOn: $hasReminder)
+                        .disabled(!hasStartTime)
+                    if hasReminder, hasStartTime {
+                        Picker("通知時刻", selection: $reminderLeadTime) {
+                            ForEach(ActivityReminderLeadTime.allCases) { leadTime in
+                                Text(leadTime.displayName).tag(leadTime)
+                            }
+                        }
+                    }
+                } header: {
+                    Text("リマインダー")
+                } footer: {
+                    if hasStartTime {
+                        Text("保存後に通知の許可を確認します。通知には予定名だけを使用し、予約番号や場所は表示しません。")
+                    } else {
+                        Text("開始時刻を設定すると通知を利用できます。")
                     }
                 }
 
@@ -1061,7 +1120,16 @@ private struct GuideQuickEditSheet: View {
                             url: parsedReservationURL,
                             note: reservationNote
                         ) : nil
-                        if onSave(activity.id, editedStartTime, note, place, progress, reservation) {
+                        let reminder = hasStartTime && hasReminder ? reminderLeadTime : nil
+                        if onSave(
+                            activity.id,
+                            editedStartTime,
+                            note,
+                            place,
+                            progress,
+                            reservation,
+                            reminder
+                        ) {
                             dismiss()
                         }
                     }
@@ -1096,6 +1164,76 @@ private struct GuideQuickEditSheet: View {
     private var hasInvalidReservationURL: Bool {
         !reservationURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             && parsedReservationURL == nil
+    }
+}
+
+private enum GuideReminderSchedulingError: LocalizedError {
+    case notificationsDenied
+
+    var errorDescription: String? {
+        "予定は保存しました。通知を受け取るには、システム設定でTripMapの通知を許可してください。"
+    }
+}
+
+@MainActor
+private enum GuideReminderScheduler {
+    static func sync(
+        trip: Trip,
+        requestingAuthorization: Bool,
+        now: Date = Date()
+    ) async throws {
+        let center = UNUserNotificationCenter.current()
+        let prefix = ActivityReminderProjection.identifierPrefix(for: trip.id)
+        let schedules = ActivityReminderProjection.pendingSchedules(for: trip, now: now)
+        let desiredIdentifiers = Set(schedules.map(\.id))
+        let pending = await center.pendingNotificationRequests()
+        center.removePendingNotificationRequests(
+            withIdentifiers: pending.map(\.identifier).filter {
+                $0.hasPrefix(prefix) && !desiredIdentifiers.contains($0)
+            }
+        )
+
+        guard !schedules.isEmpty else { return }
+
+        var settings = await center.notificationSettings()
+        if settings.authorizationStatus == .notDetermined, requestingAuthorization {
+            let granted = try await center.requestAuthorization(options: [.alert, .sound])
+            guard granted else {
+                throw GuideReminderSchedulingError.notificationsDenied
+            }
+            settings = await center.notificationSettings()
+        }
+
+        switch settings.authorizationStatus {
+        case .authorized, .provisional, .ephemeral:
+            break
+        case .denied where requestingAuthorization:
+            throw GuideReminderSchedulingError.notificationsDenied
+        case .notDetermined, .denied:
+            return
+        @unknown default:
+            return
+        }
+
+        for schedule in schedules {
+            let content = UNMutableNotificationContent()
+            content.title = "予定のリマインダー"
+            content.body = schedule.activityTitle
+            content.sound = .default
+            let interval = schedule.fireDate.timeIntervalSince(now)
+            guard interval >= 1 else { continue }
+            let trigger = UNTimeIntervalNotificationTrigger(
+                timeInterval: interval,
+                repeats: false
+            )
+            try await center.add(
+                UNNotificationRequest(
+                    identifier: schedule.id,
+                    content: content,
+                    trigger: trigger
+                )
+            )
+        }
     }
 }
 #endif
