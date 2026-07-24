@@ -63,7 +63,7 @@ struct PlanView: View {
         TripDoctor.inspect(
             trip,
             participantNames: tripParticipantAssignments.compactMap { $0.participant?.displayName },
-            travelEstimates: travelLoad.estimates
+            travelLegs: travelLoad.legs
         )
     }
 

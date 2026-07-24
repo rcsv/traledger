@@ -528,6 +528,12 @@ schema へ含めない。初期段階は、隣接し双方に Venue がある Ac
 推定をメモリだけに保持する。transport、手動所要時間、メモを編集する段階で初めてユーザー意図の
 永続レコードを追加する。
 
+2026-07-24 時点で ADR 0004 の stateful domain projection を実装済みである。方向付き Activity
+pair、routing fingerprint、`idle / loading / loaded / unavailable / failed / stale`、24時間の
+freshness、手動時間の優先順位を Domain で表現し、既存 MapKit loader と Doctor をこの投影へ
+移行した。決定論テストと macOS 全モデルテスト、iOS Simulator generic build は成功している。
+ユーザー意図の永続化と leg row は未実装である。
+
 ### 10.2 表示
 
 - Activity List の Activity 間に `車 25分` のように表示する。
@@ -1091,6 +1097,7 @@ P1 以降の platform expansion Gate として扱う。
 ### P3 — Travel Leg
 
 - Domain / MapKit boundary ADR — accepted in ADR 0004
+- stateful domain projection / deterministic tests — implemented
 - leg UI
 - transport type
 - calculation states
@@ -1187,10 +1194,9 @@ P1 以降の platform expansion Gate として扱う。
 
 次の実装担当者は、この順序で作業する。
 
-1. ADR 0004 に従い、Travel Leg の stateful domain projection と deterministic test を追加する。
-2. leg row の calculation states と、取得不能でも崩れない表示を実装する。
-3. iPadOS adaptive workspace を追加し、iPad viewport を確認する。
-4. Activity の完了 / スキップ状態を Domain として定義し、iPhone quick edit の第二段階を実装する。
+1. leg row の calculation states と、取得不能でも崩れない表示を実装する。
+2. iPadOS adaptive workspace を追加し、iPad viewport を確認する。
+3. Activity の完了 / スキップ状態を Domain として定義し、iPhone quick edit の第二段階を実装する。
 
 新しい外部画像 provider、評価データ、独自サーバー、AI、CloudKit は、それぞれの Research Gate
 なしに開始しない。

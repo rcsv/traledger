@@ -22,22 +22,6 @@ enum TripDoctorIssueCode: String, Hashable, Sendable {
     case duplicateParticipantNames
 }
 
-struct TripTravelEstimate: Hashable, Sendable {
-    struct LegID: Hashable, Sendable {
-        let fromActivityID: Activity.ID
-        let toActivityID: Activity.ID
-    }
-
-    let dayID: Day.ID
-    let fromActivityID: Activity.ID
-    let toActivityID: Activity.ID
-    let expectedTravelMinutes: Int
-
-    var legID: LegID {
-        LegID(fromActivityID: fromActivityID, toActivityID: toActivityID)
-    }
-}
-
 enum TripDoctorIssueTarget: Hashable, Sendable {
     case trip
     case day(Day.ID)
@@ -105,7 +89,7 @@ enum TripDoctor {
     static func inspect(
         _ trip: Trip,
         participantNames: [String] = [],
-        travelEstimates: [TripTravelEstimate] = []
+        travelLegs: [TravelLeg] = []
     ) -> TripDoctorReport {
         var issues: [TripDoctorIssue] = []
         let orderedDays = trip.orderedDays
@@ -177,7 +161,7 @@ enum TripDoctor {
             appendTravelLoadIssue(
                 for: day,
                 activities: activities,
-                estimates: travelEstimates,
+                travelLegs: travelLegs,
                 to: &issues
             )
 
@@ -267,23 +251,23 @@ enum TripDoctor {
     private static func appendTravelLoadIssue(
         for day: Day,
         activities: [Activity],
-        estimates: [TripTravelEstimate],
+        travelLegs: [TravelLeg],
         to issues: inout [TripDoctorIssue]
     ) {
-        let routeLegs = zip(activities, activities.dropFirst()).compactMap { from, to -> TripTravelEstimate.LegID? in
+        let routeLegIDs = zip(activities, activities.dropFirst()).compactMap { from, to -> TravelLegID? in
             guard from.place != nil, to.place != nil else { return nil }
-            return TripTravelEstimate.LegID(fromActivityID: from.id, toActivityID: to.id)
+            return TravelLegID(fromActivityID: from.id, toActivityID: to.id)
         }
-        guard !routeLegs.isEmpty else { return }
+        guard !routeLegIDs.isEmpty else { return }
 
-        let estimatesByLeg = estimates
+        let durationsByLeg = travelLegs
             .filter { $0.dayID == day.id }
-            .reduce(into: [TripTravelEstimate.LegID: Int]()) { result, estimate in
-                result[estimate.legID] = estimate.expectedTravelMinutes
+            .reduce(into: [TravelLegID: Int]()) { result, leg in
+                result[leg.id] = leg.effectiveDuration?.minutes
             }
-        guard routeLegs.allSatisfy({ estimatesByLeg[$0] != nil }) else { return }
+        guard routeLegIDs.allSatisfy({ durationsByLeg[$0] != nil }) else { return }
 
-        let total = routeLegs.reduce(0) { $0 + (estimatesByLeg[$1] ?? 0) }
+        let total = routeLegIDs.reduce(0) { $0 + (durationsByLeg[$1] ?? 0) }
         guard total >= maximumTravelMinutesPerDay else { return }
 
         issues.append(

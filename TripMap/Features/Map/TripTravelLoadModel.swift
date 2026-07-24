@@ -7,9 +7,9 @@ import MapKit
 /// results stay in memory because a route is derived data, not part of a Trip.
 @MainActor
 final class TripTravelLoadModel: ObservableObject {
-    @Published private(set) var estimates: [TripTravelEstimate] = []
+    @Published private(set) var legs: [TravelLeg] = []
 
-    private var estimatesByKey: [RouteKey: TripTravelEstimate] = [:]
+    private var calculations: [TravelLegRoutingFingerprint: TravelLegCalculationState] = [:]
     private var refreshTask: Task<Void, Never>?
     private var refreshGeneration = 0
 
@@ -22,84 +22,108 @@ final class TripTravelLoadModel: ObservableObject {
         let generation = refreshGeneration
         refreshTask?.cancel()
 
-        let requests = routeRequests(for: trip)
-        let requestKeys = Set(requests.map(\.key))
-        estimatesByKey = estimatesByKey.filter { requestKeys.contains($0.key) }
-        publishEstimates()
+        let projectedLegs = TravelLegProjection.activeLegs(
+            for: trip,
+            calculations: calculations
+        )
+        let activeFingerprints = Set(projectedLegs.map(\.routingFingerprint))
+        calculations = calculations.filter { activeFingerprints.contains($0.key) }
 
-        let missingRequests = requests.filter { estimatesByKey[$0.key] == nil }
-        guard !missingRequests.isEmpty else { return }
+        let requests = projectedLegs.compactMap { leg -> RouteRequest? in
+            let shouldRequest: Bool
+            switch leg.calculationState {
+            case .idle, .stale:
+                shouldRequest = true
+            case .loading, .loaded, .unavailable, .failed:
+                shouldRequest = false
+            }
+            guard shouldRequest else { return nil }
+
+            if leg.transportType == .other {
+                calculations[leg.routingFingerprint] = .unavailable
+                return nil
+            }
+
+            if case .idle = leg.calculationState {
+                calculations[leg.routingFingerprint] = .loading
+            }
+            return RouteRequest(
+                fingerprint: leg.routingFingerprint,
+                fromCoordinate: leg.fromPlace.coordinate,
+                toCoordinate: leg.toPlace.coordinate,
+                transportType: leg.transportType
+            )
+        }
+        publishLegs(for: trip)
+        guard !requests.isEmpty else { return }
 
         refreshTask = Task { [weak self] in
-            for request in missingRequests {
+            for request in requests {
                 guard !Task.isCancelled else { return }
-                guard let minutes = await Self.calculateDrivingMinutes(for: request) else { continue }
+                let result = await Self.calculate(for: request)
                 guard let self, !Task.isCancelled, self.refreshGeneration == generation else { return }
-                self.estimatesByKey[request.key] = TripTravelEstimate(
-                    dayID: request.dayID,
-                    fromActivityID: request.key.fromActivityID,
-                    toActivityID: request.key.toActivityID,
-                    expectedTravelMinutes: minutes
-                )
-                self.publishEstimates()
+                self.calculations[request.fingerprint] = result.calculationState
+                self.publishLegs(for: trip)
             }
         }
     }
 
-    private func publishEstimates() {
-        estimates = estimatesByKey.values.sorted {
-            if $0.dayID != $1.dayID {
-                return $0.dayID.uuidString < $1.dayID.uuidString
-            }
-            return $0.fromActivityID.uuidString < $1.fromActivityID.uuidString
-        }
+    private func publishLegs(for trip: Trip) {
+        legs = TravelLegProjection.activeLegs(
+            for: trip,
+            calculations: calculations
+        )
     }
 
-    private func routeRequests(for trip: Trip) -> [RouteRequest] {
-        trip.orderedDays.flatMap { day in
-            zip(day.orderedActivities, day.orderedActivities.dropFirst()).compactMap { from, to in
-                guard let fromPlace = from.place, let toPlace = to.place else { return nil }
-                return RouteRequest(
-                    key: RouteKey(
-                        fromActivityID: from.id,
-                        toActivityID: to.id,
-                        fromPlaceID: fromPlace.id,
-                        toPlaceID: toPlace.id
-                    ),
-                    dayID: day.id,
-                    fromCoordinate: fromPlace.coordinate,
-                    toCoordinate: toPlace.coordinate
-                )
-            }
-        }
-    }
-
-    private static func calculateDrivingMinutes(for request: RouteRequest) async -> Int? {
+    private static func calculate(for request: RouteRequest) async -> RouteCalculationResult {
         let directionsRequest = MKDirections.Request()
         directionsRequest.source = MKMapItem(placemark: MKPlacemark(coordinate: request.fromCoordinate))
         directionsRequest.destination = MKMapItem(placemark: MKPlacemark(coordinate: request.toCoordinate))
-        directionsRequest.transportType = .automobile
+        directionsRequest.transportType = request.transportType.mapKitTransportType
 
         do {
             let response = try await MKDirections(request: directionsRequest).calculate()
-            guard let route = response.routes.first else { return nil }
-            return max(1, Int((route.expectedTravelTime / 60).rounded()))
+            guard let route = response.routes.first else { return .unavailable }
+            return .loaded(
+                TravelLegEstimate(
+                    durationMinutes: max(1, Int((route.expectedTravelTime / 60).rounded())),
+                    calculatedAt: Date()
+                )
+            )
         } catch {
-            return nil
+            return .failed
         }
     }
 }
 
-private struct RouteKey: Hashable {
-    let fromActivityID: Activity.ID
-    let toActivityID: Activity.ID
-    let fromPlaceID: PlaceSnapshot.ID
-    let toPlaceID: PlaceSnapshot.ID
+private extension TravelTransportType {
+    var mapKitTransportType: MKDirectionsTransportType {
+        switch self {
+        case .automobile: .automobile
+        case .walking: .walking
+        case .transit: .transit
+        case .other: .any
+        }
+    }
+}
+
+private enum RouteCalculationResult {
+    case loaded(TravelLegEstimate)
+    case unavailable
+    case failed
+
+    var calculationState: TravelLegCalculationState {
+        switch self {
+        case .loaded(let estimate): .loaded(estimate)
+        case .unavailable: .unavailable
+        case .failed: .failed
+        }
+    }
 }
 
 private struct RouteRequest {
-    let key: RouteKey
-    let dayID: Day.ID
+    let fingerprint: TravelLegRoutingFingerprint
     let fromCoordinate: CLLocationCoordinate2D
     let toCoordinate: CLLocationCoordinate2D
+    let transportType: TravelTransportType
 }

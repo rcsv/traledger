@@ -600,26 +600,29 @@ final class TripModelTests: XCTestCase {
     func testDoctorChecksCompleteMapKitTravelEstimatesPerDay() {
         let trip = OkinawaSample.trip
         let day = trip.days[1]
-        let activities = day.orderedActivities
-        let estimates = [
-            TripTravelEstimate(
-                dayID: day.id,
-                fromActivityID: activities[0].id,
-                toActivityID: activities[1].id,
-                expectedTravelMinutes: 100
-            ),
-            TripTravelEstimate(
-                dayID: day.id,
-                fromActivityID: activities[1].id,
-                toActivityID: activities[2].id,
-                expectedTravelMinutes: 85
-            )
-        ]
+        let now = Date()
+        let idleLegs = TravelLegProjection.activeLegs(for: trip, now: now)
+        let dayLegs = idleLegs.filter { $0.dayID == day.id }
+        let calculations = Dictionary(
+            uniqueKeysWithValues: zip(dayLegs, [100, 85]).map { leg, minutes in
+                (
+                    leg.routingFingerprint,
+                    TravelLegCalculationState.loaded(
+                        TravelLegEstimate(durationMinutes: minutes, calculatedAt: now)
+                    )
+                )
+            }
+        )
+        let loadedLegs = TravelLegProjection.activeLegs(
+            for: trip,
+            calculations: calculations,
+            now: now
+        )
 
         var report = TripDoctor.inspect(
             trip,
             participantNames: ["John"],
-            travelEstimates: estimates
+            travelLegs: loadedLegs
         )
         XCTAssertTrue(report.issues.contains(where: {
             $0.code == .highTravelTime && $0.target == .day(day.id)
@@ -628,9 +631,113 @@ final class TripModelTests: XCTestCase {
         report = TripDoctor.inspect(
             trip,
             participantNames: ["John"],
-            travelEstimates: Array(estimates.dropLast())
+            travelLegs: loadedLegs.filter { $0.id != dayLegs.last?.id }
         )
         XCTAssertFalse(report.issues.contains(where: { $0.code == .highTravelTime }))
+    }
+
+    func testTravelLegProjectionUsesOnlyAdjacentActivitiesWithTwoVenues() {
+        var trip = OkinawaSample.trip
+        let dayIndex = 1
+        let activities = trip.days[dayIndex].orderedActivities
+        trip.days[dayIndex].activities[1].place = nil
+
+        let legs = TravelLegProjection.activeLegs(for: trip)
+
+        XCTAssertFalse(legs.contains(where: {
+            $0.id == TravelLegID(
+                fromActivityID: activities[0].id,
+                toActivityID: activities[2].id
+            )
+        }))
+        XCTAssertTrue(legs.allSatisfy {
+            $0.id.fromActivityID != activities[1].id
+                && $0.id.toActivityID != activities[1].id
+        })
+    }
+
+    func testTravelLegIdentityIsDirectionalAndSurvivesUnrelatedActivityEdits() {
+        var trip = OkinawaSample.trip
+        let originalLegs = TravelLegProjection.activeLegs(for: trip)
+        let original = originalLegs[0]
+
+        trip.days[0].activities[0].title = "Edited title"
+        trip.days[0].activities[0].note = "Edited note"
+        let edited = TravelLegProjection.activeLegs(for: trip)[0]
+
+        XCTAssertEqual(edited.id, original.id)
+        XCTAssertEqual(edited.routingFingerprint, original.routingFingerprint)
+        XCTAssertNotEqual(
+            original.id,
+            TravelLegID(
+                fromActivityID: original.id.toActivityID,
+                toActivityID: original.id.fromActivityID
+            )
+        )
+    }
+
+    func testTravelLegFingerprintChangesForVenueAndTransportEdits() {
+        var trip = OkinawaSample.trip
+        let initial = TravelLegProjection.activeLegs(for: trip)[0]
+        let dayIndex = trip.days.firstIndex(where: { day in
+            day.activities.contains(where: { $0.id == initial.id.fromActivityID })
+        })!
+        let activityIndex = trip.days[dayIndex].activities.firstIndex(where: {
+            $0.id == initial.id.fromActivityID
+        })!
+
+        trip.days[dayIndex].activities[activityIndex].place?.latitude += 0.01
+        let venueEdited = TravelLegProjection.activeLegs(for: trip).first(where: {
+            $0.id == initial.id
+        })!
+        XCTAssertNotEqual(venueEdited.routingFingerprint, initial.routingFingerprint)
+
+        let preference = TravelLegPreference(
+            legID: venueEdited.id,
+            transportType: .walking,
+            manualDurationMinutes: nil,
+            note: nil
+        )
+        let transportEdited = TravelLegProjection.activeLegs(
+            for: trip,
+            preferences: [preference.legID: preference]
+        )[0]
+        XCTAssertNotEqual(transportEdited.routingFingerprint, venueEdited.routingFingerprint)
+    }
+
+    func testTravelLegManualDurationWinsAndLoadedEstimateBecomesStale() throws {
+        let trip = OkinawaSample.trip
+        let now = Date()
+        let idleLeg = try XCTUnwrap(TravelLegProjection.activeLegs(for: trip, now: now).first)
+        let estimate = TravelLegEstimate(durationMinutes: 30, calculatedAt: now)
+        let preference = TravelLegPreference(
+            legID: idleLeg.id,
+            transportType: .automobile,
+            manualDurationMinutes: 45,
+            note: "Meet at the north exit"
+        )
+
+        let manualLeg = try XCTUnwrap(
+            TravelLegProjection.activeLegs(
+                for: trip,
+                preferences: [preference.legID: preference],
+                calculations: [idleLeg.routingFingerprint: .loaded(estimate)],
+                now: now
+            ).first
+        )
+        XCTAssertEqual(manualLeg.effectiveDuration?.minutes, 45)
+        XCTAssertEqual(manualLeg.effectiveDuration?.source, .manual)
+
+        let staleLeg = try XCTUnwrap(
+            TravelLegProjection.activeLegs(
+                for: trip,
+                calculations: [idleLeg.routingFingerprint: .loaded(estimate)],
+                now: now.addingTimeInterval(TravelLegProjection.estimateFreshness)
+            ).first
+        )
+        XCTAssertEqual(staleLeg.calculationState, .stale(estimate))
+        XCTAssertEqual(staleLeg.effectiveDuration?.minutes, 30)
+        XCTAssertEqual(staleLeg.effectiveDuration?.source, .staleMapKit)
     }
 
     func testAdversarialFixturesCoverEmptyOverlapAndDensity() {
