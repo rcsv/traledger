@@ -2123,6 +2123,284 @@ final class TripModelTests: XCTestCase {
     }
 
     @MainActor
+    func testScopedDateRangeExtensionUsesStableIDsAndPreservesEdits() throws {
+        let container = try TripMapStore.makeContainer(inMemoryOnly: true)
+        let context = container.mainContext
+        let stored = try StoredTrip(validatingSnapshot: OkinawaSample.trip)
+        context.insert(stored)
+        try context.save()
+
+        let trip = try XCTUnwrap(stored.snapshot)
+        let timeZone = try XCTUnwrap(
+            TimeZone(identifier: trip.timeZoneIdentifier)
+        )
+        let currentStart = LocalDate(
+            date: trip.dateRange.lowerBound,
+            timeZone: timeZone
+        )
+        let currentEnd = LocalDate(
+            date: trip.dateRange.upperBound,
+            timeZone: timeZone
+        )
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = timeZone
+        let extendedStart = LocalDate(
+            date: try XCTUnwrap(
+                calendar.date(
+                    byAdding: .day,
+                    value: -1,
+                    to: trip.dateRange.lowerBound
+                )
+            ),
+            timeZone: timeZone
+        )
+        let extendedEnd = LocalDate(
+            date: try XCTUnwrap(
+                calendar.date(
+                    byAdding: .day,
+                    value: 1,
+                    to: trip.dateRange.upperBound
+                )
+            ),
+            timeZone: timeZone
+        )
+        let leadingDayID = UUID()
+        let trailingDayID = UUID()
+        var generatedIDs = [leadingDayID, trailingDayID]
+        let mutation = try TripPlanEditor.makeDateRangeMutation(
+            in: trip,
+            startDate: extendedStart,
+            endDate: extendedEnd,
+            makeDayID: { generatedIDs.removeFirst() }
+        )
+
+        let activityID = try XCTUnwrap(
+            trip.orderedDays.first?.orderedActivities.first?.id
+        )
+        var concurrent = trip
+        let dayIndex = try XCTUnwrap(
+            concurrent.days.firstIndex {
+                $0.activities.contains(where: { $0.id == activityID })
+            }
+        )
+        let activityIndex = try XCTUnwrap(
+            concurrent.days[dayIndex].activities.firstIndex {
+                $0.id == activityID
+            }
+        )
+        concurrent.days[dayIndex]
+            .activities[activityIndex].note = "日程変更と同時の編集"
+        try stored.applyPlan(concurrent, in: context)
+        try context.save()
+
+        try stored.applyMutation(
+            .changeTripDateRange(mutation),
+            in: context
+        )
+        try context.save()
+
+        let snapshot = try XCTUnwrap(stored.snapshot)
+        XCTAssertEqual(
+            snapshot.orderedDays.map(\.id),
+            [leadingDayID]
+                + trip.orderedDays.map(\.id)
+                + [trailingDayID]
+        )
+        XCTAssertEqual(
+            snapshot.orderedDays.map(\.sequence),
+            Array(1...snapshot.days.count)
+        )
+        XCTAssertEqual(
+            LocalDate(
+                date: snapshot.dateRange.lowerBound,
+                timeZone: timeZone
+            ),
+            extendedStart
+        )
+        XCTAssertEqual(
+            LocalDate(
+                date: snapshot.dateRange.upperBound,
+                timeZone: timeZone
+            ),
+            extendedEnd
+        )
+        XCTAssertEqual(
+            snapshot.days
+                .flatMap(\.activities)
+                .first(where: { $0.id == activityID })?.note,
+            "日程変更と同時の編集"
+        )
+        XCTAssertNotEqual(currentStart, extendedStart)
+        XCTAssertNotEqual(currentEnd, extendedEnd)
+    }
+
+    @MainActor
+    func testScopedDateRangeContractionRemovesOnlyEmptyBoundaryDays() throws {
+        let start = try XCTUnwrap(
+            LocalDate(year: 2026, month: 9, day: 10)
+        )
+        let end = try XCTUnwrap(
+            LocalDate(year: 2026, month: 9, day: 13)
+        )
+        let trip = try TripFactory.makeTrip(
+            from: TripCreationRequest(
+                title: "日程短縮",
+                startDate: start,
+                endDate: end,
+                timeZoneIdentifier: "Asia/Tokyo"
+            )
+        )
+        let retained = Array(trip.orderedDays[1...2])
+        let mutation = try TripPlanEditor.makeDateRangeMutation(
+            in: trip,
+            startDate: LocalDate(
+                date: retained[0].date,
+                timeZone: TimeZone(identifier: trip.timeZoneIdentifier)!
+            ),
+            endDate: LocalDate(
+                date: retained[1].date,
+                timeZone: TimeZone(identifier: trip.timeZoneIdentifier)!
+            )
+        )
+        let container = try TripMapStore.makeContainer(inMemoryOnly: true)
+        let context = container.mainContext
+        let stored = try StoredTrip(validatingSnapshot: trip)
+        context.insert(stored)
+        try context.save()
+
+        try stored.applyMutation(
+            .changeTripDateRange(mutation),
+            in: context
+        )
+        try context.save()
+
+        let snapshot = try XCTUnwrap(stored.snapshot)
+        XCTAssertEqual(snapshot.orderedDays.map(\.id), retained.map(\.id))
+        XCTAssertEqual(snapshot.orderedDays.map(\.sequence), [1, 2])
+    }
+
+    @MainActor
+    func testScopedDateRangeRejectsAnActivityAddedToARemovedDay() throws {
+        let start = try XCTUnwrap(
+            LocalDate(year: 2026, month: 10, day: 1)
+        )
+        let end = try XCTUnwrap(
+            LocalDate(year: 2026, month: 10, day: 3)
+        )
+        let trip = try TripFactory.makeTrip(
+            from: TripCreationRequest(
+                title: "日程競合",
+                startDate: start,
+                endDate: end,
+                timeZoneIdentifier: "Asia/Tokyo"
+            )
+        )
+        let retainedDays = Array(trip.orderedDays.dropLast())
+        let timeZone = try XCTUnwrap(
+            TimeZone(identifier: trip.timeZoneIdentifier)
+        )
+        let mutation = try TripPlanEditor.makeDateRangeMutation(
+            in: trip,
+            startDate: start,
+            endDate: LocalDate(
+                date: try XCTUnwrap(retainedDays.last?.date),
+                timeZone: timeZone
+            )
+        )
+        let container = try TripMapStore.makeContainer(inMemoryOnly: true)
+        let context = container.mainContext
+        let stored = try StoredTrip(validatingSnapshot: trip)
+        context.insert(stored)
+        try context.save()
+
+        let changed = try TripPlanEditor.appendActivity(
+            in: trip,
+            to: try XCTUnwrap(trip.orderedDays.last?.id),
+            activityID: UUID(),
+            title: "削除予定日に追加",
+            startTime: nil,
+            category: .other,
+            durationMinutes: 30
+        )
+        try stored.applyPlan(changed, in: context)
+        try context.save()
+
+        XCTAssertThrowsError(
+            try stored.applyMutation(
+                .changeTripDateRange(mutation),
+                in: context
+            )
+        ) { error in
+            XCTAssertEqual(
+                error as? TripPlanEditingError,
+                .tripDateRangeContainsActivities
+            )
+        }
+        XCTAssertEqual(stored.days.count, trip.days.count)
+        XCTAssertEqual(stored.endDateCode, end.code)
+    }
+
+    @MainActor
+    func testScopedDateRangeRejectsConcurrentDayStructureChange() throws {
+        let start = try XCTUnwrap(
+            LocalDate(year: 2026, month: 10, day: 20)
+        )
+        let end = try XCTUnwrap(
+            LocalDate(year: 2026, month: 10, day: 22)
+        )
+        let trip = try TripFactory.makeTrip(
+            from: TripCreationRequest(
+                title: "日程構造競合",
+                startDate: start,
+                endDate: end,
+                timeZoneIdentifier: "Asia/Tokyo"
+            )
+        )
+        let staleMutation = try TripPlanEditor.makeDateRangeMutation(
+            in: trip,
+            startDate: start,
+            endDate: try XCTUnwrap(
+                LocalDate(year: 2026, month: 10, day: 21)
+            )
+        )
+        let concurrentMutation = try TripPlanEditor.makeDateRangeMutation(
+            in: trip,
+            startDate: start,
+            endDate: try XCTUnwrap(
+                LocalDate(year: 2026, month: 10, day: 23)
+            )
+        )
+        let container = try TripMapStore.makeContainer(inMemoryOnly: true)
+        let context = container.mainContext
+        let stored = try StoredTrip(validatingSnapshot: trip)
+        context.insert(stored)
+        try context.save()
+
+        try stored.applyMutation(
+            .changeTripDateRange(concurrentMutation),
+            in: context
+        )
+        try context.save()
+
+        XCTAssertThrowsError(
+            try stored.applyMutation(
+                .changeTripDateRange(staleMutation),
+                in: context
+            )
+        ) { error in
+            XCTAssertEqual(
+                error as? TripPlanEditingError,
+                .tripDayStructureChanged
+            )
+        }
+        XCTAssertEqual(stored.days.count, 4)
+        XCTAssertEqual(
+            stored.endDateCode,
+            LocalDate(year: 2026, month: 10, day: 23)?.code
+        )
+    }
+
+    @MainActor
     func testScopedTripMetadataMutationsPreserveLocalCalendarAndActivityEdits() throws {
         let container = try TripMapStore.makeContainer(inMemoryOnly: true)
         let context = container.mainContext

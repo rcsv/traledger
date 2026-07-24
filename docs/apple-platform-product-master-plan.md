@@ -1238,8 +1238,9 @@ platform expansion 記録として分離する。
   Day入れ替えも両DayのActivity ID順を前提条件とし、既存Activityを移動する限定保存へ移行済み。
   production AppShell は full-snapshot callback を拒否し、mutation 未対応操作を fail-closed にする。
   Trip title 編集はmacOS Overviewの標準alert、iPhone/iPad Guideの標準sheetと限定mutationで
-  提供済み（mobile実画面確認は環境gate）。date-range 編集は未提供であり、追加時はDay生成・
-  削除方針を含む scoped structural mutationを必須とする。
+  提供済み（mobile実画面確認は環境gate）。date-range 編集はmacOS Overviewの標準sheetと
+  scoped structural mutationで提供し、既存Day IDを維持、追加Day IDを事前生成、予定のある
+  Dayの削除と競合したDay構造を拒否する。実画面確認は安定版Xcode環境gateとする。
   以上を前提に三端末 matrix を実施
 - image quota — 1600px / 2MiB encoded ceiling と Cover・Venue・Memory 別 Trip inventory、
   25MiB soft threshold、置換量を考慮した非破壊 confirmation UX を実装済み。

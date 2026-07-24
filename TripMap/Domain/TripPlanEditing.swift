@@ -18,6 +18,9 @@ enum TripPlanEditingError: LocalizedError, Equatable {
     case memoryRequiresCompletedActivity
     case invalidReflection
     case invalidTimeZone
+    case invalidTripDateRange
+    case tripDateRangeContainsActivities
+    case tripDayStructureChanged
     case placeNotFound
     case placeChanged
 
@@ -40,6 +43,12 @@ enum TripPlanEditingError: LocalizedError, Equatable {
         case .memoryRequiresCompletedActivity: "訪問済みにしてから思い出を記録してください。"
         case .invalidReflection: "感想は500文字以内で入力してください。"
         case .invalidTimeZone: "タイムゾーンを確認してください。"
+        case .invalidTripDateRange:
+            "終了日は開始日以降にし、旅行期間を366日以内にしてください。"
+        case .tripDateRangeContainsActivities:
+            "予定があるDayを日程から削除することはできません。先に予定を移動または削除してください。"
+        case .tripDayStructureChanged:
+            "旅行日程が別の画面で変更されたため、操作を中止しました。"
         case .placeNotFound: "場所が見つかりません。"
         case .placeChanged: "場所が変更されたため、画像の更新を中止しました。"
         }
@@ -136,8 +145,26 @@ struct SwapDayPlansMutation: Equatable, Sendable {
     let expectedSecondActivityIDs: [Activity.ID]
 }
 
+struct TripDayDateIdentity: Equatable, Sendable {
+    let dayID: Day.ID
+    let date: LocalDate
+}
+
+struct AddedTripDayMutation: Equatable, Sendable {
+    let dayID: Day.ID
+    let date: LocalDate
+}
+
+struct ChangeTripDateRangeMutation: Equatable, Sendable {
+    let startDate: LocalDate
+    let endDate: LocalDate
+    let expectedDays: [TripDayDateIdentity]
+    let addedDays: [AddedTripDayMutation]
+}
+
 enum TripMutation: Equatable, Sendable {
     case renameTrip(String)
+    case changeTripDateRange(ChangeTripDateRangeMutation)
     case setCoverImage(Data?)
     case setDefaultCurrencyCode(String)
     case changeTimeZone(String)
@@ -175,6 +202,11 @@ enum TripMutation: Equatable, Sendable {
         switch self {
         case .renameTrip(let title):
             return try TripPlanEditor.renameTrip(in: trip, to: title)
+        case .changeTripDateRange(let mutation):
+            return try TripPlanEditor.changeDateRange(
+                in: trip,
+                mutation: mutation
+            )
         case .setCoverImage(let imageData):
             var copy = trip
             copy.coverImageData = imageData
@@ -362,6 +394,135 @@ enum TripPlanEditor {
         }
         var copy = trip
         copy.title = normalizedTitle
+        return copy
+    }
+
+    static func makeDateRangeMutation(
+        in trip: Trip,
+        startDate: LocalDate,
+        endDate: LocalDate,
+        makeDayID: () -> Day.ID = UUID.init
+    ) throws -> ChangeTripDateRangeMutation {
+        guard let timeZone = TimeZone(
+            identifier: trip.timeZoneIdentifier
+        ) else {
+            throw TripPlanEditingError.invalidTimeZone
+        }
+        let desiredDates = try dateRangeDates(
+            startDate: startDate,
+            endDate: endDate,
+            timeZoneIdentifier: trip.timeZoneIdentifier
+        )
+        let existingDates = Set(
+            trip.days.map {
+                LocalDate(date: $0.date, timeZone: timeZone)
+            }
+        )
+        return ChangeTripDateRangeMutation(
+            startDate: startDate,
+            endDate: endDate,
+            expectedDays: trip.orderedDays.map {
+                TripDayDateIdentity(
+                    dayID: $0.id,
+                    date: LocalDate(date: $0.date, timeZone: timeZone)
+                )
+            },
+            addedDays: desiredDates
+                .filter { !existingDates.contains($0) }
+                .map {
+                    AddedTripDayMutation(
+                        dayID: makeDayID(),
+                        date: $0
+                    )
+                }
+        )
+    }
+
+    static func changeDateRange(
+        in trip: Trip,
+        mutation: ChangeTripDateRangeMutation
+    ) throws -> Trip {
+        guard let timeZone = TimeZone(
+            identifier: trip.timeZoneIdentifier
+        ) else {
+            throw TripPlanEditingError.invalidTimeZone
+        }
+        let desiredDates = try dateRangeDates(
+            startDate: mutation.startDate,
+            endDate: mutation.endDate,
+            timeZoneIdentifier: trip.timeZoneIdentifier
+        )
+        let currentIdentities = trip.orderedDays.map {
+            TripDayDateIdentity(
+                dayID: $0.id,
+                date: LocalDate(date: $0.date, timeZone: timeZone)
+            )
+        }
+        guard currentIdentities == mutation.expectedDays else {
+            throw TripPlanEditingError.tripDayStructureChanged
+        }
+
+        let desiredDateSet = Set(desiredDates)
+        let retainedDays = trip.days.filter {
+            desiredDateSet.contains(
+                LocalDate(date: $0.date, timeZone: timeZone)
+            )
+        }
+        let removedDays = trip.days.filter {
+            !desiredDateSet.contains(
+                LocalDate(date: $0.date, timeZone: timeZone)
+            )
+        }
+        guard removedDays.allSatisfy(\.activities.isEmpty) else {
+            throw TripPlanEditingError.tripDateRangeContainsActivities
+        }
+
+        let retainedDates = Set(
+            retainedDays.map {
+                LocalDate(date: $0.date, timeZone: timeZone)
+            }
+        )
+        let requiredAddedDates = desiredDates.filter {
+            !retainedDates.contains($0)
+        }
+        guard mutation.addedDays.map(\.date) == requiredAddedDates,
+              Set(mutation.addedDays.map(\.dayID)).count
+                == mutation.addedDays.count,
+              Set(trip.days.map(\.id)).isDisjoint(
+                with: mutation.addedDays.map(\.dayID)
+              ) else {
+            throw TripPlanEditingError.tripDayStructureChanged
+        }
+
+        var days = retainedDays
+        for added in mutation.addedDays {
+            guard let date = added.date.date(in: timeZone) else {
+                throw TripPlanEditingError.invalidTripDateRange
+            }
+            days.append(
+                Day(
+                    id: added.dayID,
+                    sequence: 0,
+                    date: date,
+                    title: "",
+                    activities: []
+                )
+            )
+        }
+        days.sort {
+            LocalDate(date: $0.date, timeZone: timeZone).code
+                < LocalDate(date: $1.date, timeZone: timeZone).code
+        }
+        for index in days.indices {
+            days[index].sequence = index + 1
+        }
+        guard let start = mutation.startDate.date(in: timeZone),
+              let end = mutation.endDate.date(in: timeZone) else {
+            throw TripPlanEditingError.invalidTripDateRange
+        }
+        var copy = trip
+        copy.dateRange = start...end
+        copy.days = days
         return copy
     }
 
@@ -937,6 +1098,38 @@ enum TripPlanEditor {
         guard durationMinutes.map({ (1...1_440).contains($0) }) ?? true else {
             throw TripPlanEditingError.invalidActivityDuration
         }
+    }
+
+    private static func dateRangeDates(
+        startDate: LocalDate,
+        endDate: LocalDate,
+        timeZoneIdentifier: String
+    ) throws -> [LocalDate] {
+        guard startDate.code <= endDate.code,
+              let timeZone = TimeZone(identifier: timeZoneIdentifier),
+              let start = startDate.date(in: timeZone),
+              let end = endDate.date(in: timeZone) else {
+            throw TripPlanEditingError.invalidTripDateRange
+        }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = timeZone
+        var dates: [LocalDate] = []
+        var date = start
+        while date <= end {
+            guard dates.count < TripFactory.maximumDayCount else {
+                throw TripPlanEditingError.invalidTripDateRange
+            }
+            dates.append(LocalDate(date: date, timeZone: timeZone))
+            guard let next = calendar.date(
+                byAdding: .day,
+                value: 1,
+                to: date
+            ) else {
+                throw TripPlanEditingError.invalidTripDateRange
+            }
+            date = next
+        }
+        return dates
     }
 
     private static func normalizedOptionalText(_ value: String?) -> String? {

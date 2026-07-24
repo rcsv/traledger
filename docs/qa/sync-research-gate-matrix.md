@@ -112,6 +112,12 @@ Local preconditions completed on 2026-07-25:
   concurrent Activity append and rejects a blank title. The mutation is
   reachable from macOS Overview and the iPhone/iPad Guide Trip menu; mobile
   viewport confirmation remains an environment gate.
+- Trip date-range editing owns only date bounds, Day membership, and Day
+  sequence. Local tests preserve retained UUIDs and concurrent Activity fields,
+  create added Days with pre-generated UUIDs, remove only empty Days, and reject
+  an Activity added to a removal target or any changed Day identity/date/order.
+  The macOS Overview sheet is implemented; visual confirmation remains an
+  environment gate.
 - C03 has a scoped Memory intent that owns completion, photo, and reflection.
 - C02/C09 Plan and Guide Activity edits have separate field ownership; Guide
   owns progress, reservation, and reminder without replaying planning fields.
@@ -142,9 +148,7 @@ Local preconditions completed on 2026-07-25:
   Local tests preserve a concurrent Activity field edit and unrelated Trip
   field, while an append/delete/reorder on either Day rejects the stale swap.
 - Production Plan/Guide workspaces reject their full-snapshot compatibility
-  callback. An operation without a scoped mutation fails closed; Trip
-  date-range editing remains unavailable until it has a scoped structural
-  design.
+  callback. An operation without a scoped mutation fails closed.
 - in-memory tests prove independent local fields survive scoped Cover, Venue
   image, and Memory writes.
 

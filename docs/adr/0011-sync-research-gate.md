@@ -178,9 +178,9 @@ the warning remain part of the stable-device gate.
 The first conflict-risk reduction landed on 2026-07-25:
 
 - `TripMutation` expresses Cover, user Venue image, external Venue image,
-  Trip rename, field-owned Plan/Guide Activity edits, travel-leg preference,
-  Activity append/delete/move/progress, Day replication/swap, mutation-aware
-  reorder Undo, Memory, currency, and time-zone intents;
+  Trip rename/date range, field-owned Plan/Guide Activity edits, travel-leg
+  preference, Activity append/delete/move/progress, Day replication/swap,
+  mutation-aware reorder Undo, Memory, currency, and time-zone intents;
 - `StoredTrip.applyMutation` reapplies an intent to the latest valid local
   snapshot and writes only its owned fields;
 - Venue image intents require the initiating Place UUID and reject stale results
@@ -191,10 +191,12 @@ The first conflict-risk reduction landed on 2026-07-25:
 - in-memory persistence tests prove that unrelated edits survive Cover, Venue
   image, and Memory writes.
 
-This is not the Stage 2 exit. Trip date-range editing is not exposed and must
-receive a scoped structural design before introduction. Same-field resolution,
-delete-versus-edit policy, concurrent reorder policy, and real replica
-convergence also remain unproven.
+This is not the Stage 2 exit. macOS Overview exposes date-range editing through
+a scoped structural mutation: retained Day UUIDs survive, added empty Days get
+caller-generated UUIDs, contraction refuses Days with Activities, and a
+concurrent Day structure change rejects the stale intent. Same-field
+resolution, delete-versus-edit policy, concurrent reorder policy, and real
+replica convergence remain unproven.
 
 ## Data and UX rules
 

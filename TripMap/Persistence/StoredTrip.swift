@@ -589,6 +589,37 @@ extension StoredTrip {
         switch mutation {
         case .renameTrip:
             title = updated.title
+        case .changeTripDateRange(let mutation):
+            let desiredDayIDs = Set(updated.days.map(\.id))
+            let removedDays = days.filter {
+                !desiredDayIDs.contains($0.id)
+            }
+            days.removeAll {
+                !desiredDayIDs.contains($0.id)
+            }
+            for day in removedDays {
+                modelContext.delete(day)
+            }
+
+            let storedByID = Dictionary(
+                uniqueKeysWithValues: days.map { ($0.id, $0) }
+            )
+            for desired in updated.days {
+                if let existing = storedByID[desired.id] {
+                    existing.sequence = desired.sequence
+                } else {
+                    guard mutation.addedDays.contains(
+                        where: { $0.dayID == desired.id }
+                    ) else {
+                        throw TripPlanEditingError.tripDayStructureChanged
+                    }
+                    days.append(
+                        StoredDay(snapshot: desired, timeZone: timeZone)
+                    )
+                }
+            }
+            startDateCode = mutation.startDate.code
+            endDateCode = mutation.endDate.code
         case .setCoverImage:
             coverImageData = updated.coverImageData
         case .setDefaultCurrencyCode:

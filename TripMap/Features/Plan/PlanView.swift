@@ -380,6 +380,7 @@ struct PlanView: View {
             doctorReport: doctorReport,
             coverPickerItem: $coverPickerItem,
             onRenameTrip: updateTripTitle,
+            onChangeDateRange: updateTripDateRange,
             onSelectCurrency: updateTripCurrency,
             onSelectTimeZone: updateTripTimeZone,
             onSelectDoctorIssue: selectDoctorIssue
@@ -738,6 +739,38 @@ struct PlanView: View {
     private func updateTripTitle(_ title: String) {
         do {
             let mutation = TripMutation.renameTrip(title)
+            if applyMutationIfAvailable(mutation) {
+                return
+            }
+            apply(try mutation.applying(to: trip))
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func updateTripDateRange(
+        startDate: Date,
+        endDate: Date
+    ) {
+        do {
+            guard let timeZone = TimeZone(
+                identifier: trip.timeZoneIdentifier
+            ) else {
+                throw TripPlanEditingError.invalidTimeZone
+            }
+            let mutation = TripMutation.changeTripDateRange(
+                try TripPlanEditor.makeDateRangeMutation(
+                    in: trip,
+                    startDate: LocalDate(
+                        date: startDate,
+                        timeZone: timeZone
+                    ),
+                    endDate: LocalDate(
+                        date: endDate,
+                        timeZone: timeZone
+                    )
+                )
+            )
             if applyMutationIfAvailable(mutation) {
                 return
             }
@@ -1474,6 +1507,7 @@ private struct TripOverviewView: View {
     let doctorReport: TripDoctorReport
     @Binding var coverPickerItem: PhotosPickerItem?
     let onRenameTrip: (String) -> Void
+    let onChangeDateRange: (Date, Date) -> Void
     let onSelectCurrency: (String) -> Void
     let onSelectTimeZone: (String) -> Void
     let onSelectDoctorIssue: (TripDoctorIssue) -> Void
@@ -1482,6 +1516,7 @@ private struct TripOverviewView: View {
     @State private var checklistTitle = ""
     @State private var isRenameTripPresented = false
     @State private var tripTitleDraft = ""
+    @State private var isDateRangeEditorPresented = false
 
     private let timeZones = [
         "Asia/Tokyo", "Asia/Singapore", "Australia/Sydney", "Pacific/Auckland",
@@ -1511,6 +1546,13 @@ private struct TripOverviewView: View {
                     Text(trip.dateRange.upperBound, format: .dateTime.year().month(.abbreviated).day())
                     Text("·")
                     Text("\(trip.orderedDays.count) days")
+
+                    Button("日程を変更", systemImage: "calendar.badge.clock") {
+                        isDateRangeEditorPresented = true
+                    }
+                    .labelStyle(.iconOnly)
+                    .help("旅行の日程を変更")
+                    .accessibilityIdentifier("trip-date-range-edit-button")
                 }
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
@@ -1664,6 +1706,14 @@ private struct TripOverviewView: View {
         } message: {
             Text("LibraryとTrip画面に表示する名前です。")
         }
+        .sheet(isPresented: $isDateRangeEditorPresented) {
+            TripDateRangeSheet(
+                startDate: trip.dateRange.lowerBound,
+                endDate: trip.dateRange.upperBound,
+                timeZoneIdentifier: trip.timeZoneIdentifier,
+                onSave: onChangeDateRange
+            )
+        }
         .sheet(isPresented: $isParticipantPickerPresented) {
             ParticipantPickerSheet(
                 participants: participants.filter { participant in
@@ -1735,6 +1785,68 @@ private struct TripOverviewView: View {
     }
 
     private func save() { try? modelContext.save() }
+}
+
+private struct TripDateRangeSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let timeZone: TimeZone
+    let onSave: (Date, Date) -> Void
+    @State private var startDate: Date
+    @State private var endDate: Date
+
+    init(
+        startDate: Date,
+        endDate: Date,
+        timeZoneIdentifier: String,
+        onSave: @escaping (Date, Date) -> Void
+    ) {
+        timeZone = TimeZone(identifier: timeZoneIdentifier) ?? .current
+        self.onSave = onSave
+        _startDate = State(initialValue: startDate)
+        _endDate = State(initialValue: endDate)
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                DatePicker(
+                    "開始日",
+                    selection: $startDate,
+                    displayedComponents: .date
+                )
+                DatePicker(
+                    "終了日",
+                    selection: $endDate,
+                    in: startDate...,
+                    displayedComponents: .date
+                )
+
+                Text("予定があるDayは日程から削除できません。先に予定を移動または削除してください。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .environment(\.timeZone, timeZone)
+            .navigationTitle("旅行の日程を変更")
+            .onChange(of: startDate) { _, newStartDate in
+                if endDate < newStartDate {
+                    endDate = newStartDate
+                }
+            }
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("キャンセル") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("保存") {
+                        onSave(startDate, endDate)
+                        dismiss()
+                    }
+                }
+            }
+        }
+        .frame(minWidth: 380, minHeight: 240)
+        .accessibilityIdentifier("trip-date-range-editor")
+    }
 }
 
 private struct ParticipantPickerSheet: View {
