@@ -1230,8 +1230,9 @@ platform expansion 記録として分離する。
   model type を参照しており独立 freeze されていないことが現時点の blocker
 - conflict test — Cover、Venue画像、外部画像、進捗、Memory は最新 snapshot へ再適用する
   scoped mutation へ移行済み。Plan/Guide の Activity 編集も各画面の所有フィールドだけを
-  保存し、Venue置換・clear は Place ID 世代確認を行う。Trip metadata、Day/Activity
-  構造変更、travel leg は full-snapshot write が残るため、移行後に三端末 matrix を実施
+  保存し、Venue置換・clear は Place ID 世代確認を行う。travel leg preference も対象区間
+  だけを保存する。Trip metadata、Day/Activity 構造変更は full-snapshot write が残るため、
+  移行後に三端末 matrix を実施
 - image quota — 1600px / 2MiB encoded ceiling と Cover・Venue・Memory 別 Trip inventory、
   25MiB soft threshold、置換量を考慮した非破壊 confirmation UX を実装済み。
   device format と実画面 gate は継続

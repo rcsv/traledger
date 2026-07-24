@@ -2561,6 +2561,116 @@ final class TripModelTests: XCTestCase {
     }
 
     @MainActor
+    func testScopedTravelLegMutationPreservesOtherLegAndActivityEdits() throws {
+        let container = try TripMapStore.makeContainer(inMemoryOnly: true)
+        let context = container.mainContext
+        let activities = OkinawaSample.trip.orderedDays[0].orderedActivities
+        let firstActivity = try XCTUnwrap(activities.first)
+        let secondActivity = try XCTUnwrap(activities.dropFirst().first)
+        let thirdActivity = try XCTUnwrap(activities.dropFirst(2).first)
+        let targetLegID = TravelLegID(
+            fromActivityID: firstActivity.id,
+            toActivityID: secondActivity.id
+        )
+        let otherLegID = TravelLegID(
+            fromActivityID: secondActivity.id,
+            toActivityID: thirdActivity.id
+        )
+        let stored = try StoredTrip(validatingSnapshot: OkinawaSample.trip)
+        context.insert(stored)
+        try context.save()
+
+        var concurrent = try TripPlanEditor.setTravelLegPreference(
+            in: try XCTUnwrap(stored.snapshot),
+            legID: otherLegID,
+            transportType: .walking,
+            manualDurationMinutes: 25,
+            note: "別区間の設定"
+        )
+        let dayIndex = try XCTUnwrap(
+            concurrent.days.firstIndex(where: {
+                $0.activities.contains(where: { $0.id == thirdActivity.id })
+            })
+        )
+        let activityIndex = try XCTUnwrap(
+            concurrent.days[dayIndex].activities.firstIndex(
+                where: { $0.id == thirdActivity.id }
+            )
+        )
+        concurrent.days[dayIndex].activities[activityIndex].title =
+            "別画面で更新した到着予定"
+        try stored.applyPlan(concurrent, in: context)
+        try context.save()
+
+        try stored.applyMutation(
+            .setTravelLegPreference(
+                TravelLegPreferenceMutation(
+                    legID: targetLegID,
+                    transportType: .transit,
+                    manualDurationMinutes: 40,
+                    note: "  駅で乗り換え  "
+                )
+            ),
+            in: context
+        )
+        try context.save()
+
+        var snapshot = try XCTUnwrap(stored.snapshot)
+        XCTAssertEqual(
+            snapshot.travelLegPreferences.first(
+                where: { $0.legID == targetLegID }
+            ),
+            TravelLegPreference(
+                legID: targetLegID,
+                transportType: .transit,
+                manualDurationMinutes: 40,
+                note: "駅で乗り換え"
+            )
+        )
+        XCTAssertEqual(
+            snapshot.travelLegPreferences.first(
+                where: { $0.legID == otherLegID }
+            )?.note,
+            "別区間の設定"
+        )
+        XCTAssertEqual(
+            snapshot.days.flatMap(\.activities)
+                .first(where: { $0.id == thirdActivity.id })?
+                .title,
+            "別画面で更新した到着予定"
+        )
+
+        try stored.applyMutation(
+            .setTravelLegPreference(
+                TravelLegPreferenceMutation(
+                    legID: targetLegID,
+                    transportType: .automobile,
+                    manualDurationMinutes: nil,
+                    note: nil
+                )
+            ),
+            in: context
+        )
+        try context.save()
+
+        snapshot = try XCTUnwrap(stored.snapshot)
+        XCTAssertNil(
+            snapshot.travelLegPreferences.first(
+                where: { $0.legID == targetLegID }
+            )
+        )
+        XCTAssertNotNil(
+            snapshot.travelLegPreferences.first(
+                where: { $0.legID == otherLegID }
+            )
+        )
+        XCTAssertEqual(
+            try context.fetchCount(FetchDescriptor<StoredTravelLegPreference>()),
+            1
+        )
+    }
+
+    @MainActor
     func testStoredTripPersistsActivityProgressAfterPlanUpdate() throws {
         let container = try TripMapStore.makeContainer(inMemoryOnly: true)
         let context = container.mainContext

@@ -600,6 +600,28 @@ extension StoredTrip {
             if case .replace = edit.place {
                 applyPlace(desired.place, to: stored)
             }
+        case .setTravelLegPreference(let mutation):
+            let existing = travelLegPreferences.first(
+                where: { $0.snapshotID == mutation.legID }
+            )
+            let desired = updated.travelLegPreferences.first(
+                where: { $0.legID == mutation.legID }
+            )
+            switch (desired, existing) {
+            case let (desired?, existing?):
+                existing.apply(desired)
+            case let (desired?, nil):
+                travelLegPreferences.append(
+                    StoredTravelLegPreference(snapshot: desired)
+                )
+            case (nil, let existing?):
+                travelLegPreferences.removeAll {
+                    $0.snapshotID == mutation.legID
+                }
+                modelContext.delete(existing)
+            case (nil, nil):
+                break
+            }
         case .setVenueUserImage(let activityID, _, _):
             let stored = try storedActivity(activityID)
             let desired = try updatedActivity(activityID)

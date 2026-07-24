@@ -31,6 +31,7 @@ The first mutation set owns:
   explicitly changed Venue;
 - Guide Activity details: start time, note, an explicitly changed Venue,
   progress, reservation, and reminder;
+- one travel-leg preference: transport type, manual duration, and note;
 - user-selected Venue image;
 - derived external Venue image metadata;
 - Activity progress and its change timestamp;
@@ -48,9 +49,9 @@ but CloudKit activation remains blocked until schema migration and the
 three-device matrix are complete.
 
 Structural and composite operations still use `applyPlan`, including Trip
-metadata, Day add/delete/reorder, Activity add/delete/move, and travel-leg
-preference changes. Those paths must become scoped operations or gain proven
-field-level merge behavior before development sync is enabled.
+metadata, Day add/delete/reorder, and Activity add/delete/move. Those paths
+must become scoped operations or gain proven field-level merge behavior before
+development sync is enabled.
 
 Plan and Guide Activity mutations intentionally have different ownership.
 Plan does not write progress, reservation, reminder, or Memory. Guide does not
@@ -69,6 +70,8 @@ been cleared.
 - Plan and Guide Activity edits preserve fields owned by the other workflow.
 - Venue replacement/clear and reservation replacement/clear delete superseded
   SwiftData children in the same `ModelContext` transaction.
+- A travel-leg edit updates or removes only its directional leg preference and
+  preserves other legs and Activity fields.
 - Venue image intents carry the Place UUID observed by their initiating UI.
   A replaced or cleared Venue rejects the stale result, so an old Look
   Around/Wikimedia task cannot decorate the new Venue.
@@ -89,6 +92,8 @@ In-memory SwiftData regression tests must prove that:
 - a Guide edit preserves planning and Memory fields while clearing Venue and
   reservation children;
 - an Activity edit based on a replaced Venue is rejected atomically;
+- a travel-leg edit preserves another leg and concurrent Activity edit, while
+  clearing the default preference removes only its own record;
 - a user Venue image changes only its owned image field;
 - an external image result for a replaced Place UUID is rejected;
 - Memory completion preserves an unrelated Activity edit and normalizes the

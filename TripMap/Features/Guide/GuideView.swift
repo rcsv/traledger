@@ -555,14 +555,22 @@ struct GuideView: View {
         note: String?
     ) -> Bool {
         do {
-            let updated = try TripPlanEditor.setTravelLegPreference(
-                in: trip,
-                legID: legID,
-                transportType: transportType,
-                manualDurationMinutes: manualDurationMinutes,
-                note: note
+            let mutation = TripMutation.setTravelLegPreference(
+                TravelLegPreferenceMutation(
+                    legID: legID,
+                    transportType: transportType,
+                    manualDurationMinutes: manualDurationMinutes,
+                    note: note
+                )
             )
-            if let persistenceError = onApplyPlan(updated) {
+            let updated = try mutation.applying(to: trip)
+            let persistenceError: String?
+            if let onApplyMutation {
+                persistenceError = onApplyMutation(mutation)
+            } else {
+                persistenceError = onApplyPlan(updated)
+            }
+            if let persistenceError {
                 errorMessage = persistenceError
                 return false
             }
@@ -581,14 +589,22 @@ struct GuideView: View {
         note: String?
     ) -> Bool {
         do {
-            let updated = try TripPlanEditor.setTravelLegPreference(
-                in: trip,
-                legID: legID,
-                transportType: transportType,
-                manualDurationMinutes: manualDurationMinutes,
-                note: note
+            let mutation = TripMutation.setTravelLegPreference(
+                TravelLegPreferenceMutation(
+                    legID: legID,
+                    transportType: transportType,
+                    manualDurationMinutes: manualDurationMinutes,
+                    note: note
+                )
             )
-            if let persistenceError = onApplyPlan(updated) {
+            let updated = try mutation.applying(to: trip)
+            let persistenceError: String?
+            if let onApplyMutation {
+                persistenceError = onApplyMutation(mutation)
+            } else {
+                persistenceError = onApplyPlan(updated)
+            }
+            if let persistenceError {
                 errorMessage = persistenceError
                 return false
             }

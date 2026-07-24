@@ -116,8 +116,10 @@ Local preconditions completed on 2026-07-25:
   editing and remove superseded local relationship records transactionally.
 - C08 image mutations carry the initiating Place UUID and reject results after
   that Venue has been replaced or cleared.
-- C09 has a scoped progress intent, although reminder editing remains on the
-  full-snapshot path.
+- C09 progress and reminder changes are saved atomically by the scoped Guide
+  Activity intent.
+- Travel-leg preferences update or clear one directional leg without replaying
+  another leg or Activity fields.
 - in-memory tests prove independent local fields survive scoped Cover, Venue
   image, and Memory writes.
 

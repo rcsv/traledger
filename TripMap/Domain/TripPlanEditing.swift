@@ -80,10 +80,18 @@ struct GuideActivityMutation: Equatable, Sendable {
     let reminderLeadTime: ActivityReminderLeadTime?
 }
 
+struct TravelLegPreferenceMutation: Equatable, Sendable {
+    let legID: TravelLegID
+    let transportType: TravelTransportType
+    let manualDurationMinutes: Int?
+    let note: String?
+}
+
 enum TripMutation: Equatable, Sendable {
     case setCoverImage(Data?)
     case editPlanActivity(PlanActivityMutation)
     case editGuideActivity(GuideActivityMutation)
+    case setTravelLegPreference(TravelLegPreferenceMutation)
     case setVenueUserImage(
         activityID: Activity.ID,
         placeID: PlaceSnapshot.ID,
@@ -151,6 +159,14 @@ enum TripMutation: Equatable, Sendable {
                 in: withReservation,
                 activityID: edit.activityID,
                 leadTime: edit.reminderLeadTime
+            )
+        case .setTravelLegPreference(let preference):
+            return try TripPlanEditor.setTravelLegPreference(
+                in: trip,
+                legID: preference.legID,
+                transportType: preference.transportType,
+                manualDurationMinutes: preference.manualDurationMinutes,
+                note: preference.note
             )
         case let .setVenueUserImage(activityID, placeID, imageData):
             return try updatingPlace(
