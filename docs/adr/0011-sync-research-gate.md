@@ -111,6 +111,21 @@ Adopt sync in four independently releasable stages:
    - Back up production data before promotion and record the immutable server
      schema.
 
+## Stage 1 implementation
+
+The local V1 baseline was implemented on 2026-07-24:
+
+- `TripMapSchemaV1` names the existing model set as version 1.0.0.
+- `TripMapMigrationPlan` contains V1 and no migration stages.
+- every production and test `ModelConfiguration` created by `TripMapStore`
+  explicitly uses `cloudKitDatabase: .none`;
+- an automated disk test writes a production-shaped Trip through the prior
+  unversioned `Schema`, then opens the same store with V1 and verifies root and
+  child UUIDs, local dates, cover image, Venue image, and Memory photo/text.
+
+This establishes the migration runway. It does not make the V1 relationship
+shape CloudKit-compatible and does not unblock sync activation.
+
 ## Data and UX rules
 
 - Local data remains usable when iCloud is absent, restricted, indeterminate,

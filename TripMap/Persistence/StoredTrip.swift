@@ -251,8 +251,10 @@ final class StoredChecklistItem {
     }
 }
 
-enum TripMapStore {
-    static let schema = Schema([
+enum TripMapSchemaV1: VersionedSchema {
+    static let versionIdentifier = Schema.Version(1, 0, 0)
+
+    static let models: [any PersistentModel.Type] = [
         StoredTrip.self,
         StoredDay.self,
         StoredActivity.self,
@@ -262,16 +264,40 @@ enum TripMapStore {
         StoredParticipant.self,
         StoredTripParticipant.self,
         StoredChecklistItem.self
-    ])
+    ]
+}
+
+enum TripMapMigrationPlan: SchemaMigrationPlan {
+    static let schemas: [any VersionedSchema.Type] = [
+        TripMapSchemaV1.self
+    ]
+
+    static let stages: [MigrationStage] = []
+}
+
+enum TripMapStore {
+    static let schema = Schema(versionedSchema: TripMapSchemaV1.self)
 
     static func makeContainer(inMemoryOnly: Bool = false, url: URL? = nil) throws -> ModelContainer {
         let configuration: ModelConfiguration
         if let url {
-            configuration = ModelConfiguration(schema: schema, url: url)
+            configuration = ModelConfiguration(
+                schema: schema,
+                url: url,
+                cloudKitDatabase: .none
+            )
         } else {
-            configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: inMemoryOnly)
+            configuration = ModelConfiguration(
+                schema: schema,
+                isStoredInMemoryOnly: inMemoryOnly,
+                cloudKitDatabase: .none
+            )
         }
-        return try ModelContainer(for: schema, configurations: configuration)
+        return try ModelContainer(
+            for: schema,
+            migrationPlan: TripMapMigrationPlan.self,
+            configurations: configuration
+        )
     }
 }
 

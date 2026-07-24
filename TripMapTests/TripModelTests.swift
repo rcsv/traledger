@@ -1967,6 +1967,75 @@ final class TripModelTests: XCTestCase {
         XCTAssertEqual(reloaded.days.count, OkinawaSample.trip.days.count)
     }
 
+    @MainActor
+    func testVersionedStoreOpensUnversionedStoreWithoutDataLoss() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(
+            UUID().uuidString,
+            isDirectory: true
+        )
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let storeURL = directory.appendingPathComponent("TripMap-unversioned.store")
+
+        var fixture = OkinawaSample.trip
+        fixture.coverImageData = Data([0x10, 0x20, 0x30])
+        fixture.days[0].activities[0].place?.imageData = Data([0x40, 0x50])
+        let memoryActivityID = fixture.days[0].activities[0].id
+        fixture = try TripPlanEditor.setActivityProgress(
+            in: fixture,
+            activityID: memoryActivityID,
+            progress: .completed,
+            at: Date(timeIntervalSince1970: 1_800_000_000)
+        )
+        fixture = try TripPlanEditor.setActivityMemory(
+            in: fixture,
+            activityID: memoryActivityID,
+            photoData: Data([0x60, 0x70, 0x80]),
+            reflection: "V1 migration fixture"
+        )
+
+        do {
+            let unversionedSchema = Schema(TripMapSchemaV1.models)
+            let configuration = ModelConfiguration(
+                schema: unversionedSchema,
+                url: storeURL,
+                cloudKitDatabase: .none
+            )
+            let legacyContainer = try ModelContainer(
+                for: unversionedSchema,
+                configurations: configuration
+            )
+            legacyContainer.mainContext.insert(try StoredTrip(validatingSnapshot: fixture))
+            try legacyContainer.mainContext.save()
+        }
+
+        let versionedContainer = try TripMapStore.makeContainer(url: storeURL)
+        let storedTrips = try versionedContainer.mainContext.fetch(FetchDescriptor<StoredTrip>())
+        let reloaded = try XCTUnwrap(storedTrips.first?.snapshot)
+        let reloadedMemory = try XCTUnwrap(
+            reloaded.days.flatMap(\.activities).first(where: { $0.id == memoryActivityID })
+        )
+
+        XCTAssertEqual(storedTrips.count, 1)
+        XCTAssertEqual(reloaded.id, fixture.id)
+        XCTAssertEqual(reloaded.dateRange, fixture.dateRange)
+        XCTAssertEqual(reloaded.orderedDays.map(\.id), fixture.orderedDays.map(\.id))
+        XCTAssertEqual(
+            reloaded.orderedDays.flatMap(\.orderedActivities).map(\.id),
+            fixture.orderedDays.flatMap(\.orderedActivities).map(\.id)
+        )
+        XCTAssertEqual(reloaded.coverImageData, fixture.coverImageData)
+        let fixtureMemory = try XCTUnwrap(
+            fixture.days.flatMap(\.activities).first(where: { $0.id == memoryActivityID })
+        )
+        XCTAssertEqual(
+            reloadedMemory.place?.imageData,
+            fixtureMemory.place?.imageData
+        )
+        XCTAssertEqual(reloadedMemory.memoryPhotoData, Data([0x60, 0x70, 0x80]))
+        XCTAssertEqual(reloadedMemory.reflection, "V1 migration fixture")
+    }
+
     private func externalPlaceImage(providerImageID: String = "Example.jpg") -> ExternalPlaceImage {
         ExternalPlaceImage(
             provider: .wikimediaCommons,

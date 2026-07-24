@@ -1,6 +1,6 @@
 # P8 Sync Research Gate Matrix
 
-Status: planned; CloudKit is not enabled
+Status: Stage A in progress; CloudKit is not enabled
 
 Date: 2026-07-24
 
@@ -29,6 +29,13 @@ close the release gate.
 | M04 | Interrupt migration using a copied store | Original copy remains recoverable; no reset path is offered | integration test |
 | M05 | Open a future/unknown schema | Show non-destructive store-unavailable UI | integration test |
 | M06 | Upgrade a store with empty, dense, and adversarial Trips | All validation invariants remain true | macOS test |
+
+Current evidence:
+
+- M01 passes in
+  `testVersionedStoreOpensUnversionedStoreWithoutDataLoss`.
+- M02 passes in `testDiskBackedStoreReopensSavedTrip`.
+- M03–M06 remain required before a Cloud-compatible V2 can ship.
 
 ## Stage B — image budget
 
