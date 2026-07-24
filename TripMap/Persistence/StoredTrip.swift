@@ -573,6 +573,10 @@ extension StoredTrip {
         switch mutation {
         case .setCoverImage:
             coverImageData = updated.coverImageData
+        case .setDefaultCurrencyCode:
+            defaultCurrencyCode = updated.defaultCurrencyCode
+        case .changeTimeZone:
+            timeZoneIdentifier = updated.timeZoneIdentifier
         case .editPlanActivity(let edit):
             let stored = try storedActivity(edit.activityID)
             let desired = try updatedActivity(edit.activityID)

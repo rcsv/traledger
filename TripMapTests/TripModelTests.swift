@@ -2067,6 +2067,84 @@ final class TripModelTests: XCTestCase {
     }
 
     @MainActor
+    func testScopedTripMetadataMutationsPreserveLocalCalendarAndActivityEdits() throws {
+        let container = try TripMapStore.makeContainer(inMemoryOnly: true)
+        let context = container.mainContext
+        let activityID = OkinawaSample.trip.days[0].activities[0].id
+        let stored = try StoredTrip(validatingSnapshot: OkinawaSample.trip)
+        context.insert(stored)
+        try context.save()
+
+        var concurrent = try XCTUnwrap(stored.snapshot)
+        let originalTimeZone = try XCTUnwrap(
+            TimeZone(identifier: concurrent.timeZoneIdentifier)
+        )
+        let originalDayCodes = concurrent.orderedDays.map {
+            LocalDate(date: $0.date, timeZone: originalTimeZone).code
+        }
+        let originalStartMinutes = concurrent.orderedDays
+            .flatMap(\.orderedActivities)
+            .map {
+                $0.startTime.map {
+                    LocalTime(date: $0, timeZone: originalTimeZone).minuteOfDay
+                }
+            }
+        let dayIndex = try XCTUnwrap(
+            concurrent.days.firstIndex(where: {
+                $0.activities.contains(where: { $0.id == activityID })
+            })
+        )
+        let activityIndex = try XCTUnwrap(
+            concurrent.days[dayIndex].activities.firstIndex(
+                where: { $0.id == activityID }
+            )
+        )
+        concurrent.days[dayIndex].activities[activityIndex].note =
+            "メタデータとは独立した編集"
+        try stored.applyPlan(concurrent, in: context)
+        try context.save()
+
+        try stored.applyMutation(
+            .setDefaultCurrencyCode("USD"),
+            in: context
+        )
+        try stored.applyMutation(
+            .changeTimeZone("Pacific/Honolulu"),
+            in: context
+        )
+        try context.save()
+
+        let snapshot = try XCTUnwrap(stored.snapshot)
+        let newTimeZone = try XCTUnwrap(
+            TimeZone(identifier: snapshot.timeZoneIdentifier)
+        )
+        XCTAssertEqual(snapshot.defaultCurrencyCode, "USD")
+        XCTAssertEqual(snapshot.timeZoneIdentifier, "Pacific/Honolulu")
+        XCTAssertEqual(
+            snapshot.days.flatMap(\.activities)
+                .first(where: { $0.id == activityID })?
+                .note,
+            "メタデータとは独立した編集"
+        )
+        XCTAssertEqual(
+            snapshot.orderedDays.map {
+                LocalDate(date: $0.date, timeZone: newTimeZone).code
+            },
+            originalDayCodes
+        )
+        XCTAssertEqual(
+            snapshot.orderedDays
+                .flatMap(\.orderedActivities)
+                .map {
+                    $0.startTime.map {
+                        LocalTime(date: $0, timeZone: newTimeZone).minuteOfDay
+                    }
+                },
+            originalStartMinutes
+        )
+    }
+
+    @MainActor
     func testScopedPlanActivityMutationPreservesExecutionFieldsAndReplacesVenue() throws {
         let container = try TripMapStore.makeContainer(inMemoryOnly: true)
         let context = container.mainContext

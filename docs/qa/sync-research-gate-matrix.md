@@ -120,6 +120,8 @@ Local preconditions completed on 2026-07-25:
   Activity intent.
 - Travel-leg preferences update or clear one directional leg without replaying
   another leg or Activity fields.
+- Currency and time-zone intents preserve concurrent Activity edits, local day
+  codes, and minute-of-day values.
 - in-memory tests prove independent local fields survive scoped Cover, Venue
   image, and Memory writes.
 

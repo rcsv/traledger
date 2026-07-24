@@ -673,6 +673,11 @@ struct PlanView: View {
 
     private func updateTripCurrency(_ currencyCode: String) {
         guard trip.defaultCurrencyCode != currencyCode else { return }
+        if applyMutationIfAvailable(
+            .setDefaultCurrencyCode(currencyCode)
+        ) {
+            return
+        }
         var updated = trip
         updated.defaultCurrencyCode = currencyCode
         apply(updated)
@@ -680,6 +685,9 @@ struct PlanView: View {
 
     private func updateTripTimeZone(_ identifier: String) {
         do {
+            if applyMutationIfAvailable(.changeTimeZone(identifier)) {
+                return
+            }
             apply(try TripPlanEditor.changeTimeZone(in: trip, to: identifier))
         } catch {
             errorMessage = error.localizedDescription

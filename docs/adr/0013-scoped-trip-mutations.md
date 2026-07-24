@@ -27,6 +27,7 @@ Represent small user intents as `TripMutation`. At save time:
 The first mutation set owns:
 
 - Trip cover image;
+- Trip default currency and time-zone identifier;
 - Plan Activity details: title, start time, category, duration, note, and an
   explicitly changed Venue;
 - Guide Activity details: start time, note, an explicitly changed Venue,
@@ -49,9 +50,13 @@ but CloudKit activation remains blocked until schema migration and the
 three-device matrix are complete.
 
 Structural and composite operations still use `applyPlan`, including Trip
-metadata, Day add/delete/reorder, and Activity add/delete/move. Those paths
-must become scoped operations or gain proven field-level merge behavior before
-development sync is enabled.
+title/date metadata, Day add/delete/reorder, and Activity add/delete/move.
+Those paths must become scoped operations or gain proven field-level merge
+behavior before development sync is enabled.
+
+Changing time zone is validated against the latest Domain snapshot but writes
+only `timeZoneIdentifier`. Local day codes and minute-of-day storage remain
+unchanged, which preserves the wall-clock itinerary semantics.
 
 Plan and Guide Activity mutations intentionally have different ownership.
 Plan does not write progress, reservation, reminder, or Memory. Guide does not
@@ -72,6 +77,8 @@ been cleared.
   SwiftData children in the same `ModelContext` transaction.
 - A travel-leg edit updates or removes only its directional leg preference and
   preserves other legs and Activity fields.
+- Currency and time-zone changes preserve concurrent Activity edits; time-zone
+  changes preserve local calendar days and start minutes.
 - Venue image intents carry the Place UUID observed by their initiating UI.
   A replaced or cleared Venue rejects the stale result, so an old Look
   Around/Wikimedia task cannot decorate the new Venue.
@@ -94,6 +101,8 @@ In-memory SwiftData regression tests must prove that:
 - an Activity edit based on a replaced Venue is rejected atomically;
 - a travel-leg edit preserves another leg and concurrent Activity edit, while
   clearing the default preference removes only its own record;
+- currency/time-zone changes preserve concurrent Activity data and local
+  calendar semantics;
 - a user Venue image changes only its owned image field;
 - an external image result for a replaced Place UUID is rejected;
 - Memory completion preserves an unrelated Activity edit and normalizes the

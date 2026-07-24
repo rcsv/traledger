@@ -89,6 +89,8 @@ struct TravelLegPreferenceMutation: Equatable, Sendable {
 
 enum TripMutation: Equatable, Sendable {
     case setCoverImage(Data?)
+    case setDefaultCurrencyCode(String)
+    case changeTimeZone(String)
     case editPlanActivity(PlanActivityMutation)
     case editGuideActivity(GuideActivityMutation)
     case setTravelLegPreference(TravelLegPreferenceMutation)
@@ -120,6 +122,12 @@ enum TripMutation: Equatable, Sendable {
             var copy = trip
             copy.coverImageData = imageData
             return copy
+        case .setDefaultCurrencyCode(let currencyCode):
+            var copy = trip
+            copy.defaultCurrencyCode = currencyCode
+            return copy
+        case .changeTimeZone(let identifier):
+            return try TripPlanEditor.changeTimeZone(in: trip, to: identifier)
         case .editPlanActivity(let edit):
             let activity = try activity(in: trip, id: edit.activityID)
             return try TripPlanEditor.updateActivity(
