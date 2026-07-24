@@ -4,6 +4,8 @@ enum TripPlanEditingError: LocalizedError, Equatable {
     case sourceDayNotFound
     case targetDayNotFound
     case activityNotFound
+    case activityAlreadyExists
+    case activityChangedDay
     case targetIncludesSource
     case sameDay
     case blankActivityTitle
@@ -24,6 +26,8 @@ enum TripPlanEditingError: LocalizedError, Equatable {
         case .sourceDayNotFound: "コピー元のDayが見つかりません。"
         case .targetDayNotFound: "コピー先のDayが見つかりません。"
         case .activityNotFound: "予定が見つかりません。"
+        case .activityAlreadyExists: "同じ予定がすでに追加されています。"
+        case .activityChangedDay: "予定の所属日が変更されたため、操作を中止しました。"
         case .targetIncludesSource: "コピー元と同じDayにはコピーできません。"
         case .sameDay: "同じDay同士は入れ替えできません。"
         case .blankActivityTitle: "予定の名前を入力してください。"
@@ -87,6 +91,20 @@ struct TravelLegPreferenceMutation: Equatable, Sendable {
     let note: String?
 }
 
+struct AppendActivityMutation: Equatable, Sendable {
+    let dayID: Day.ID
+    let activityID: Activity.ID
+    let title: String
+    let startTime: Date?
+    let category: ActivityCategory?
+    let durationMinutes: Int?
+}
+
+struct DeleteActivityMutation: Equatable, Sendable {
+    let dayID: Day.ID
+    let activityID: Activity.ID
+}
+
 enum TripMutation: Equatable, Sendable {
     case setCoverImage(Data?)
     case setDefaultCurrencyCode(String)
@@ -94,6 +112,8 @@ enum TripMutation: Equatable, Sendable {
     case editPlanActivity(PlanActivityMutation)
     case editGuideActivity(GuideActivityMutation)
     case setTravelLegPreference(TravelLegPreferenceMutation)
+    case appendActivity(AppendActivityMutation)
+    case deleteActivity(DeleteActivityMutation)
     case setVenueUserImage(
         activityID: Activity.ID,
         placeID: PlaceSnapshot.ID,
@@ -175,6 +195,33 @@ enum TripMutation: Equatable, Sendable {
                 transportType: preference.transportType,
                 manualDurationMinutes: preference.manualDurationMinutes,
                 note: preference.note
+            )
+        case .appendActivity(let activity):
+            return try TripPlanEditor.appendActivity(
+                in: trip,
+                to: activity.dayID,
+                activityID: activity.activityID,
+                title: activity.title,
+                startTime: activity.startTime,
+                category: activity.category,
+                durationMinutes: activity.durationMinutes
+            )
+        case .deleteActivity(let activity):
+            guard let currentDay = trip.days.first(
+                where: {
+                    $0.activities.contains(
+                        where: { $0.id == activity.activityID }
+                    )
+                }
+            ) else {
+                throw TripPlanEditingError.activityNotFound
+            }
+            guard currentDay.id == activity.dayID else {
+                throw TripPlanEditingError.activityChangedDay
+            }
+            return try TripPlanEditor.deleteActivity(
+                in: trip,
+                activityID: activity.activityID
             )
         case let .setVenueUserImage(activityID, placeID, imageData):
             return try updatingPlace(
@@ -295,6 +342,7 @@ enum TripPlanEditor {
     static func appendActivity(
         in trip: Trip,
         to dayID: Day.ID,
+        activityID: Activity.ID = UUID(),
         title: String,
         startTime: Date?,
         category: ActivityCategory? = nil,
@@ -302,6 +350,11 @@ enum TripPlanEditor {
     ) throws -> Trip {
         guard let dayIndex = trip.days.firstIndex(where: { $0.id == dayID }) else {
             throw TripPlanEditingError.targetDayNotFound
+        }
+        guard !trip.days
+            .flatMap(\.activities)
+            .contains(where: { $0.id == activityID }) else {
+            throw TripPlanEditingError.activityAlreadyExists
         }
         let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedTitle.isEmpty else { throw TripPlanEditingError.blankActivityTitle }
@@ -317,7 +370,7 @@ enum TripPlanEditor {
         try validate(durationMinutes: durationMinutes)
         copy.days[dayIndex].activities.append(
             Activity(
-                id: UUID(),
+                id: activityID,
                 sequence: sequence,
                 title: trimmedTitle,
                 startTime: normalizedStartTime,

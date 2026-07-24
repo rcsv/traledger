@@ -122,6 +122,12 @@ Local preconditions completed on 2026-07-25:
   another leg or Activity fields.
 - Currency and time-zone intents preserve concurrent Activity edits, local day
   codes, and minute-of-day values.
+- Concurrent local Activity appends keep both stable UUIDs; delete removes
+  owned Venue/reservation and referencing leg preferences while preserving an
+  unrelated append.
+- Activity delete rejects a target whose parent Day changed. This is only a
+  local precondition check; C05 still requires a remote delete-versus-edit
+  policy and replica evidence.
 - in-memory tests prove independent local fields survive scoped Cover, Venue
   image, and Memory writes.
 

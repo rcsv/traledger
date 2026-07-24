@@ -702,18 +702,29 @@ struct PlanView: View {
         durationMinutes: Int?
     ) {
         do {
-            let updated = try TripPlanEditor.appendActivity(
-                in: trip,
-                to: dayID,
-                title: title,
-                startTime: startTime,
-                category: category,
-                durationMinutes: durationMinutes
+            let activityID = UUID()
+            let mutation = TripMutation.appendActivity(
+                AppendActivityMutation(
+                    dayID: dayID,
+                    activityID: activityID,
+                    title: title,
+                    startTime: startTime,
+                    category: category,
+                    durationMinutes: durationMinutes
+                )
             )
-            guard apply(updated) else { return }
-            if let activity = updated.days.first(where: { $0.id == dayID })?.orderedActivities.last {
-                interaction.selectActivity(activity.id, source: .list, in: updated)
+            let updated = try mutation.applying(to: trip)
+            let persistenceError: String?
+            if let onApplyMutation {
+                persistenceError = onApplyMutation(mutation)
+            } else {
+                persistenceError = onApplyPlan(updated)
             }
+            if let persistenceError {
+                errorMessage = persistenceError
+                return
+            }
+            interaction.selectActivity(activityID, source: .list, in: updated)
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -788,10 +799,31 @@ struct PlanView: View {
 
     private func deleteActivity(_ activityID: Activity.ID) {
         do {
-            let updated = try TripPlanEditor.deleteActivity(in: trip, activityID: activityID)
-            if apply(updated) {
-                interaction.reconcile(with: updated)
+            guard let dayID = trip.days.first(
+                where: {
+                    $0.activities.contains(where: { $0.id == activityID })
+                }
+            )?.id else {
+                throw TripPlanEditingError.activityNotFound
             }
+            let mutation = TripMutation.deleteActivity(
+                DeleteActivityMutation(
+                    dayID: dayID,
+                    activityID: activityID
+                )
+            )
+            let updated = try mutation.applying(to: trip)
+            let persistenceError: String?
+            if let onApplyMutation {
+                persistenceError = onApplyMutation(mutation)
+            } else {
+                persistenceError = onApplyPlan(updated)
+            }
+            if let persistenceError {
+                errorMessage = persistenceError
+                return
+            }
+            interaction.reconcile(with: updated)
         } catch {
             errorMessage = error.localizedDescription
         }

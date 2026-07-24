@@ -2145,6 +2145,269 @@ final class TripModelTests: XCTestCase {
     }
 
     @MainActor
+    func testScopedActivityAppendUsesStableIDAfterAConcurrentAppend() throws {
+        let container = try TripMapStore.makeContainer(inMemoryOnly: true)
+        let context = container.mainContext
+        let dayID = OkinawaSample.trip.orderedDays[0].id
+        let existingActivityID = OkinawaSample.trip.orderedDays[0].orderedActivities[0].id
+        let concurrentActivityID = UUID()
+        let requestedActivityID = UUID()
+        let stored = try StoredTrip(validatingSnapshot: OkinawaSample.trip)
+        context.insert(stored)
+        try context.save()
+
+        var concurrent = try TripPlanEditor.appendActivity(
+            in: try XCTUnwrap(stored.snapshot),
+            to: dayID,
+            activityID: concurrentActivityID,
+            title: "別画面で追加",
+            startTime: nil,
+            category: .other,
+            durationMinutes: 20
+        )
+        let dayIndex = try XCTUnwrap(
+            concurrent.days.firstIndex(where: { $0.id == dayID })
+        )
+        let activityIndex = try XCTUnwrap(
+            concurrent.days[dayIndex].activities.firstIndex(
+                where: { $0.id == existingActivityID }
+            )
+        )
+        concurrent.days[dayIndex].activities[activityIndex].note =
+            "追加とは独立した編集"
+        try stored.applyPlan(concurrent, in: context)
+        try context.save()
+
+        try stored.applyMutation(
+            .appendActivity(
+                AppendActivityMutation(
+                    dayID: dayID,
+                    activityID: requestedActivityID,
+                    title: "  あとから追加  ",
+                    startTime: nil,
+                    category: .sightseeing,
+                    durationMinutes: 45
+                )
+            ),
+            in: context
+        )
+        try context.save()
+
+        let snapshot = try XCTUnwrap(stored.snapshot)
+        let activities = try XCTUnwrap(
+            snapshot.days.first(where: { $0.id == dayID })
+        ).orderedActivities
+        XCTAssertNotNil(
+            activities.first(where: { $0.id == concurrentActivityID })
+        )
+        let appended = try XCTUnwrap(
+            activities.first(where: { $0.id == requestedActivityID })
+        )
+        XCTAssertEqual(appended.title, "あとから追加")
+        XCTAssertEqual(appended.sequence, activities.count)
+        XCTAssertEqual(
+            activities.first(where: { $0.id == existingActivityID })?.note,
+            "追加とは独立した編集"
+        )
+        XCTAssertEqual(
+            activities.map(\.sequence),
+            Array(1...activities.count)
+        )
+    }
+
+    @MainActor
+    func testScopedActivityDeleteCascadesOwnedChildrenAndPreservesConcurrentAppend() throws {
+        let container = try TripMapStore.makeContainer(inMemoryOnly: true)
+        let context = container.mainContext
+        let activities = OkinawaSample.trip.orderedDays[0].orderedActivities
+        let target = try XCTUnwrap(activities.first)
+        let second = try XCTUnwrap(activities.dropFirst().first)
+        let third = try XCTUnwrap(activities.dropFirst(2).first)
+        let dayID = OkinawaSample.trip.orderedDays[0].id
+        let deletedLegID = TravelLegID(
+            fromActivityID: target.id,
+            toActivityID: second.id
+        )
+        let retainedLegID = TravelLegID(
+            fromActivityID: second.id,
+            toActivityID: third.id
+        )
+        var fixture = try TripPlanEditor.setReservation(
+            in: OkinawaSample.trip,
+            activityID: target.id,
+            reservation: ReservationReference(
+                id: UUID(),
+                kind: .transport,
+                title: "削除対象の予約",
+                confirmationCode: nil,
+                url: nil,
+                note: nil
+            )
+        )
+        fixture = try TripPlanEditor.setTravelLegPreference(
+            in: fixture,
+            legID: deletedLegID,
+            transportType: .transit,
+            manualDurationMinutes: 30,
+            note: nil
+        )
+        fixture = try TripPlanEditor.setTravelLegPreference(
+            in: fixture,
+            legID: retainedLegID,
+            transportType: .walking,
+            manualDurationMinutes: 15,
+            note: "保持する区間"
+        )
+        let stored = try StoredTrip(validatingSnapshot: fixture)
+        context.insert(stored)
+        try context.save()
+        let placeCount = try context.fetchCount(
+            FetchDescriptor<StoredPlaceSnapshot>()
+        )
+        let reservationCount = try context.fetchCount(
+            FetchDescriptor<StoredReservationReference>()
+        )
+        let preferenceCount = try context.fetchCount(
+            FetchDescriptor<StoredTravelLegPreference>()
+        )
+
+        let concurrentActivityID = UUID()
+        let concurrent = try TripPlanEditor.appendActivity(
+            in: try XCTUnwrap(stored.snapshot),
+            to: dayID,
+            activityID: concurrentActivityID,
+            title: "削除と同時に追加",
+            startTime: nil,
+            category: nil,
+            durationMinutes: nil
+        )
+        try stored.applyPlan(concurrent, in: context)
+        try context.save()
+
+        try stored.applyMutation(
+            .deleteActivity(
+                DeleteActivityMutation(
+                    dayID: dayID,
+                    activityID: target.id
+                )
+            ),
+            in: context
+        )
+        try context.save()
+
+        let snapshot = try XCTUnwrap(stored.snapshot)
+        let remaining = try XCTUnwrap(
+            snapshot.days.first(where: { $0.id == dayID })
+        ).orderedActivities
+        XCTAssertNil(remaining.first(where: { $0.id == target.id }))
+        XCTAssertNotNil(
+            remaining.first(where: { $0.id == concurrentActivityID })
+        )
+        XCTAssertEqual(
+            remaining.map(\.sequence),
+            Array(1...remaining.count)
+        )
+        XCTAssertNil(
+            snapshot.travelLegPreferences.first(
+                where: { $0.legID == deletedLegID }
+            )
+        )
+        XCTAssertEqual(
+            snapshot.travelLegPreferences.first(
+                where: { $0.legID == retainedLegID }
+            )?.note,
+            "保持する区間"
+        )
+        XCTAssertEqual(
+            try context.fetchCount(FetchDescriptor<StoredPlaceSnapshot>()),
+            placeCount - 1
+        )
+        XCTAssertEqual(
+            try context.fetchCount(FetchDescriptor<StoredReservationReference>()),
+            reservationCount - 1
+        )
+        XCTAssertEqual(
+            try context.fetchCount(FetchDescriptor<StoredTravelLegPreference>()),
+            preferenceCount - 1
+        )
+    }
+
+    @MainActor
+    func testScopedActivityDeleteRejectsAnActivityMovedToAnotherDay() throws {
+        let container = try TripMapStore.makeContainer(inMemoryOnly: true)
+        let context = container.mainContext
+        let originalDayID = OkinawaSample.trip.orderedDays[0].id
+        let destinationDayID = OkinawaSample.trip.orderedDays[1].id
+        let activityID = OkinawaSample.trip.orderedDays[0].orderedActivities[0].id
+        let stored = try StoredTrip(validatingSnapshot: OkinawaSample.trip)
+        context.insert(stored)
+        try context.save()
+
+        var moved = try XCTUnwrap(stored.snapshot)
+        let sourceIndex = try XCTUnwrap(
+            moved.days.firstIndex(where: { $0.id == originalDayID })
+        )
+        let destinationIndex = try XCTUnwrap(
+            moved.days.firstIndex(where: { $0.id == destinationDayID })
+        )
+        let activityIndex = try XCTUnwrap(
+            moved.days[sourceIndex].activities.firstIndex(
+                where: { $0.id == activityID }
+            )
+        )
+        var activity = moved.days[sourceIndex].activities.remove(
+            at: activityIndex
+        )
+        let timeZone = try XCTUnwrap(
+            TimeZone(identifier: moved.timeZoneIdentifier)
+        )
+        if let startTime = activity.startTime {
+            let localTime = LocalTime(date: startTime, timeZone: timeZone)
+            let destinationDate = LocalDate(
+                date: moved.days[destinationIndex].date,
+                timeZone: timeZone
+            )
+            activity.startTime = localTime.date(
+                on: destinationDate,
+                in: timeZone
+            )
+        }
+        moved.days[sourceIndex].activities = moved.days[sourceIndex]
+            .orderedActivities
+            .enumerated()
+            .map { index, activity in
+                var copy = activity
+                copy.sequence = index + 1
+                return copy
+            }
+        activity.sequence =
+            (moved.days[destinationIndex].activities.map(\.sequence).max() ?? 0) + 1
+        moved.days[destinationIndex].activities.append(activity)
+        try stored.applyPlan(moved, in: context)
+        try context.save()
+
+        XCTAssertThrowsError(
+            try stored.applyMutation(
+                .deleteActivity(
+                    DeleteActivityMutation(
+                        dayID: originalDayID,
+                        activityID: activityID
+                    )
+                ),
+                in: context
+            )
+        ) { error in
+            XCTAssertEqual(error as? TripPlanEditingError, .activityChangedDay)
+        }
+        XCTAssertNotNil(
+            stored.snapshot?.days
+                .first(where: { $0.id == destinationDayID })?
+                .activities
+                .first(where: { $0.id == activityID })
+        )
+    }
+
+    @MainActor
     func testScopedPlanActivityMutationPreservesExecutionFieldsAndReplacesVenue() throws {
         let container = try TripMapStore.makeContainer(inMemoryOnly: true)
         let context = container.mainContext

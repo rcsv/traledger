@@ -33,6 +33,8 @@ The first mutation set owns:
 - Guide Activity details: start time, note, an explicitly changed Venue,
   progress, reservation, and reminder;
 - one travel-leg preference: transport type, manual duration, and note;
+- Activity append with a caller-generated stable UUID;
+- Activity delete with its expected parent Day UUID;
 - user-selected Venue image;
 - derived external Venue image metadata;
 - Activity progress and its change timestamp;
@@ -50,9 +52,21 @@ but CloudKit activation remains blocked until schema migration and the
 three-device matrix are complete.
 
 Structural and composite operations still use `applyPlan`, including Trip
-title/date metadata, Day add/delete/reorder, and Activity add/delete/move.
+title/date metadata, Day activity replication/swap, and Activity move/reorder.
 Those paths must become scoped operations or gain proven field-level merge
 behavior before development sync is enabled.
+
+Activity append generates its UUID before persistence and assigns sequence
+against the latest Day, so concurrent appends survive. Activity delete requires
+the Day UUID observed by the initiating UI, renumbers only that Day, deletes
+owned Venue/reservation records and referencing travel-leg preferences, and
+rejects an Activity that moved to another Day.
+
+Move/reorder is intentionally not migrated yet. Its current Undo coordinator
+restores a complete Trip snapshot; changing only the forward operation would
+leave Undo capable of replaying stale unrelated fields. Replication and Day
+swap also generate or relocate multiple identities and need an explicit
+concurrent-order policy.
 
 Changing time zone is validated against the latest Domain snapshot but writes
 only `timeZoneIdentifier`. Local day codes and minute-of-day storage remain
@@ -79,6 +93,9 @@ been cleared.
   preserves other legs and Activity fields.
 - Currency and time-zone changes preserve concurrent Activity edits; time-zone
   changes preserve local calendar days and start minutes.
+- Activity append preserves concurrent appends with stable identities.
+- Activity delete preserves concurrent additions, cascades owned children and
+  referencing leg preferences, and rejects a changed parent Day.
 - Venue image intents carry the Place UUID observed by their initiating UI.
   A replaced or cleared Venue rejects the stale result, so an old Look
   Around/Wikimedia task cannot decorate the new Venue.
@@ -103,6 +120,9 @@ In-memory SwiftData regression tests must prove that:
   clearing the default preference removes only its own record;
 - currency/time-zone changes preserve concurrent Activity data and local
   calendar semantics;
+- concurrent Activity appends both survive with contiguous local sequence;
+- Activity delete removes owned children and referencing leg preferences while
+  preserving unrelated additions and preferences;
 - a user Venue image changes only its owned image field;
 - an external image result for a replaced Place UUID is rejected;
 - Memory completion preserves an unrelated Activity edit and normalizes the
