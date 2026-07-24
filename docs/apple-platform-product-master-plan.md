@@ -377,6 +377,9 @@ Memory は Core Planner が安定した後に実装する。
 Activity 所有の一枚の memory photo と500文字以内の短い感想、Trip 集計の純粋
 `MemoryProjection` を実装した。Venue のユーザー画像を訪問写真へ流用せず、PhotosPicker と画像正規化
 pipeline だけを再利用する境界は [`ADR 0010`](adr/0010-memory-minimum-domain.md) を正とする。
+同日、Guide と Plan から開ける共通 Memory 画面、明示的な visited 遷移を伴う写真・感想 editor、
+過去 Trip Card の訪問数・記録数表示まで実装した。複数写真、写真 metadata による候補提案、共有は
+後続 slice とし、実機／安定した Simulator での PhotosPicker と viewport 確認は環境 gate として残す。
 
 ## 8. Activity と Venue の境界
 
@@ -1212,9 +1215,9 @@ platform expansion 記録として分離する。
 ### P7 — Memory Minimum Slice
 
 - visited state — existing completed state を Memory projection へ接続済み
-- Activity photo attachment — Activity-owned Domain / SwiftData external storage を実装済み、UI は次工程
-- short reflection — normalized Domain / SwiftData を実装済み、UI は次工程
-- Memory Trip Card
+- Activity photo attachment — Activity-owned Domain / SwiftData external storage / PhotosPicker UI を実装済み
+- short reflection — normalized Domain / SwiftData / 500文字 editor UI を実装済み
+- Memory Trip Card — 過去 Trip の訪問数・記録数を表示済み
 
 完了条件:
 
@@ -1259,14 +1262,16 @@ platform expansion 記録として分離する。
 
 次の実装担当者は、この順序で作業する。
 
-1. P7 Memory editor と Trip Card を、Activity-owned photo / reflection projection 上に実装する。
-2. local reminder の permission / delivery / timezone change gate を、安定した Simulator または実機で確認する。
-3. Now / Next、Reservation、Offline review、Travel Leg route detail の実画面 viewport gate を、安定した Simulator が利用可能になった時点で再開する。
+1. P8 Sync Research Gate として、現行 SwiftData schema の versioning、migration、CloudKit compatibility、
+   conflict policy、画像 quota、account state を調査し、実装前 ADR と検証 matrix を確定する。
+2. Memory の PhotosPicker、保存、再表示、削除と Trip Card 集計を、安定した Simulator または実機で確認する。
+3. local reminder の permission / delivery / timezone change gate を、安定した Simulator または実機で確認する。
+4. Now / Next、Reservation、Offline review、Travel Leg route detail の実画面 viewport gate を、安定した Simulator が利用可能になった時点で再開する。
 
 Travel Leg calculation states、iPadOS adaptive workspace、Activity progress / iPhone Quick Edit
-第二段階、Travel Leg preference editor / explicit retry、Guide Now / Next pure projection は
-2026-07-24 に実装済み。Travel Leg までは代表 viewport 確認済みで、Now / Next の実画面 gate
-だけを環境制約により保留している。
+第二段階、Travel Leg preference editor / explicit retry、Guide Now / Next pure projection、P7 Memory
+minimum slice は 2026-07-24 に実装済み。Travel Leg までは代表 viewport 確認済みで、Now / Next、
+Reservation、Offline review、Memory の実画面 gate は環境制約により保留している。
 
 新しい外部画像 provider、評価データ、独自サーバー、AI、CloudKit は、それぞれの Research Gate
 なしに開始しない。

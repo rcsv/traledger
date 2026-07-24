@@ -23,6 +23,7 @@ struct GuideView: View {
     @State private var travelLegEditTarget: TravelLegID?
     @State private var reservationTarget: GuideReservationTarget?
     @State private var isOfflineReviewPresented = false
+    @State private var isMemoryPresented = false
     @State private var errorMessage: String?
     #if TRIPMAP_QA
     @State private var didOpenQuickEditFromLaunchArgument = false
@@ -77,6 +78,11 @@ struct GuideView: View {
                 isOfflineReviewPresented = true
             }
             .accessibilityIdentifier("guide-offline-review-button")
+
+            Button("思い出", systemImage: "photo.on.rectangle.angled") {
+                isMemoryPresented = true
+            }
+            .accessibilityIdentifier("guide-memory-button")
 
             if let selectedActivityID = interaction.selectedActivityID,
                activityAndDay(for: selectedActivityID)?.0.reservation != nil {
@@ -140,6 +146,20 @@ struct GuideView: View {
         }
         .sheet(isPresented: $isOfflineReviewPresented) {
             GuideOfflineReviewSheet(report: GuideOfflineReview.report(for: trip))
+        }
+        .sheet(isPresented: $isMemoryPresented) {
+            MemoryView(trip: trip) { updated in
+                let result = onApplyPlan(updated)
+                if result == nil {
+                    Task {
+                        try? await GuideReminderScheduler.sync(
+                            trip: updated,
+                            requestingAuthorization: false
+                        )
+                    }
+                }
+                return result
+            }
         }
         .alert("操作を完了できませんでした", isPresented: Binding(
             get: { errorMessage != nil },

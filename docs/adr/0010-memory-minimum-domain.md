@@ -50,5 +50,11 @@ ownership/cascade boundary.
 
 Tests cover the visited-state invariant, reflection normalization and limit,
 non-destructive progress behavior, Venue/Memory image separation, ordered
-summary counts, and SwiftData round-trip. UI and PhotosPicker integration are
-the next implementation slice.
+summary counts, and SwiftData round-trip.
+
+The shared Memory surface is available from Guide and Plan. Its editor performs
+the explicit visited transition, uses PhotosPicker plus the existing image
+normalization pipeline, and persists one photo and a short reflection. Past Trip
+cards expose visited and recorded counts. PhotosPicker behavior, persistence
+after relaunch, and adaptive viewport presentation remain visual gates for a
+stable Simulator or physical device.

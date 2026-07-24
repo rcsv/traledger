@@ -27,6 +27,7 @@ struct PlanView: View {
     @State private var activityEditor: ActivityEditorTarget?
     @State private var pendingActivityDeletion: ActivityEditorTarget?
     @State private var pendingVenueFocusActivityID: Activity.ID?
+    @State private var isMemoryPresented = false
     @State private var errorMessage: String?
 
     init(
@@ -90,6 +91,11 @@ struct PlanView: View {
         .navigationTitle(trip.title)
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
+                Button("思い出", systemImage: "photo.on.rectangle.angled") {
+                    isMemoryPresented = true
+                }
+                .accessibilityIdentifier("plan-memory-button")
+
                 Button {
                     isMapVisible.toggle()
                 } label: {
@@ -170,6 +176,9 @@ struct PlanView: View {
                     applySwap(first: sourceDayID, second: targetDayID)
                 }
             }
+        }
+        .sheet(isPresented: $isMemoryPresented) {
+            MemoryView(trip: trip, onApplyPlan: onApplyPlan)
         }
         .sheet(isPresented: $isActivityCreationPresented) {
             if let selectedDay {

@@ -297,6 +297,11 @@ private struct TripLibraryRow: View {
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
+                if let memoryText {
+                    Label(memoryText, systemImage: "photo.on.rectangle.angled")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
             Spacer()
             Image(systemName: "chevron.right")
@@ -314,6 +319,13 @@ private struct TripLibraryRow: View {
         let startText = String(format: "%04d/%02d/%02d", start.year, start.month, start.day)
         let endText = String(format: "%04d/%02d/%02d", end.year, end.month, end.day)
         return start == end ? startText : "\(startText) – \(endText)"
+    }
+
+    private var memoryText: String? {
+        guard group == .past, let snapshot = trip.snapshot else { return nil }
+        let summary = MemoryProjection.summary(for: snapshot)
+        guard summary.visitedCount > 0 else { return nil }
+        return "訪問 \(summary.visitedCount) · 記録 \(summary.recordedCount)"
     }
 }
 
