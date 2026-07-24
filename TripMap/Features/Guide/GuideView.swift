@@ -1,4 +1,5 @@
 #if os(iOS)
+import MapKit
 import SwiftUI
 
 struct GuideView: View {
@@ -731,6 +732,29 @@ private struct TravelLegEditSheet: View {
                 Section {
                     LabeledContent("出発", value: fromActivityTitle)
                     LabeledContent("到着", value: toActivityTitle)
+                    LabeledContent("出発場所", value: leg.fromPlace.name)
+                    LabeledContent("到着場所", value: leg.toPlace.name)
+                    LabeledContent("所要時間") {
+                        Text(routeDurationText)
+                    }
+                    LabeledContent("情報源") {
+                        Text(routeSourceText)
+                    }
+
+                    if let directionsMode {
+                        Button("Appleマップで経路を開く", systemImage: "map") {
+                            openRouteInMaps(directionsMode: directionsMode)
+                        }
+                        .accessibilityIdentifier("travel-leg-open-maps-button")
+                    }
+                } header: {
+                    Text("経路概要")
+                } footer: {
+                    if directionsMode == nil {
+                        Text("「その他」の移動は経路モードを決められないため、Appleマップ連携を表示しません。")
+                    } else {
+                        Text("経路は必要な時だけAppleマップで表示します。TripMap内に経路線は常時表示・保存しません。")
+                    }
                 }
 
                 Section("移動手段") {
@@ -818,6 +842,57 @@ private struct TravelLegEditSheet: View {
         case .failed, .unavailable: "経路取得を再試行"
         case .idle, .loading, .loaded, .stale: "経路を再計算"
         }
+    }
+
+    private var routeDurationText: String {
+        guard let duration = leg.effectiveDuration else {
+            return switch leg.calculationState {
+            case .idle: "未計算"
+            case .loading: "計算中"
+            case .loaded: "不明"
+            case .unavailable: "利用できません"
+            case .failed: "取得に失敗"
+            case .stale: "古い推定"
+            }
+        }
+        return formattedDuration(duration.minutes)
+    }
+
+    private var routeSourceText: String {
+        if let duration = leg.effectiveDuration {
+            return switch duration.source {
+            case .manual: "手動設定"
+            case .mapKit: "MapKit推定"
+            case .staleMapKit: "古いMapKit推定"
+            }
+        }
+        return switch leg.calculationState {
+        case .idle: "未取得"
+        case .loading: "MapKitへ問い合わせ中"
+        case .loaded, .stale: "MapKit推定"
+        case .unavailable: "この移動手段では利用不可"
+        case .failed: "通信または経路取得エラー"
+        }
+    }
+
+    private var directionsMode: String? {
+        switch leg.transportType {
+        case .automobile: MKLaunchOptionsDirectionsModeDriving
+        case .walking: MKLaunchOptionsDirectionsModeWalking
+        case .transit: MKLaunchOptionsDirectionsModeTransit
+        case .other: nil
+        }
+    }
+
+    private func openRouteInMaps(directionsMode: String) {
+        let source = MKMapItem(placemark: MKPlacemark(coordinate: leg.fromPlace.coordinate))
+        source.name = leg.fromPlace.name
+        let destination = MKMapItem(placemark: MKPlacemark(coordinate: leg.toPlace.coordinate))
+        destination.name = leg.toPlace.name
+        MKMapItem.openMaps(
+            with: [source, destination],
+            launchOptions: [MKLaunchOptionsDirectionsModeKey: directionsMode]
+        )
     }
 
     private func formattedDuration(_ minutes: Int) -> String {

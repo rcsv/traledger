@@ -577,7 +577,9 @@ Guide では leg row から transport、手動所要時間、メモを編集で�
 妨げず、明示的な再試行を同じ sheet に置く。再試行前に未保存の transport を永続化し、その
 fingerprint で MapKit を再要求する。手動時間は再計算で上書きしない。標準 Dynamic Type の
 iPhone 17 Pro で、公共交通・手動42分の保存状態と、取得不能状態の再試行導線を実画面確認済み。
-route detail は未実装である。
+route detail は同じ sheet の先頭へ段階表示し、Activity / Venue 名、所要時間、情報源を確認して
+から、車・徒歩・公共交通だけを明示操作で Apple Maps の経路へ渡す。常時 polyline や経路形状の
+永続化を行わない境界は [`ADR 0008`](adr/0008-travel-leg-route-detail.md) を正とする。
 
 ### 10.3 MapKit 境界
 
@@ -1153,7 +1155,7 @@ platform expansion 記録として分離する。
 - leg UI / calculation-state presentation — implemented, macOS UI-tested and iPhone viewport-verified
 - transport type / manual duration / note editor — implemented and persisted as explicit user intent
 - retry / explicit refresh behavior — implemented without overwriting manual duration
-- route detail
+- route detail — progressive sheet summary / explicit Apple Maps handoff を実装済み
 - Doctor integration
 
 完了条件:
@@ -1246,9 +1248,9 @@ platform expansion 記録として分離する。
 
 次の実装担当者は、この順序で作業する。
 
-1. Travel Leg route detail の価値と表示範囲を、常時 polyline を避ける前提で定義する。
-2. Guide の local notification を、ユーザーが明示設定した reminder だけに限定して設計する。
-3. Now / Next、Reservation、Offline review の実画面 viewport gate を、安定した Simulator が利用可能になった時点で再開する。
+1. Guide の local notification を、ユーザーが明示設定した reminder だけに限定して設計する。
+2. Reservation の URL open / confirmation code copy を、意図しない露出を避けて Guide に配置する。
+3. Now / Next、Reservation、Offline review、Travel Leg route detail の実画面 viewport gate を、安定した Simulator が利用可能になった時点で再開する。
 
 Travel Leg calculation states、iPadOS adaptive workspace、Activity progress / iPhone Quick Edit
 第二段階、Travel Leg preference editor / explicit retry、Guide Now / Next pure projection は
