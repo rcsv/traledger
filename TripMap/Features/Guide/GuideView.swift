@@ -462,6 +462,43 @@ struct GuideView: View {
         }
 
         do {
+            let placeMutation: ActivityPlaceMutation = activity.place == place
+                ? .unchanged
+                : .replace(expectedPlaceID: activity.place?.id, place: place)
+            let mutation = TripMutation.editGuideActivity(
+                GuideActivityMutation(
+                    activityID: activityID,
+                    startTime: startTime,
+                    note: note,
+                    place: placeMutation,
+                    progress: progress,
+                    progressChangedAt: Date(),
+                    reservation: reservation,
+                    reminderLeadTime: reminderLeadTime
+                )
+            )
+            if let onApplyMutation {
+                let updated = try mutation.applying(to: trip)
+                if let persistenceError = onApplyMutation(mutation) {
+                    errorMessage = persistenceError
+                    return false
+                }
+                interaction.selectActivity(activityID, source: .list, in: updated)
+                let shouldRequestAuthorization = activity.reminderLeadTime == nil
+                    && reminderLeadTime != nil
+                Task {
+                    do {
+                        try await GuideReminderScheduler.sync(
+                            trip: updated,
+                            requestingAuthorization: shouldRequestAuthorization
+                        )
+                    } catch {
+                        errorMessage = error.localizedDescription
+                    }
+                }
+                return true
+            }
+
             let edited = try TripPlanEditor.updateActivity(
                 in: trip,
                 activityID: activityID,

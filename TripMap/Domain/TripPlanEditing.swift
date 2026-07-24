@@ -42,8 +42,48 @@ enum TripPlanEditingError: LocalizedError, Equatable {
     }
 }
 
+enum ActivityPlaceMutation: Equatable, Sendable {
+    case unchanged
+    case replace(expectedPlaceID: PlaceSnapshot.ID?, place: PlaceSnapshot?)
+
+    func resolving(current: PlaceSnapshot?) throws -> PlaceSnapshot? {
+        switch self {
+        case .unchanged:
+            return current
+        case let .replace(expectedPlaceID, place):
+            guard current?.id == expectedPlaceID else {
+                throw TripPlanEditingError.placeChanged
+            }
+            return place
+        }
+    }
+}
+
+struct PlanActivityMutation: Equatable, Sendable {
+    let activityID: Activity.ID
+    let title: String
+    let startTime: Date?
+    let category: ActivityCategory?
+    let durationMinutes: Int?
+    let note: String?
+    let place: ActivityPlaceMutation
+}
+
+struct GuideActivityMutation: Equatable, Sendable {
+    let activityID: Activity.ID
+    let startTime: Date?
+    let note: String?
+    let place: ActivityPlaceMutation
+    let progress: ActivityProgress
+    let progressChangedAt: Date
+    let reservation: ReservationReference?
+    let reminderLeadTime: ActivityReminderLeadTime?
+}
+
 enum TripMutation: Equatable, Sendable {
     case setCoverImage(Data?)
+    case editPlanActivity(PlanActivityMutation)
+    case editGuideActivity(GuideActivityMutation)
     case setVenueUserImage(
         activityID: Activity.ID,
         placeID: PlaceSnapshot.ID,
@@ -72,6 +112,46 @@ enum TripMutation: Equatable, Sendable {
             var copy = trip
             copy.coverImageData = imageData
             return copy
+        case .editPlanActivity(let edit):
+            let activity = try activity(in: trip, id: edit.activityID)
+            return try TripPlanEditor.updateActivity(
+                in: trip,
+                activityID: edit.activityID,
+                title: edit.title,
+                startTime: edit.startTime,
+                category: edit.category,
+                durationMinutes: edit.durationMinutes,
+                note: edit.note,
+                place: try edit.place.resolving(current: activity.place)
+            )
+        case .editGuideActivity(let edit):
+            let activity = try activity(in: trip, id: edit.activityID)
+            let withDetails = try TripPlanEditor.updateActivity(
+                in: trip,
+                activityID: edit.activityID,
+                title: activity.title,
+                startTime: edit.startTime,
+                category: activity.category,
+                durationMinutes: activity.durationMinutes,
+                note: edit.note,
+                place: try edit.place.resolving(current: activity.place)
+            )
+            let withProgress = try TripPlanEditor.setActivityProgress(
+                in: withDetails,
+                activityID: edit.activityID,
+                progress: edit.progress,
+                at: edit.progressChangedAt
+            )
+            let withReservation = try TripPlanEditor.setReservation(
+                in: withProgress,
+                activityID: edit.activityID,
+                reservation: edit.reservation
+            )
+            return try TripPlanEditor.setActivityReminder(
+                in: withReservation,
+                activityID: edit.activityID,
+                leadTime: edit.reminderLeadTime
+            )
         case let .setVenueUserImage(activityID, placeID, imageData):
             return try updatingPlace(
                 in: trip,
@@ -109,6 +189,15 @@ enum TripMutation: Equatable, Sendable {
                 reflection: reflection
             )
         }
+    }
+
+    private func activity(in trip: Trip, id activityID: Activity.ID) throws -> Activity {
+        guard let activity = trip.days
+            .flatMap(\.activities)
+            .first(where: { $0.id == activityID }) else {
+            throw TripPlanEditingError.activityNotFound
+        }
+        return activity
     }
 
     private func updatingPlace(

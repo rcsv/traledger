@@ -178,7 +178,7 @@ the warning remain part of the stable-device gate.
 The first conflict-risk reduction landed on 2026-07-25:
 
 - `TripMutation` expresses Cover, user Venue image, external Venue image,
-  Activity progress, and Memory intents;
+  field-owned Plan/Guide Activity edits, Activity progress, and Memory intents;
 - `StoredTrip.applyMutation` reapplies an intent to the latest valid local
   snapshot and writes only its owned fields;
 - Venue image intents require the initiating Place UUID and reject stale results
@@ -188,9 +188,8 @@ The first conflict-risk reduction landed on 2026-07-25:
   image, and Memory writes.
 
 This is not the Stage 2 exit. Trip metadata, structural Day/Activity changes,
-Venue replacement, reservation, reminder, and travel-leg edits still use
-`applyPlan`. Same-field resolution and real replica convergence also remain
-unproven.
+and travel-leg edits still use `applyPlan`. Same-field resolution and real
+replica convergence also remain unproven.
 
 ## Data and UX rules
 

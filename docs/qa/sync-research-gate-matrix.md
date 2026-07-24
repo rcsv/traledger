@@ -109,7 +109,11 @@ Domain snapshots by stable UUID.
 Local preconditions completed on 2026-07-25:
 
 - C03 has a scoped Memory intent that owns completion, photo, and reflection.
+- C02/C09 Plan and Guide Activity edits have separate field ownership; Guide
+  owns progress, reservation, and reminder without replaying planning fields.
 - C07 user image and external image metadata have separate scoped ownership.
+- C07/C08 Venue replacement and clear require the Place UUID displayed when
+  editing and remove superseded local relationship records transactionally.
 - C08 image mutations carry the initiating Place UUID and reject results after
   that Venue has been replaced or cleared.
 - C09 has a scoped progress intent, although reminder editing remains on the
@@ -119,8 +123,7 @@ Local preconditions completed on 2026-07-25:
 
 These are local preservation checks, not evidence that any C-row passes. All
 rows still require real replicas, recorded convergence, and an explicit
-same-field policy. C07/C08 additionally require Venue replacement/clear to
-leave the full-snapshot path.
+same-field policy.
 
 ## Observability record
 

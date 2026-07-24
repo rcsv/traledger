@@ -2055,7 +2055,7 @@ final class TripModelTests: XCTestCase {
         try stored.applyPlan(concurrent, in: context)
         try context.save()
 
-        try stored.applyMutation(.setCoverImage(Data([0xCA, 0xFE])))
+        try stored.applyMutation(.setCoverImage(Data([0xCA, 0xFE])), in: context)
         try context.save()
 
         let reloaded = try XCTUnwrap(stored.snapshot)
@@ -2064,6 +2064,253 @@ final class TripModelTests: XCTestCase {
             reloaded.days.flatMap(\.activities).first(where: { $0.id == activityID })?.note,
             "別端末で更新したメモ"
         )
+    }
+
+    @MainActor
+    func testScopedPlanActivityMutationPreservesExecutionFieldsAndReplacesVenue() throws {
+        let container = try TripMapStore.makeContainer(inMemoryOnly: true)
+        let context = container.mainContext
+        let baseActivity = OkinawaSample.trip.days[0].activities[0]
+        let originalPlaceID = try XCTUnwrap(baseActivity.place?.id)
+        let replacementPlace = PlaceSnapshot(
+            id: UUID(),
+            name: "新しい到着地",
+            address: "沖縄県那覇市",
+            latitude: 26.2064,
+            longitude: 127.6468,
+            mapKitIdentifier: "new-arrival"
+        )
+        let mutation = TripMutation.editPlanActivity(
+            PlanActivityMutation(
+                activityID: baseActivity.id,
+                title: "  到着地を確認  ",
+                startTime: baseActivity.startTime,
+                category: .sightseeing,
+                durationMinutes: 75,
+                note: "  展望デッキへ  ",
+                place: .replace(
+                    expectedPlaceID: originalPlaceID,
+                    place: replacementPlace
+                )
+            )
+        )
+        let stored = try StoredTrip(validatingSnapshot: OkinawaSample.trip)
+        context.insert(stored)
+        try context.save()
+        let initialPlaceCount = try context.fetchCount(
+            FetchDescriptor<StoredPlaceSnapshot>()
+        )
+
+        let progressDate = Date(timeIntervalSince1970: 1_820_000_000)
+        var concurrent = try TripPlanEditor.setActivityProgress(
+            in: try XCTUnwrap(stored.snapshot),
+            activityID: baseActivity.id,
+            progress: .completed,
+            at: progressDate
+        )
+        let reservation = ReservationReference(
+            id: UUID(),
+            kind: .transport,
+            title: "空港送迎",
+            confirmationCode: "BUS-42",
+            url: nil,
+            note: nil
+        )
+        concurrent = try TripPlanEditor.setReservation(
+            in: concurrent,
+            activityID: baseActivity.id,
+            reservation: reservation
+        )
+        try stored.applyPlan(concurrent, in: context)
+        try context.save()
+
+        try stored.applyMutation(mutation, in: context)
+        try context.save()
+
+        let activity = try XCTUnwrap(
+            stored.snapshot?.days
+                .flatMap(\.activities)
+                .first(where: { $0.id == baseActivity.id })
+        )
+        XCTAssertEqual(activity.title, "到着地を確認")
+        XCTAssertEqual(activity.category, .sightseeing)
+        XCTAssertEqual(activity.durationMinutes, 75)
+        XCTAssertEqual(activity.note, "展望デッキへ")
+        XCTAssertEqual(activity.place, replacementPlace)
+        XCTAssertEqual(activity.progress, .completed)
+        XCTAssertEqual(activity.progressUpdatedAt, progressDate)
+        XCTAssertEqual(activity.reservation, reservation)
+        XCTAssertEqual(
+            try context.fetchCount(FetchDescriptor<StoredPlaceSnapshot>()),
+            initialPlaceCount
+        )
+    }
+
+    @MainActor
+    func testScopedGuideActivityMutationPreservesPlanningAndMemoryFields() throws {
+        let container = try TripMapStore.makeContainer(inMemoryOnly: true)
+        let context = container.mainContext
+        let baseActivity = OkinawaSample.trip.days[0].activities[0]
+        let originalPlaceID = try XCTUnwrap(baseActivity.place?.id)
+        let existingReservation = ReservationReference(
+            id: UUID(),
+            kind: .transport,
+            title: "到着便",
+            confirmationCode: "FLT-10",
+            url: nil,
+            note: nil
+        )
+        var fixture = try TripPlanEditor.setReservation(
+            in: OkinawaSample.trip,
+            activityID: baseActivity.id,
+            reservation: existingReservation
+        )
+        fixture = try TripPlanEditor.setActivityProgress(
+            in: fixture,
+            activityID: baseActivity.id,
+            progress: .completed,
+            at: Date(timeIntervalSince1970: 1_820_000_100)
+        )
+        fixture = try TripPlanEditor.setActivityMemory(
+            in: fixture,
+            activityID: baseActivity.id,
+            photoData: Data([0x21, 0x22]),
+            reflection: "到着の記録"
+        )
+        let stored = try StoredTrip(validatingSnapshot: fixture)
+        context.insert(stored)
+        try context.save()
+        let initialPlaceCount = try context.fetchCount(
+            FetchDescriptor<StoredPlaceSnapshot>()
+        )
+        let initialReservationCount = try context.fetchCount(
+            FetchDescriptor<StoredReservationReference>()
+        )
+
+        var concurrent = try XCTUnwrap(stored.snapshot)
+        let dayIndex = try XCTUnwrap(
+            concurrent.days.firstIndex(where: {
+                $0.activities.contains(where: { $0.id == baseActivity.id })
+            })
+        )
+        let activityIndex = try XCTUnwrap(
+            concurrent.days[dayIndex].activities.firstIndex(
+                where: { $0.id == baseActivity.id }
+            )
+        )
+        concurrent.days[dayIndex].activities[activityIndex].title =
+            "別画面で更新したタイトル"
+        concurrent.days[dayIndex].activities[activityIndex].category = .transport
+        concurrent.days[dayIndex].activities[activityIndex].durationMinutes = 90
+        try stored.applyPlan(concurrent, in: context)
+        try context.save()
+
+        try stored.applyMutation(
+            .editGuideActivity(
+                GuideActivityMutation(
+                    activityID: baseActivity.id,
+                    startTime: baseActivity.startTime,
+                    note: "  Guideで更新したメモ  ",
+                    place: .replace(
+                        expectedPlaceID: originalPlaceID,
+                        place: nil
+                    ),
+                    progress: .completed,
+                    progressChangedAt: Date(timeIntervalSince1970: 1_820_000_200),
+                    reservation: nil,
+                    reminderLeadTime: .oneHour
+                )
+            ),
+            in: context
+        )
+        try context.save()
+
+        let activity = try XCTUnwrap(
+            stored.snapshot?.days
+                .flatMap(\.activities)
+                .first(where: { $0.id == baseActivity.id })
+        )
+        XCTAssertEqual(activity.title, "別画面で更新したタイトル")
+        XCTAssertEqual(activity.category, .transport)
+        XCTAssertEqual(activity.durationMinutes, 90)
+        XCTAssertEqual(activity.note, "Guideで更新したメモ")
+        XCTAssertNil(activity.place)
+        XCTAssertNil(activity.reservation)
+        XCTAssertEqual(activity.reminderLeadTime, .oneHour)
+        XCTAssertEqual(activity.memoryPhotoData, Data([0x21, 0x22]))
+        XCTAssertEqual(activity.reflection, "到着の記録")
+        XCTAssertEqual(
+            try context.fetchCount(FetchDescriptor<StoredPlaceSnapshot>()),
+            initialPlaceCount - 1
+        )
+        XCTAssertEqual(
+            try context.fetchCount(FetchDescriptor<StoredReservationReference>()),
+            initialReservationCount - 1
+        )
+    }
+
+    @MainActor
+    func testScopedActivityMutationRejectsAConcurrentVenueReplacement() throws {
+        let container = try TripMapStore.makeContainer(inMemoryOnly: true)
+        let context = container.mainContext
+        let baseActivity = OkinawaSample.trip.days[0].activities[0]
+        let originalPlaceID = try XCTUnwrap(baseActivity.place?.id)
+        let stored = try StoredTrip(validatingSnapshot: OkinawaSample.trip)
+        context.insert(stored)
+        try context.save()
+
+        let replacement = PlaceSnapshot(
+            id: UUID(),
+            name: "別画面で置換した場所",
+            address: "沖縄県",
+            latitude: 26.3,
+            longitude: 127.8,
+            mapKitIdentifier: "concurrent-place"
+        )
+        var concurrent = try XCTUnwrap(stored.snapshot)
+        let dayIndex = try XCTUnwrap(
+            concurrent.days.firstIndex(where: {
+                $0.activities.contains(where: { $0.id == baseActivity.id })
+            })
+        )
+        let activityIndex = try XCTUnwrap(
+            concurrent.days[dayIndex].activities.firstIndex(
+                where: { $0.id == baseActivity.id }
+            )
+        )
+        concurrent.days[dayIndex].activities[activityIndex].place = replacement
+        try stored.applyPlan(concurrent, in: context)
+        try context.save()
+
+        XCTAssertThrowsError(
+            try stored.applyMutation(
+                .editPlanActivity(
+                    PlanActivityMutation(
+                        activityID: baseActivity.id,
+                        title: "古い画面の編集",
+                        startTime: baseActivity.startTime,
+                        category: baseActivity.category,
+                        durationMinutes: baseActivity.durationMinutes,
+                        note: baseActivity.note,
+                        place: .replace(
+                            expectedPlaceID: originalPlaceID,
+                            place: nil
+                        )
+                    )
+                ),
+                in: context
+            )
+        ) { error in
+            XCTAssertEqual(error as? TripPlanEditingError, .placeChanged)
+        }
+
+        let activity = try XCTUnwrap(
+            stored.snapshot?.days
+                .flatMap(\.activities)
+                .first(where: { $0.id == baseActivity.id })
+        )
+        XCTAssertEqual(activity.title, baseActivity.title)
+        XCTAssertEqual(activity.place, replacement)
     }
 
     @MainActor
@@ -2098,7 +2345,8 @@ final class TripModelTests: XCTestCase {
                         .id
                 ),
                 imageData: Data([0x01, 0x02])
-            )
+            ),
+            in: context
         )
         try context.save()
 
@@ -2148,7 +2396,8 @@ final class TripModelTests: XCTestCase {
                         .id
                 ),
                 image: externalImage
-            )
+            ),
+            in: context
         )
         try context.save()
 
@@ -2204,7 +2453,8 @@ final class TripModelTests: XCTestCase {
                     activityID: activityID,
                     placeID: originalPlaceID,
                     image: externalPlaceImage(providerImageID: "Stale.jpg")
-                )
+                ),
+                in: context
             )
         ) { error in
             XCTAssertEqual(error as? TripPlanEditingError, .placeChanged)
@@ -2247,7 +2497,8 @@ final class TripModelTests: XCTestCase {
                 activityID: activityID,
                 progress: .skipped,
                 changedAt: changedAt
-            )
+            ),
+            in: context
         )
         try context.save()
 
@@ -2290,7 +2541,8 @@ final class TripModelTests: XCTestCase {
                 photoData: Data([0x03, 0x04]),
                 reflection: "  また来たい  ",
                 completedAt: completedAt
-            )
+            ),
+            in: context
         )
         try context.save()
 

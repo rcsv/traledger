@@ -721,10 +721,39 @@ struct PlanView: View {
         place: PlaceSnapshot?
     ) -> Bool {
         do {
-            let previousPlace = trip.days
+            guard let activity = trip.days
                 .flatMap(\.activities)
-                .first(where: { $0.id == activityID })?
-                .place
+                .first(where: { $0.id == activityID }) else {
+                throw TripPlanEditingError.activityNotFound
+            }
+            let previousPlace = activity.place
+            let placeMutation: ActivityPlaceMutation = previousPlace == place
+                ? .unchanged
+                : .replace(expectedPlaceID: previousPlace?.id, place: place)
+            let mutation = TripMutation.editPlanActivity(
+                PlanActivityMutation(
+                    activityID: activityID,
+                    title: title,
+                    startTime: startTime,
+                    category: category,
+                    durationMinutes: durationMinutes,
+                    note: note,
+                    place: placeMutation
+                )
+            )
+            let shouldFocusVenue = place != nil && previousPlace != place
+            if let onApplyMutation {
+                if shouldFocusVenue {
+                    pendingVenueFocusActivityID = activityID
+                }
+                errorMessage = onApplyMutation(mutation)
+                if errorMessage != nil {
+                    pendingVenueFocusActivityID = nil
+                    return false
+                }
+                return true
+            }
+
             let updated = try TripPlanEditor.updateActivity(
                 in: trip,
                 activityID: activityID,
@@ -735,7 +764,6 @@ struct PlanView: View {
                 note: note,
                 place: place
             )
-            let shouldFocusVenue = place != nil && previousPlace != place
             if shouldFocusVenue {
                 pendingVenueFocusActivityID = activityID
             }

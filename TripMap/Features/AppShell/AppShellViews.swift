@@ -91,9 +91,10 @@ private struct TripGuideWorkspaceView: View {
                         return "旅行データを読み込めませんでした。"
                     }
                     do {
-                        try storedTrip.applyMutation(mutation)
+                        try storedTrip.applyMutation(mutation, in: modelContext)
                         try modelContext.save()
-                        if let updated = storedTrip.snapshot {
+                        if case .recordActivityMemory = mutation,
+                           let updated = storedTrip.snapshot {
                             Task {
                                 try? await GuideReminderScheduler.sync(
                                     trip: updated,
@@ -253,7 +254,7 @@ struct MacTripWorkspaceView: View {
                 onApplyMutation: { mutation in
                     guard let storedTrip = storedTrips.first else { return "旅行データを読み込めませんでした。" }
                     do {
-                        try storedTrip.applyMutation(mutation)
+                        try storedTrip.applyMutation(mutation, in: modelContext)
                         try modelContext.save()
                         return nil
                     } catch {

@@ -503,11 +503,14 @@ extension StoredTrip {
     /// Applies a small user intent to the latest persisted snapshot, then writes
     /// only the fields owned by that intent. This avoids replaying an older
     /// screen snapshot over unrelated changes.
-    func applyMutation(_ mutation: TripMutation) throws {
+    func applyMutation(_ mutation: TripMutation, in modelContext: ModelContext) throws {
         guard let current = snapshot else {
             throw TripPersistenceError.invalidModel
         }
         let updated = try mutation.applying(to: current)
+        guard let timeZone = TimeZone(identifier: timeZoneIdentifier) else {
+            throw TripPersistenceError.invalidTimeZone
+        }
 
         func storedActivity(_ activityID: Activity.ID) throws -> StoredActivity {
             guard let activity = days
@@ -527,9 +530,76 @@ extension StoredTrip {
             return activity
         }
 
+        func applyPlace(
+            _ desiredPlace: PlaceSnapshot?,
+            to stored: StoredActivity
+        ) {
+            switch (desiredPlace, stored.place) {
+            case let (desired?, existing?) where desired.id == existing.id:
+                existing.apply(desired)
+            case let (desired?, existing?):
+                stored.place = StoredPlaceSnapshot(snapshot: desired)
+                modelContext.delete(existing)
+            case let (desired?, nil):
+                stored.place = StoredPlaceSnapshot(snapshot: desired)
+            case (nil, let existing?):
+                stored.place = nil
+                modelContext.delete(existing)
+            case (nil, nil):
+                break
+            }
+        }
+
+        func applyReservation(
+            _ desiredReservation: ReservationReference?,
+            to stored: StoredActivity
+        ) {
+            switch (desiredReservation, stored.reservation) {
+            case let (desired?, existing?) where desired.id == existing.id:
+                existing.apply(desired)
+            case let (desired?, existing?):
+                stored.reservation = StoredReservationReference(snapshot: desired)
+                modelContext.delete(existing)
+            case let (desired?, nil):
+                stored.reservation = StoredReservationReference(snapshot: desired)
+            case (nil, let existing?):
+                stored.reservation = nil
+                modelContext.delete(existing)
+            case (nil, nil):
+                break
+            }
+        }
+
         switch mutation {
         case .setCoverImage:
             coverImageData = updated.coverImageData
+        case .editPlanActivity(let edit):
+            let stored = try storedActivity(edit.activityID)
+            let desired = try updatedActivity(edit.activityID)
+            stored.title = desired.title
+            stored.startMinuteOfDay = desired.startTime.map {
+                LocalTime(date: $0, timeZone: timeZone).minuteOfDay
+            }
+            stored.categoryRawValue = desired.category?.rawValue
+            stored.durationMinutes = desired.durationMinutes
+            stored.note = desired.note
+            if case .replace = edit.place {
+                applyPlace(desired.place, to: stored)
+            }
+        case .editGuideActivity(let edit):
+            let stored = try storedActivity(edit.activityID)
+            let desired = try updatedActivity(edit.activityID)
+            stored.startMinuteOfDay = desired.startTime.map {
+                LocalTime(date: $0, timeZone: timeZone).minuteOfDay
+            }
+            stored.note = desired.note
+            stored.progressRawValue = desired.progress.rawValue
+            stored.progressUpdatedAt = desired.progressUpdatedAt
+            stored.reminderLeadTimeMinutes = desired.reminderLeadTime?.rawValue
+            applyReservation(desired.reservation, to: stored)
+            if case .replace = edit.place {
+                applyPlace(desired.place, to: stored)
+            }
         case .setVenueUserImage(let activityID, _, _):
             let stored = try storedActivity(activityID)
             let desired = try updatedActivity(activityID)

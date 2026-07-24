@@ -27,6 +27,10 @@ Represent small user intents as `TripMutation`. At save time:
 The first mutation set owns:
 
 - Trip cover image;
+- Plan Activity details: title, start time, category, duration, note, and an
+  explicitly changed Venue;
+- Guide Activity details: start time, note, an explicitly changed Venue,
+  progress, reservation, and reminder;
 - user-selected Venue image;
 - derived external Venue image metadata;
 - Activity progress and its change timestamp;
@@ -44,10 +48,15 @@ but CloudKit activation remains blocked until schema migration and the
 three-device matrix are complete.
 
 Structural and composite operations still use `applyPlan`, including Trip
-metadata, Day add/delete/reorder, Activity add/delete/move/edit, Venue
-replacement, reservation, reminder, and travel-leg preference changes. Those
-paths must become scoped operations or gain proven field-level merge behavior
-before development sync is enabled.
+metadata, Day add/delete/reorder, Activity add/delete/move, and travel-leg
+preference changes. Those paths must become scoped operations or gain proven
+field-level merge behavior before development sync is enabled.
+
+Plan and Guide Activity mutations intentionally have different ownership.
+Plan does not write progress, reservation, reminder, or Memory. Guide does not
+write title, category, duration, or Memory. Venue is written only when the
+sheet changed it, and replacement requires the Place UUID that the sheet
+originally displayed.
 
 Derived Look Around/Wikimedia resolution may only update external image
 metadata. It must not write the user image field or recreate a Venue that has
@@ -57,6 +66,9 @@ been cleared.
 
 - Cover, Venue image, external image, progress, and Memory saves no longer
   replay stale unrelated values.
+- Plan and Guide Activity edits preserve fields owned by the other workflow.
+- Venue replacement/clear and reservation replacement/clear delete superseded
+  SwiftData children in the same `ModelContext` transaction.
 - Venue image intents carry the Place UUID observed by their initiating UI.
   A replaced or cleared Venue rejects the stale result, so an old Look
   Around/Wikimedia task cannot decorate the new Venue.
@@ -73,6 +85,10 @@ been cleared.
 In-memory SwiftData regression tests must prove that:
 
 - a cover update preserves a concurrent Activity edit;
+- a Plan edit preserves execution fields while replacing its Venue;
+- a Guide edit preserves planning and Memory fields while clearing Venue and
+  reservation children;
+- an Activity edit based on a replaced Venue is rejected atomically;
 - a user Venue image changes only its owned image field;
 - an external image result for a replaced Place UUID is rejected;
 - Memory completion preserves an unrelated Activity edit and normalizes the
