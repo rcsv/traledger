@@ -12,6 +12,29 @@ struct Trip: Identifiable, Hashable, Sendable {
     var travelLegPreferences: [TravelLegPreference] = []
 }
 
+struct TripImageStorageInventory: Equatable, Sendable {
+    static let softLimitByteCount = 25 * 1_024 * 1_024
+
+    let coverByteCount: Int
+    let venueUserImageByteCount: Int
+    let memoryPhotoByteCount: Int
+    let coverCount: Int
+    let venueUserImageCount: Int
+    let memoryPhotoCount: Int
+
+    var totalByteCount: Int {
+        coverByteCount + venueUserImageByteCount + memoryPhotoByteCount
+    }
+
+    var totalImageCount: Int {
+        coverCount + venueUserImageCount + memoryPhotoCount
+    }
+
+    var exceedsSoftLimit: Bool {
+        totalByteCount > Self.softLimitByteCount
+    }
+}
+
 struct Day: Identifiable, Hashable, Sendable {
     let id: UUID
     var sequence: Int
@@ -230,6 +253,20 @@ struct PlaceSnapshot: Identifiable, Hashable, Sendable {
 }
 
 extension Trip {
+    var imageStorageInventory: TripImageStorageInventory {
+        let activities = days.flatMap(\.activities)
+        let venueImages = activities.compactMap(\.place?.imageData)
+        let memoryPhotos = activities.compactMap(\.memoryPhotoData)
+        return TripImageStorageInventory(
+            coverByteCount: coverImageData?.count ?? 0,
+            venueUserImageByteCount: venueImages.reduce(0) { $0 + $1.count },
+            memoryPhotoByteCount: memoryPhotos.reduce(0) { $0 + $1.count },
+            coverCount: coverImageData == nil ? 0 : 1,
+            venueUserImageCount: venueImages.count,
+            memoryPhotoCount: memoryPhotos.count
+        )
+    }
+
     /// Temporary country inference until venues persist a geocoded country code.
     var venueCountryNames: [String] {
         Array(Set(days.flatMap(\.activities).compactMap { $0.place?.inferredCountryName })).sorted()

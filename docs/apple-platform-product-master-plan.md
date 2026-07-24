@@ -1228,7 +1228,8 @@ platform expansion 記録として分離する。
 - versioned schema — local V1 baseline、migration plan、legacy store 無損失 open test を実装済み
 - CloudKit compatibility — 非 optional to-many relationship が現時点の blocker
 - conflict test — full-snapshot write を granular mutation へ改めてから三端末 matrix を実施
-- image quota — external storage に加えて encoded-byte ceiling / Trip inventory が必要
+- image quota — 1600px / 2MiB encoded ceiling と Cover・Venue・Memory 別 Trip inventory、
+  25MiB soft threshold を実装済み。device format と quota UX gate は継続
 - account states — local-first を維持して全 `CKAccountStatus` を扱う
 
 2026-07-24 の調査結果は [`ADR 0011`](adr/0011-sync-research-gate.md) と
@@ -1266,8 +1267,8 @@ container、server schema はまだ追加しない。
 
 次の実装担当者は、この順序で作業する。
 
-1. Stage 2 の前提として、画像 encoder の encoded-byte ceiling と Trip-level byte inventory を実装する。
-2. Cloud-compatible V2 の optional relationship 設計と V1→V2 migration fixture を実装する。
+1. Cloud-compatible V2 の optional relationship 設計と V1→V2 migration fixture を実装する。
+2. Trip image soft budget を画像選択前後の非破壊 UX へ接続する。
 3. Memory の PhotosPicker、保存、再表示、削除と Trip Card 集計を、安定した Simulator または実機で確認する。
 4. local reminder の permission / delivery / timezone change gate を、安定した Simulator または実機で確認する。
 5. Now / Next、Reservation、Offline review、Travel Leg route detail の実画面 viewport gate を、安定した Simulator が利用可能になった時点で再開する。

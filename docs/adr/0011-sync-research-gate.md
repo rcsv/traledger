@@ -126,6 +126,21 @@ The local V1 baseline was implemented on 2026-07-24:
 This establishes the migration runway. It does not make the V1 relationship
 shape CloudKit-compatible and does not unblock sync activation.
 
+The Stage 2 image prerequisite was also implemented locally:
+
+- `TripImageProcessor` uses Image I/O on every platform, strips the selected
+  image to JPEG, preserves a maximum 1600-pixel dimension, and progressively
+  reduces quality and dimensions until the encoded result is at most 2 MiB;
+- `TripImageStorageInventory` separately counts Cover, Venue user-image, and
+  Activity Memory bytes and images;
+- 25 MiB per Trip is a soft product-review threshold, not a destructive limit;
+- Look Around and Wikimedia metadata are excluded because they are not
+  user-owned stored image bytes.
+
+Large PNG normalization and byte/pixel limits have automated macOS coverage.
+Large HEIC/JPEG inputs, image orientation, and on-device PhotosPicker delivery
+remain part of Q01’s stable-device gate.
+
 ## Data and UX rules
 
 - Local data remains usable when iCloud is absent, restricted, indeterminate,

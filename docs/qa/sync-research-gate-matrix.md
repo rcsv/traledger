@@ -49,6 +49,14 @@ Current evidence:
 
 No automatic deletion policy may be introduced to make Q02–Q04 pass.
 
+Current evidence:
+
+- Q01 is partially automated: a 3200×2400 PNG is normalized to JPEG within the
+  1600-pixel and 2 MiB ceilings, and malformed data is rejected.
+- The pure Trip inventory has automated Cover/Venue/Memory separation and count
+  coverage.
+- HEIC/JPEG device inputs, orientation, Q02 UI, and Q03–Q05 remain open.
+
 ## Stage C — account and lifecycle
 
 | ID | Scenario | Required result |

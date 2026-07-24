@@ -1,9 +1,63 @@
+import AppKit
+import ImageIO
 import MapKit
 import SwiftData
+import UniformTypeIdentifiers
 import XCTest
 @testable import TripMap
 
 final class TripModelTests: XCTestCase {
+    @MainActor
+    func testImageNormalizationEnforcesPixelAndEncodedByteCeilings() throws {
+        let image = NSImage(size: NSSize(width: 3_200, height: 2_400))
+        image.lockFocus()
+        NSColor.systemIndigo.setFill()
+        NSBezierPath.fill(NSRect(x: 0, y: 0, width: 3_200, height: 2_400))
+        NSColor.systemOrange.setFill()
+        NSBezierPath(
+            roundedRect: NSRect(x: 320, y: 240, width: 2_560, height: 1_920),
+            xRadius: 320,
+            yRadius: 320
+        ).fill()
+        image.unlockFocus()
+
+        let tiffData = try XCTUnwrap(image.tiffRepresentation)
+        let bitmap = try XCTUnwrap(NSBitmapImageRep(data: tiffData))
+        let sourceData = try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
+        let normalized = try XCTUnwrap(TripImageProcessor.normalizedJPEGData(from: sourceData))
+        let source = try XCTUnwrap(CGImageSourceCreateWithData(normalized as CFData, nil))
+        let properties = try XCTUnwrap(
+            CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any]
+        )
+        let width = try XCTUnwrap(properties[kCGImagePropertyPixelWidth] as? Int)
+        let height = try XCTUnwrap(properties[kCGImagePropertyPixelHeight] as? Int)
+
+        XCTAssertLessThanOrEqual(max(width, height), TripImageProcessor.maximumPixelDimension)
+        XCTAssertLessThanOrEqual(normalized.count, TripImageProcessor.maximumEncodedByteCount)
+        XCTAssertEqual(CGImageSourceGetType(source), UTType.jpeg.identifier as CFString)
+        XCTAssertNil(TripImageProcessor.normalizedJPEGData(from: Data([0x00, 0x01])))
+    }
+
+    func testTripImageStorageInventorySeparatesUserOwnedImageKinds() {
+        var trip = OkinawaSample.trip
+        trip.coverImageData = Data(repeating: 0x01, count: 10)
+        trip.days[0].activities[0].place?.imageData = Data(repeating: 0x02, count: 20)
+        trip.days[0].activities[2].place?.imageData = Data(repeating: 0x03, count: 30)
+        trip.days[0].activities[0].memoryPhotoData = Data(repeating: 0x04, count: 40)
+
+        let inventory = trip.imageStorageInventory
+
+        XCTAssertEqual(inventory.coverByteCount, 10)
+        XCTAssertEqual(inventory.venueUserImageByteCount, 50)
+        XCTAssertEqual(inventory.memoryPhotoByteCount, 40)
+        XCTAssertEqual(inventory.totalByteCount, 100)
+        XCTAssertEqual(inventory.coverCount, 1)
+        XCTAssertEqual(inventory.venueUserImageCount, 2)
+        XCTAssertEqual(inventory.memoryPhotoCount, 1)
+        XCTAssertEqual(inventory.totalImageCount, 4)
+        XCTAssertFalse(inventory.exceedsSoftLimit)
+    }
+
     @MainActor
     func testVenueImageResolutionUsesUserImageWithoutAutomaticRequests() async {
         var lookAroundCalls = 0
