@@ -49,6 +49,12 @@ Plan and Guide pass a mutation callback from the persistence-owning workspace.
 Previews and isolated callers may omit it and retain the existing full-snapshot
 callback while migration is incomplete.
 
+Production AppShell workspaces reject that compatibility callback. A user
+operation without a scoped mutation therefore fails closed instead of reaching
+`StoredTrip.applyPlan`. Full-snapshot application remains available only for
+fixture setup, persistence round-trip tests, and isolated non-production
+callers.
+
 ## Boundaries
 
 `TripMutation` is not a general merge engine and does not define remote
@@ -56,9 +62,9 @@ same-field conflict policy. A mutation can preserve independent local fields,
 but CloudKit activation remains blocked until schema migration and the
 three-device matrix are complete.
 
-Trip title/date metadata still uses `applyPlan`. That path must become a scoped
-operation or gain proven field-level merge behavior before development sync is
-enabled.
+Trip title/date editing is not currently exposed. If introduced, it must use a
+scoped operation or gain proven field-level merge behavior; production may not
+enable the compatibility callback for it.
 
 Activity append generates its UUID before persistence and assigns sequence
 against the latest Day, so concurrent appends survive. Activity delete requires
@@ -126,8 +132,8 @@ been cleared.
 - Memory completion and its content persist as one intent.
 - Reminder reconciliation after a Guide mutation uses the latest persisted
   snapshot.
-- Trip title/date metadata stays on the old full-snapshot path until a scoped
-  design is introduced.
+- Production AppShell workspaces fail closed if a future UI operation omits its
+  scoped mutation; Trip title/date editing remains unavailable.
 
 ## Verification
 
@@ -157,6 +163,8 @@ In-memory SwiftData regression tests must prove that:
 - Memory completion preserves an unrelated Activity edit and normalizes the
   reflection;
 - mutation errors do not fall back to a broad write.
+- the production broad-write boundary returns an error rather than accepting a
+  complete Trip snapshot.
 
 Device-to-device convergence remains governed by the
 [`P8 Sync Research Gate Matrix`](../qa/sync-research-gate-matrix.md).

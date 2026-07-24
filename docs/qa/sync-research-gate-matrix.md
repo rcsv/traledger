@@ -137,6 +137,9 @@ Local preconditions completed on 2026-07-25:
 - Day swap records both Activity UUID orders and moves existing relationships.
   Local tests preserve a concurrent Activity field edit and unrelated Trip
   field, while an append/delete/reorder on either Day rejects the stale swap.
+- Production Plan/Guide workspaces reject their full-snapshot compatibility
+  callback. An operation without a scoped mutation fails closed; Trip
+  title/date editing remains unavailable until it has a scoped design.
 - in-memory tests prove independent local fields survive scoped Cover, Venue
   image, and Memory writes.
 

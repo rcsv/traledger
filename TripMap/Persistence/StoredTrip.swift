@@ -307,6 +307,7 @@ enum TripPersistenceError: LocalizedError, Equatable {
     case invalidTimeZone
     case invalidModel
     case duplicateIdentifier
+    case scopedMutationRequired
 
     var errorDescription: String? {
         switch self {
@@ -320,7 +321,15 @@ enum TripPersistenceError: LocalizedError, Equatable {
             "旅行データに不正な日付、順序、時刻、または場所があります。"
         case .duplicateIdentifier:
             "旅行データ内に重複した識別子があります。"
+        case .scopedMutationRequired:
+            "この操作は安全な保存方式に対応していないため、中止しました。"
         }
+    }
+}
+
+enum TripPersistenceBoundary {
+    static func rejectBroadPlanWrite(_: Trip) -> String? {
+        return TripPersistenceError.scopedMutationRequired.localizedDescription
     }
 }
 

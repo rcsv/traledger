@@ -7,6 +7,15 @@ import XCTest
 @testable import TripMap
 
 final class TripModelTests: XCTestCase {
+    func testProductionBroadPlanWritesFailClosed() {
+        XCTAssertEqual(
+            TripPersistenceBoundary.rejectBroadPlanWrite(
+                OkinawaSample.trip
+            ),
+            TripPersistenceError.scopedMutationRequired.localizedDescription
+        )
+    }
+
     @available(macOS 26.0, *)
     @MainActor
     func testOptionalToManyRelationshipSupportsLightweightMigration() throws {

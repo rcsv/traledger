@@ -186,12 +186,15 @@ The first conflict-risk reduction landed on 2026-07-25:
 - Venue image intents require the initiating Place UUID and reject stale results
   after Venue replacement or clear;
 - Plan and Guide production workspaces use the scoped path for those operations;
+- production workspaces reject the full-snapshot compatibility callback, so a
+  missing mutation cannot silently become a broad write;
 - in-memory persistence tests prove that unrelated edits survive Cover, Venue
   image, and Memory writes.
 
-This is not the Stage 2 exit. Trip title/date metadata still uses `applyPlan`.
-Same-field resolution, delete-versus-edit policy, concurrent reorder policy,
-and real replica convergence also remain unproven.
+This is not the Stage 2 exit. Trip title/date editing is not exposed and must
+receive a scoped design before introduction. Same-field resolution,
+delete-versus-edit policy, concurrent reorder policy, and real replica
+convergence also remain unproven.
 
 ## Data and UX rules
 

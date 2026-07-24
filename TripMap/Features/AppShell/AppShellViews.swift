@@ -73,19 +73,7 @@ private struct TripGuideWorkspaceView: View {
             GuideView(
                 trip: trip,
                 initialActivityID: venueImageQAInitialActivityID,
-                onApplyPlan: { updated in
-                    guard let storedTrip = storedTrips.first else {
-                        return "旅行データを読み込めませんでした。"
-                    }
-                    do {
-                        try storedTrip.applyPlan(updated, in: modelContext)
-                        try modelContext.save()
-                        return nil
-                    } catch {
-                        modelContext.rollback()
-                        return error.localizedDescription
-                    }
-                },
+                onApplyPlan: TripPersistenceBoundary.rejectBroadPlanWrite,
                 onApplyMutation: { mutation in
                     guard let storedTrip = storedTrips.first else {
                         return "旅行データを読み込めませんでした。"
@@ -240,17 +228,7 @@ struct MacTripWorkspaceView: View {
                 trip: trip,
                 initialDayID: venueImageQAInitialDayID,
                 initialActivityID: venueImageQAInitialActivityID,
-                onApplyPlan: { updated in
-                    guard let storedTrip = storedTrips.first else { return "旅行データを読み込めませんでした。" }
-                    do {
-                        try storedTrip.applyPlan(updated, in: modelContext)
-                        try modelContext.save()
-                        return nil
-                    } catch {
-                        modelContext.rollback()
-                        return error.localizedDescription
-                    }
-                },
+                onApplyPlan: TripPersistenceBoundary.rejectBroadPlanWrite,
                 onApplyMutation: { mutation in
                     guard let storedTrip = storedTrips.first else { return "旅行データを読み込めませんでした。" }
                     do {
