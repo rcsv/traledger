@@ -61,6 +61,7 @@ private struct TripsTabView: View {
 }
 
 private struct TripGuideWorkspaceView: View {
+    @Environment(\.modelContext) private var modelContext
     @Query private var storedTrips: [StoredTrip]
 
     init(tripID: UUID) {
@@ -71,7 +72,20 @@ private struct TripGuideWorkspaceView: View {
         if let trip = storedTrips.first?.snapshot {
             GuideView(
                 trip: trip,
-                initialActivityID: venueImageQAInitialActivityID
+                initialActivityID: venueImageQAInitialActivityID,
+                onApplyPlan: { updated in
+                    guard let storedTrip = storedTrips.first else {
+                        return "旅行データを読み込めませんでした。"
+                    }
+                    do {
+                        try storedTrip.applyPlan(updated, in: modelContext)
+                        try modelContext.save()
+                        return nil
+                    } catch {
+                        modelContext.rollback()
+                        return error.localizedDescription
+                    }
+                }
             )
                 .id(trip.id)
         } else {

@@ -1,6 +1,7 @@
 import Combine
 import Foundation
 import MapKit
+import SwiftUI
 
 /// MapKit の補完候補を解決して、アプリで保持できる会場情報へ変換する検索モデルです。
 struct VenueSearchResult: Identifiable {
@@ -102,5 +103,180 @@ final class VenueSearchModel: NSObject, ObservableObject, @preconcurrency MKLoca
 
     func report(error: String?) {
         errorMessage = error
+    }
+}
+
+struct VenueSearchSheet: View {
+    let onSelect: (PlaceSnapshot) -> Void
+    @Environment(\.dismiss) private var dismiss
+    @StateObject private var search = VenueSearchModel()
+    @State private var query = ""
+    @State private var selectedResult: VenueSearchResult?
+
+    var body: some View {
+        sheetContent
+            .alert("場所を検索できませんでした", isPresented: Binding(
+                get: { search.errorMessage != nil },
+                set: { if !$0 { search.report(error: nil) } }
+            )) {
+                Button("OK") { search.report(error: nil) }
+            } message: {
+                Text(search.errorMessage ?? "不明なエラー")
+            }
+    }
+
+    @ViewBuilder
+    private var sheetContent: some View {
+        #if os(macOS)
+        navigationContent
+            .frame(minWidth: 740, minHeight: 500)
+        #else
+        navigationContent
+        #endif
+    }
+
+    private var navigationContent: some View {
+        NavigationStack {
+            adaptiveContent
+                .navigationTitle("場所を検索")
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("キャンセル") { dismiss() }
+                    }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("この場所を設定") {
+                            if let selectedResult { onSelect(selectedResult.snapshot) }
+                            dismiss()
+                        }
+                        .disabled(selectedResult == nil)
+                    }
+                }
+        }
+    }
+
+    @ViewBuilder
+    private var adaptiveContent: some View {
+        #if os(macOS)
+        HSplitView {
+            searchResults
+                .frame(minWidth: 290)
+            venuePreview
+                .frame(minWidth: 360)
+        }
+        #else
+        VStack(spacing: 0) {
+            searchResults
+            Divider()
+            venuePreview
+                .frame(minHeight: 220)
+        }
+        #endif
+    }
+
+    private var searchResults: some View {
+        List {
+            if search.isResolving {
+                ProgressView("場所を確認中…")
+                    .frame(maxWidth: .infinity, alignment: .center)
+            } else if !search.results.isEmpty {
+                Section("検索結果") {
+                    ForEach(search.results) { result in
+                        resultButton(result)
+                    }
+                }
+            } else if search.didResolveSearch {
+                ContentUnavailableView(
+                    "場所が見つかりません",
+                    systemImage: "mappin.slash",
+                    description: Text("別の施設名や住所で検索してください。")
+                )
+            } else if !search.completions.isEmpty {
+                Section("候補") {
+                    ForEach(search.completions, id: \.self) { completion in
+                        Button {
+                            search.resolve(completion)
+                        } label: {
+                            completionLabel(completion)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            } else if search.isCompleting {
+                ProgressView("候補を検索中…")
+                    .frame(maxWidth: .infinity, alignment: .center)
+            } else if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                ContentUnavailableView(
+                    "場所を検索",
+                    systemImage: "magnifyingglass",
+                    description: Text("施設名または住所を入力してください。")
+                )
+            } else {
+                ContentUnavailableView(
+                    "候補がありません",
+                    systemImage: "magnifyingglass",
+                    description: Text("入力を変えてもう一度検索してください。")
+                )
+            }
+        }
+        .searchable(text: $query, prompt: "施設名または住所")
+        .onChange(of: query) { _, value in
+            selectedResult = nil
+            search.update(query: value)
+        }
+    }
+
+    private func resultButton(_ result: VenueSearchResult) -> some View {
+        Button {
+            selectedResult = result
+        } label: {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(result.name)
+                Text(result.address)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+        }
+        .buttonStyle(.plain)
+        .listRowBackground(selectedResult?.id == result.id ? Color.accentColor.opacity(0.16) : Color.clear)
+        .accessibilityAddTraits(selectedResult?.id == result.id ? .isSelected : [])
+    }
+
+    private func completionLabel(_ completion: MKLocalSearchCompletion) -> some View {
+        let title = completion.title
+        let subtitle = completion.subtitle
+        return VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+            if !subtitle.isEmpty {
+                Text(subtitle).foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var venuePreview: some View {
+        if let selectedResult {
+            VStack(alignment: .leading, spacing: 0) {
+                Map(initialPosition: .region(MKCoordinateRegion(
+                    center: selectedResult.coordinate,
+                    span: MKCoordinateSpan(latitudeDelta: 0.012, longitudeDelta: 0.012)
+                ))) {
+                    Marker(selectedResult.name, coordinate: selectedResult.coordinate)
+                }
+                .mapStyle(.standard(elevation: .realistic))
+                .frame(minHeight: 300)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(selectedResult.name).font(.headline)
+                    Text(selectedResult.address).font(.subheadline).foregroundStyle(.secondary)
+                }
+                .padding()
+            }
+        } else {
+            ContentUnavailableView(
+                "候補を選択してください",
+                systemImage: "mappin.and.ellipse",
+                description: Text("選択した場所を地図で確認できます。")
+            )
+        }
     }
 }

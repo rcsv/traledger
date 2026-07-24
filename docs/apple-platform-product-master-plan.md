@@ -157,6 +157,17 @@ iPhone は Guide を主目的とするが、閲覧専用にはしない。
 - Day の複製や複雑な一括操作は macOS / iPadOS へ委ねる。
 - 重要操作は片手で届く領域に置き、地図上の小さなピンだけを操作入口にしない。
 
+2026-07-24 時点で、既存モデルが永続化できる開始時刻、短いメモ、Venue の解除・再検索を
+第一段階のクイック編集として実装した。選択中 Activity がある場合は、Map / List のどちらでも
+Tab bar 直上の safe-area に全幅の編集ボタンを表示する。Activity Card の Context Menu と
+accessibility action からも同じ画面へ入る。iPhone 17 Pro / iOS 27 Simulator で標準文字サイズと
+Accessibility XXL のシート、片手領域の入口、iPhone 用 Venue 検索の縦レイアウトを実画面確認済み。
+保存処理は macOS と同じ `TripPlanEditor`、`StoredTrip.applyPlan`、`ModelContext.save` を通し、
+失敗時は rollback してシートを閉じない。
+
+完了 / スキップは一時的な View 状態として追加しない。Activity の永続的な訪問状態と、その状態を
+Doctor、Guide、同期でどう解釈するかを Domain 仕様として確定してから第二段階で追加する。
+
 ### 5.3 iPadOS
 
 iPadOS は単なる大型 iPhone ではなく、適応型 Planner / Guide とする。
@@ -384,8 +395,10 @@ Venue 検索は Editor 内の独立セクションに置く。検索結果選択
 検索画面は初期案内、候補取得中、候補、検索中、検索結果なし、失敗を区別して表示する。
 macOS は候補一覧と選択内容のプレビューを左右に並べ、iPhone は同じ情報を縦に並べる。
 Venue を選択するまで確定操作は無効にし、検索画面を開いただけでは Activity を変更しない。
-この構造と初期空状態は 2026-07-24 に macOS UI automation で確認済みであり、iOS target も
-同じ実装でコンパイルを確認済みである。
+この構造と初期空状態は 2026-07-24 に macOS UI automation で確認済みである。
+当初 iOS 分岐が macOS 限定ファイル内にあり実際にはコンパイルされていなかった不整合を解消し、
+検索 Sheet を両 target の共有ソースへ移した。iOS target のコンパイルと iPhone 17 Pro /
+iOS 27 Simulator の縦レイアウトも実画面確認済みである。
 
 標準所要時間はカテゴリ別の提案として出し、未設定時だけワンタップで採用できるようにする。
 2026-07-24 時点の初期値は、移動30分、食事60分、宿泊30分、観光90分、体験120分、買い物60分
@@ -1046,7 +1059,8 @@ P1 以降の platform expansion Gate として扱う。
 - Venue search section — implemented with explicit states, adaptive layout, and initial-state UI test
 - Drag reorder — implemented with an explicit handle, shared context/accessibility alternatives, and Domain normalization; isolated pointer smoke pending
 - Undo / Redo — implemented and UI-tested for Activity reorder
-- iPhone quick edit
+- iPhone quick edit — start time, short note, and Venue reset/search implemented; one-handed entry, standard Dynamic Type, Accessibility XXL, and adaptive Venue search visually verified
+- iPhone completion / skipped state — deferred until a persistent Activity status Domain is specified
 
 完了条件:
 
@@ -1161,10 +1175,10 @@ P1 以降の platform expansion Gate として扱う。
 
 次の実装担当者は、この順序で作業する。
 
-1. iPhone quick edit を実装し、Dynamic Type と片手操作を確認する。
-2. Doctor issue から対象 Activity Editor へ移動する。
-3. Travel Leg の Domain 仕様を ADR として先に確定する。
-4. iPadOS adaptive workspace を追加し、iPad viewport を確認する。
+1. Doctor issue から対象 Activity Editor へ移動する。
+2. Travel Leg の Domain 仕様を ADR として先に確定する。
+3. iPadOS adaptive workspace を追加し、iPad viewport を確認する。
+4. Activity の完了 / スキップ状態を Domain として定義し、iPhone quick edit の第二段階を実装する。
 
 新しい外部画像 provider、評価データ、独自サーバー、AI、CloudKit は、それぞれの Research Gate
 なしに開始しない。
