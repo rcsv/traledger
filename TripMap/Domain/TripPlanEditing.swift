@@ -13,6 +13,8 @@ enum TripPlanEditingError: LocalizedError, Equatable {
     case invalidReservationTitle
     case invalidReservationURL
     case reminderRequiresStartTime
+    case memoryRequiresCompletedActivity
+    case invalidReflection
     case invalidTimeZone
 
     var errorDescription: String? {
@@ -29,6 +31,8 @@ enum TripPlanEditingError: LocalizedError, Equatable {
         case .invalidReservationTitle: "予約名を入力してください。"
         case .invalidReservationURL: "予約URLにはHTTPSのリンクを入力してください。"
         case .reminderRequiresStartTime: "リマインダーを設定するには開始時刻が必要です。"
+        case .memoryRequiresCompletedActivity: "訪問済みにしてから思い出を記録してください。"
+        case .invalidReflection: "感想は500文字以内で入力してください。"
         case .invalidTimeZone: "タイムゾーンを確認してください。"
         }
     }
@@ -180,6 +184,11 @@ enum TripPlanEditor {
         guard trip.days[dayIndex].activities[activityIndex].progress != progress else {
             return trip
         }
+        let activity = trip.days[dayIndex].activities[activityIndex]
+        guard progress == .completed
+            || (activity.memoryPhotoData == nil && activity.reflection == nil) else {
+            throw TripPlanEditingError.memoryRequiresCompletedActivity
+        }
 
         var copy = trip
         copy.days[dayIndex].activities[activityIndex].progress = progress
@@ -235,6 +244,33 @@ enum TripPlanEditor {
 
         var copy = trip
         copy.days[dayIndex].activities[activityIndex].reminderLeadTime = leadTime
+        return copy
+    }
+
+    static func setActivityMemory(
+        in trip: Trip,
+        activityID: Activity.ID,
+        photoData: Data?,
+        reflection: String?
+    ) throws -> Trip {
+        guard let dayIndex = trip.days.firstIndex(where: { day in
+            day.activities.contains(where: { $0.id == activityID })
+        }), let activityIndex = trip.days[dayIndex].activities.firstIndex(where: { $0.id == activityID }) else {
+            throw TripPlanEditingError.activityNotFound
+        }
+
+        let normalizedReflection = normalizedOptionalText(reflection)
+        guard normalizedReflection.map(\.count) ?? 0 <= 500 else {
+            throw TripPlanEditingError.invalidReflection
+        }
+        guard (photoData == nil && normalizedReflection == nil)
+            || trip.days[dayIndex].activities[activityIndex].progress == .completed else {
+            throw TripPlanEditingError.memoryRequiresCompletedActivity
+        }
+
+        var copy = trip
+        copy.days[dayIndex].activities[activityIndex].memoryPhotoData = photoData
+        copy.days[dayIndex].activities[activityIndex].reflection = normalizedReflection
         return copy
     }
 

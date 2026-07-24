@@ -73,6 +73,8 @@ final class StoredActivity {
     var progressRawValue: String = ActivityProgress.planned.rawValue
     var progressUpdatedAt: Date?
     var reminderLeadTimeMinutes: Int?
+    @Attribute(.externalStorage) var memoryPhotoData: Data?
+    var reflection: String?
     var day: StoredDay?
     @Relationship(deleteRule: .cascade, inverse: \StoredPlaceSnapshot.activity)
     var place: StoredPlaceSnapshot?
@@ -90,6 +92,8 @@ final class StoredActivity {
         progressRawValue: String = ActivityProgress.planned.rawValue,
         progressUpdatedAt: Date? = nil,
         reminderLeadTimeMinutes: Int? = nil,
+        memoryPhotoData: Data? = nil,
+        reflection: String? = nil,
         place: StoredPlaceSnapshot?,
         reservation: StoredReservationReference? = nil
     ) {
@@ -103,6 +107,8 @@ final class StoredActivity {
         self.progressRawValue = progressRawValue
         self.progressUpdatedAt = progressUpdatedAt
         self.reminderLeadTimeMinutes = reminderLeadTimeMinutes
+        self.memoryPhotoData = memoryPhotoData
+        self.reflection = reflection
         self.place = place
         self.reservation = reservation
     }
@@ -411,6 +417,8 @@ extension StoredTrip {
                     storedActivity.progressRawValue = domainActivity.progress.rawValue
                     storedActivity.progressUpdatedAt = domainActivity.progressUpdatedAt
                     storedActivity.reminderLeadTimeMinutes = domainActivity.reminderLeadTime?.rawValue
+                    storedActivity.memoryPhotoData = domainActivity.memoryPhotoData
+                    storedActivity.reflection = domainActivity.reflection
                     switch (domainActivity.place, storedActivity.place) {
                     case let (domainPlace?, storedPlace?) where domainPlace.id == storedPlace.id:
                         storedPlace.apply(domainPlace)
@@ -574,6 +582,8 @@ private extension StoredActivity {
             progressRawValue: activity.progress.rawValue,
             progressUpdatedAt: activity.progressUpdatedAt,
             reminderLeadTimeMinutes: activity.reminderLeadTime?.rawValue,
+            memoryPhotoData: activity.memoryPhotoData,
+            reflection: activity.reflection,
             place: activity.place.map(StoredPlaceSnapshot.init(snapshot:)),
             reservation: activity.reservation.map(StoredReservationReference.init(snapshot:))
         )
@@ -620,7 +630,9 @@ private extension StoredActivity {
             progress: progress,
             progressUpdatedAt: progressUpdatedAt,
             reservation: reservationSnapshot,
-            reminderLeadTime: reminderLeadTime
+            reminderLeadTime: reminderLeadTime,
+            memoryPhotoData: memoryPhotoData,
+            reflection: reflection
         )
     }
 }

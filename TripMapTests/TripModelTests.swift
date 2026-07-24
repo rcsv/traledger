@@ -1625,6 +1625,120 @@ final class TripModelTests: XCTestCase {
         )
     }
 
+    func testActivityMemoryRequiresVisitedStateAndNormalizesReflection() throws {
+        let trip = OkinawaSample.trip
+        let activity = trip.orderedDays[0].orderedActivities[0]
+        XCTAssertThrowsError(
+            try TripPlanEditor.setActivityMemory(
+                in: trip,
+                activityID: activity.id,
+                photoData: Data([1, 2, 3]),
+                reflection: " 良い時間だった "
+            )
+        ) { error in
+            XCTAssertEqual(error as? TripPlanEditingError, .memoryRequiresCompletedActivity)
+        }
+
+        let visited = try TripPlanEditor.setActivityProgress(
+            in: trip,
+            activityID: activity.id,
+            progress: .completed,
+            at: Date(timeIntervalSince1970: 1_800_000_000)
+        )
+        let recorded = try TripPlanEditor.setActivityMemory(
+            in: visited,
+            activityID: activity.id,
+            photoData: Data([1, 2, 3]),
+            reflection: " 良い時間だった "
+        )
+        let memory = try XCTUnwrap(
+            recorded.days.flatMap(\.activities).first(where: { $0.id == activity.id })
+        )
+        XCTAssertEqual(memory.memoryPhotoData, Data([1, 2, 3]))
+        XCTAssertEqual(memory.reflection, "良い時間だった")
+        XCTAssertThrowsError(
+            try TripPlanEditor.setActivityProgress(
+                in: recorded,
+                activityID: activity.id,
+                progress: .planned
+            )
+        ) { error in
+            XCTAssertEqual(error as? TripPlanEditingError, .memoryRequiresCompletedActivity)
+        }
+        XCTAssertThrowsError(
+            try TripPlanEditor.setActivityMemory(
+                in: visited,
+                activityID: activity.id,
+                photoData: nil,
+                reflection: String(repeating: "あ", count: 501)
+            )
+        ) { error in
+            XCTAssertEqual(error as? TripPlanEditingError, .invalidReflection)
+        }
+    }
+
+    func testMemoryProjectionUsesVisitedActivitiesWithoutReusingVenueImages() throws {
+        var trip = OkinawaSample.trip
+        trip.days[0].activities[0].place?.imageData = Data([9])
+        let first = trip.orderedDays[0].orderedActivities[0]
+        let second = trip.orderedDays[0].orderedActivities[1]
+        trip = try TripPlanEditor.setActivityProgress(
+            in: trip,
+            activityID: first.id,
+            progress: .completed,
+            at: Date(timeIntervalSince1970: 1_800_000_000)
+        )
+        trip = try TripPlanEditor.setActivityMemory(
+            in: trip,
+            activityID: first.id,
+            photoData: nil,
+            reflection: "また行きたい"
+        )
+        trip = try TripPlanEditor.setActivityProgress(
+            in: trip,
+            activityID: second.id,
+            progress: .completed,
+            at: Date(timeIntervalSince1970: 1_800_000_060)
+        )
+
+        let summary = MemoryProjection.summary(for: trip)
+        XCTAssertEqual(summary.visitedCount, 2)
+        XCTAssertEqual(summary.recordedCount, 1)
+        XCTAssertEqual(summary.entries.map(\.activity.id), [first.id, second.id])
+        XCTAssertNil(summary.entries[0].activity.memoryPhotoData)
+        XCTAssertNotNil(summary.entries[0].activity.place?.imageData)
+    }
+
+    @MainActor
+    func testStoredTripRoundTripsActivityMemory() throws {
+        let container = try TripMapStore.makeContainer(inMemoryOnly: true)
+        let context = container.mainContext
+        let activity = OkinawaSample.trip.orderedDays[0].orderedActivities[0]
+        var updated = try TripPlanEditor.setActivityProgress(
+            in: OkinawaSample.trip,
+            activityID: activity.id,
+            progress: .completed,
+            at: Date(timeIntervalSince1970: 1_800_000_000)
+        )
+        updated = try TripPlanEditor.setActivityMemory(
+            in: updated,
+            activityID: activity.id,
+            photoData: Data([4, 5, 6]),
+            reflection: "忘れたくない景色"
+        )
+        context.insert(try StoredTrip(validatingSnapshot: updated))
+        try context.save()
+
+        let snapshot = try XCTUnwrap(
+            try ModelContext(container).fetch(FetchDescriptor<StoredTrip>()).first?.snapshot
+        )
+        let reloaded = try XCTUnwrap(
+            snapshot.days.flatMap(\.activities).first(where: { $0.id == activity.id })
+        )
+        XCTAssertEqual(reloaded.memoryPhotoData, Data([4, 5, 6]))
+        XCTAssertEqual(reloaded.reflection, "忘れたくない景色")
+    }
+
     @MainActor
     func testParticipantRoundTripUsesLocalStore() throws {
         let container = try TripMapStore.makeContainer(inMemoryOnly: true)

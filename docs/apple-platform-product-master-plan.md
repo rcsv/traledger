@@ -373,6 +373,11 @@ Memory は Core Planner が安定した後に実装する。
 - Trip の写真一覧から Activity へ戻れる。
 - 共有物には含まれる情報と位置情報の扱いを送信前に示す。
 
+2026-07-24 時点で P7 の最小 Domain として、既存 `completed` を visited signal として再利用し、
+Activity 所有の一枚の memory photo と500文字以内の短い感想、Trip 集計の純粋
+`MemoryProjection` を実装した。Venue のユーザー画像を訪問写真へ流用せず、PhotosPicker と画像正規化
+pipeline だけを再利用する境界は [`ADR 0010`](adr/0010-memory-minimum-domain.md) を正とする。
+
 ## 8. Activity と Venue の境界
 
 ### 8.1 Activity が所有する情報
@@ -1206,9 +1211,9 @@ platform expansion 記録として分離する。
 
 ### P7 — Memory Minimum Slice
 
-- visited state
-- Activity photo attachment
-- short reflection
+- visited state — existing completed state を Memory projection へ接続済み
+- Activity photo attachment — Activity-owned Domain / SwiftData external storage を実装済み、UI は次工程
+- short reflection — normalized Domain / SwiftData を実装済み、UI は次工程
 - Memory Trip Card
 
 完了条件:
@@ -1254,7 +1259,7 @@ platform expansion 記録として分離する。
 
 次の実装担当者は、この順序で作業する。
 
-1. P7 Memory minimum slice を、既存 Activity progress とユーザー画像を再利用する前提で定義する。
+1. P7 Memory editor と Trip Card を、Activity-owned photo / reflection projection 上に実装する。
 2. local reminder の permission / delivery / timezone change gate を、安定した Simulator または実機で確認する。
 3. Now / Next、Reservation、Offline review、Travel Leg route detail の実画面 viewport gate を、安定した Simulator が利用可能になった時点で再開する。
 

@@ -260,3 +260,44 @@ enum ActivityReminderProjection {
             }
     }
 }
+
+struct MemoryActivityEntry: Identifiable, Hashable, Sendable {
+    let dayID: Day.ID
+    let daySequence: Int
+    let activity: Activity
+
+    var id: Activity.ID { activity.id }
+    var hasRecord: Bool {
+        activity.memoryPhotoData != nil || activity.reflection != nil
+    }
+}
+
+struct MemoryTripSummary: Hashable, Sendable {
+    let totalActivityCount: Int
+    let visitedCount: Int
+    let skippedCount: Int
+    let recordedCount: Int
+    let entries: [MemoryActivityEntry]
+}
+
+enum MemoryProjection {
+    static func summary(for trip: Trip) -> MemoryTripSummary {
+        let allEntries = trip.orderedDays.flatMap { day in
+            day.orderedActivities.map {
+                MemoryActivityEntry(
+                    dayID: day.id,
+                    daySequence: day.sequence,
+                    activity: $0
+                )
+            }
+        }
+        let visited = allEntries.filter { $0.activity.progress == .completed }
+        return MemoryTripSummary(
+            totalActivityCount: allEntries.count,
+            visitedCount: visited.count,
+            skippedCount: allEntries.filter { $0.activity.progress == .skipped }.count,
+            recordedCount: visited.filter(\.hasRecord).count,
+            entries: visited
+        )
+    }
+}

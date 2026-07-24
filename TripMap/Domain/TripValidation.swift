@@ -9,6 +9,7 @@ enum TripValidationIssue: Equatable, Sendable {
     case invalidActivityDuration(Activity.ID)
     case invalidActivityProgress(Activity.ID)
     case invalidActivityReminder(Activity.ID)
+    case invalidActivityMemory(Activity.ID)
     case invalidReservationReference(Activity.ID)
     case invalidCoordinate(Activity.ID)
     case invalidTravelLegPreference(TravelLegID)
@@ -60,6 +61,15 @@ extension Trip {
                 }
                 if activity.reminderLeadTime != nil, activity.startTime == nil {
                     issues.append(.invalidActivityReminder(activity.id))
+                }
+                let reflection = activity.reflection?.trimmingCharacters(in: .whitespacesAndNewlines)
+                if (activity.memoryPhotoData != nil || activity.reflection != nil)
+                    && activity.progress != .completed
+                    || activity.reflection != nil
+                    && (reflection?.isEmpty != false
+                        || reflection != activity.reflection
+                        || (reflection?.count ?? 0) > 500) {
+                    issues.append(.invalidActivityMemory(activity.id))
                 }
                 if let reservation = activity.reservation {
                     let title = reservation.title.trimmingCharacters(in: .whitespacesAndNewlines)

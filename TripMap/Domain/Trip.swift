@@ -166,6 +166,8 @@ struct Activity: Identifiable, Hashable, Sendable {
     var progressUpdatedAt: Date? = nil
     var reservation: ReservationReference? = nil
     var reminderLeadTime: ActivityReminderLeadTime? = nil
+    var memoryPhotoData: Data? = nil
+    var reflection: String? = nil
 }
 
 struct ExternalPlaceImage: Hashable, Sendable {
