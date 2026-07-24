@@ -117,6 +117,18 @@ struct MoveActivityMutation: Equatable, Sendable {
     let placement: ActivityMovePlacement
 }
 
+struct DayReplicationTargetMutation: Equatable, Sendable {
+    let dayID: Day.ID
+    let activityIDs: [Activity.ID]
+    let placeIDs: [PlaceSnapshot.ID?]
+}
+
+struct ReplicateDayActivitiesMutation: Equatable, Sendable {
+    let sourceDayID: Day.ID
+    let expectedSourceActivityIDs: [Activity.ID]
+    let targets: [DayReplicationTargetMutation]
+}
+
 enum TripMutation: Equatable, Sendable {
     case setCoverImage(Data?)
     case setDefaultCurrencyCode(String)
@@ -127,6 +139,7 @@ enum TripMutation: Equatable, Sendable {
     case appendActivity(AppendActivityMutation)
     case deleteActivity(DeleteActivityMutation)
     case moveActivity(MoveActivityMutation)
+    case replicateDayActivities(ReplicateDayActivitiesMutation)
     case setVenueUserImage(
         activityID: Activity.ID,
         placeID: PlaceSnapshot.ID,
@@ -243,6 +256,11 @@ enum TripMutation: Equatable, Sendable {
                 activityID: activity.activityID,
                 relativeTo: activity.anchorActivityID,
                 placement: activity.placement
+            )
+        case .replicateDayActivities(let replication):
+            return try TripPlanEditor.replicateDayActivities(
+                in: trip,
+                mutation: replication
             )
         case let .setVenueUserImage(activityID, placeID, imageData):
             return try updatingPlace(
@@ -722,6 +740,105 @@ enum TripPlanEditor {
                 )
             }
             copy.days[index].activities.append(contentsOf: replicas)
+        }
+        return copy
+    }
+
+    static func replicateDayActivities(
+        in trip: Trip,
+        mutation: ReplicateDayActivitiesMutation
+    ) throws -> Trip {
+        guard let source = trip.days.first(
+            where: { $0.id == mutation.sourceDayID }
+        ) else {
+            throw TripPlanEditingError.sourceDayNotFound
+        }
+        let sourceActivities = source.orderedActivities
+        guard sourceActivities.map(\.id)
+            == mutation.expectedSourceActivityIDs else {
+            throw TripPlanEditingError.activityNotFound
+        }
+        let targetIDs = Set(mutation.targets.map(\.dayID))
+        guard targetIDs.count == mutation.targets.count,
+              !targetIDs.contains(mutation.sourceDayID) else {
+            throw TripPlanEditingError.targetIncludesSource
+        }
+        guard mutation.targets.allSatisfy({
+            $0.activityIDs.count == sourceActivities.count
+                && $0.placeIDs.count == sourceActivities.count
+                && Set($0.activityIDs).count == $0.activityIDs.count
+                && zip($0.placeIDs, sourceActivities).allSatisfy {
+                    ($0.0 == nil) == ($0.1.place == nil)
+                }
+        }) else {
+            throw TripPersistenceError.invalidModel
+        }
+        let allGeneratedActivityIDs = mutation.targets.flatMap(\.activityIDs)
+        let allGeneratedPlaceIDs = mutation.targets
+            .flatMap(\.placeIDs)
+            .compactMap { $0 }
+        guard Set(allGeneratedActivityIDs).count
+            == allGeneratedActivityIDs.count,
+              Set(allGeneratedPlaceIDs).count
+                == allGeneratedPlaceIDs.count else {
+            throw TripPersistenceError.duplicateIdentifier
+        }
+        let existingActivityIDs = Set(trip.days.flatMap(\.activities).map(\.id))
+        let existingPlaceIDs = Set(
+            trip.days
+                .flatMap(\.activities)
+                .compactMap { $0.place?.id }
+        )
+        guard existingActivityIDs.isDisjoint(
+            with: allGeneratedActivityIDs
+        ) else {
+            throw TripPlanEditingError.activityAlreadyExists
+        }
+        guard existingPlaceIDs.isDisjoint(
+            with: allGeneratedPlaceIDs
+        ) else {
+            throw TripPersistenceError.duplicateIdentifier
+        }
+
+        var copy = trip
+        let timeZone = TimeZone(identifier: trip.timeZoneIdentifier)
+            ?? TimeZone(secondsFromGMT: 0)!
+        for target in mutation.targets {
+            guard let targetIndex = copy.days.firstIndex(
+                where: { $0.id == target.dayID }
+            ) else {
+                throw TripPlanEditingError.targetDayNotFound
+            }
+            let firstSequence =
+                (copy.days[targetIndex].activities.map(\.sequence).max() ?? 0) + 1
+            let replicas = sourceActivities.enumerated().map {
+                index, activity in
+                Activity(
+                    id: target.activityIDs[index],
+                    sequence: firstSequence + index,
+                    title: activity.title,
+                    startTime: time(
+                        on: copy.days[targetIndex].date,
+                        matching: activity.startTime,
+                        timeZone: timeZone
+                    ),
+                    category: activity.category,
+                    durationMinutes: activity.durationMinutes,
+                    note: activity.note,
+                    place: activity.place.map { place in
+                        PlaceSnapshot(
+                            id: target.placeIDs[index]!,
+                            name: place.name,
+                            address: place.address,
+                            latitude: place.latitude,
+                            longitude: place.longitude,
+                            mapKitIdentifier: place.mapKitIdentifier,
+                            imageData: place.imageData
+                        )
+                    }
+                )
+            }
+            copy.days[targetIndex].activities.append(contentsOf: replicas)
         }
         return copy
     }

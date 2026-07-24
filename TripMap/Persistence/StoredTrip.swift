@@ -721,6 +721,39 @@ extension StoredTrip {
                 }
                 activity.sequence = sequence
             }
+        case .replicateDayActivities(let mutation):
+            let generatedIDs = Set(
+                mutation.targets.flatMap(\.activityIDs)
+            )
+            guard Set(days.flatMap(\.activities).map(\.id))
+                .isDisjoint(with: generatedIDs) else {
+                throw TripPlanEditingError.activityAlreadyExists
+            }
+            for target in mutation.targets {
+                let day = try storedDay(target.dayID)
+                guard let desiredDay = updated.days.first(
+                    where: { $0.id == target.dayID }
+                ) else {
+                    throw TripPlanEditingError.targetDayNotFound
+                }
+                let desiredByID = Dictionary(
+                    uniqueKeysWithValues: desiredDay.activities.map {
+                        ($0.id, $0)
+                    }
+                )
+                for activityID in target.activityIDs {
+                    guard let activity = desiredByID[activityID] else {
+                        throw TripPlanEditingError.activityNotFound
+                    }
+                    day.activities.append(
+                        StoredActivity(
+                            snapshot: activity,
+                            dayDate: desiredDay.date,
+                            timeZone: timeZone
+                        )
+                    )
+                }
+            }
         case .setVenueUserImage(let activityID, _, _):
             let stored = try storedActivity(activityID)
             let desired = try updatedActivity(activityID)

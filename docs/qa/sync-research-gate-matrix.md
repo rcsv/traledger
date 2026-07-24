@@ -131,6 +131,9 @@ Local preconditions completed on 2026-07-25:
 - Activity reorder and Undo/Redo use before/after Activity anchors and update
   only sequence fields. Local tests preserve an append and edits made between
   forward move and inverse, but C04/C06 still require replica order policy.
+- Day replication uses pre-generated Activity/Place UUIDs and an expected
+  source Activity UUID order. Local tests preserve a concurrent target append,
+  copy the latest source fields, and reject a changed source structure.
 - in-memory tests prove independent local fields survive scoped Cover, Venue
   image, and Memory writes.
 

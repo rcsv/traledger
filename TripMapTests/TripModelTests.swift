@@ -2521,6 +2521,141 @@ final class TripModelTests: XCTestCase {
     }
 
     @MainActor
+    func testScopedDayReplicationUsesStableIDsAndPreservesTargetAppend() throws {
+        let container = try TripMapStore.makeContainer(inMemoryOnly: true)
+        let context = container.mainContext
+        let sourceDay = OkinawaSample.trip.orderedDays[0]
+        let targetDay = OkinawaSample.trip.orderedDays[1]
+        let sourceActivities = sourceDay.orderedActivities
+        let generatedActivityIDs = sourceActivities.map { _ in UUID() }
+        let generatedPlaceIDs = sourceActivities.map {
+            $0.place == nil ? nil : UUID()
+        }
+        let mutation = TripMutation.replicateDayActivities(
+            ReplicateDayActivitiesMutation(
+                sourceDayID: sourceDay.id,
+                expectedSourceActivityIDs: sourceActivities.map(\.id),
+                targets: [
+                    DayReplicationTargetMutation(
+                        dayID: targetDay.id,
+                        activityIDs: generatedActivityIDs,
+                        placeIDs: generatedPlaceIDs
+                    )
+                ]
+            )
+        )
+        let stored = try StoredTrip(validatingSnapshot: OkinawaSample.trip)
+        context.insert(stored)
+        try context.save()
+
+        let concurrentActivityID = UUID()
+        var concurrent = try TripPlanEditor.appendActivity(
+            in: try XCTUnwrap(stored.snapshot),
+            to: targetDay.id,
+            activityID: concurrentActivityID,
+            title: "コピー先への同時追加",
+            startTime: nil,
+            category: nil,
+            durationMinutes: nil
+        )
+        let sourceIndex = try XCTUnwrap(
+            concurrent.days.firstIndex(where: { $0.id == sourceDay.id })
+        )
+        let firstSourceIndex = try XCTUnwrap(
+            concurrent.days[sourceIndex].activities.firstIndex(
+                where: { $0.id == sourceActivities[0].id }
+            )
+        )
+        concurrent.days[sourceIndex]
+            .activities[firstSourceIndex].note = "複製直前の最新メモ"
+        try stored.applyPlan(concurrent, in: context)
+        try context.save()
+
+        try stored.applyMutation(mutation, in: context)
+        try context.save()
+
+        let snapshot = try XCTUnwrap(stored.snapshot)
+        let replicatedDay = try XCTUnwrap(
+            snapshot.days.first(where: { $0.id == targetDay.id })
+        )
+        let ordered = replicatedDay.orderedActivities
+        XCTAssertNotNil(
+            ordered.first(where: { $0.id == concurrentActivityID })
+        )
+        for (index, generatedID) in generatedActivityIDs.enumerated() {
+            let replica = try XCTUnwrap(
+                ordered.first(where: { $0.id == generatedID })
+            )
+            XCTAssertEqual(replica.title, sourceActivities[index].title)
+            XCTAssertEqual(replica.progress, .planned)
+            XCTAssertNil(replica.progressUpdatedAt)
+            XCTAssertNil(replica.reservation)
+            XCTAssertNil(replica.reminderLeadTime)
+            XCTAssertNil(replica.memoryPhotoData)
+            XCTAssertNil(replica.reflection)
+            XCTAssertEqual(replica.place?.id, generatedPlaceIDs[index])
+        }
+        XCTAssertEqual(
+            ordered.first(where: { $0.id == generatedActivityIDs[0] })?.note,
+            "複製直前の最新メモ"
+        )
+        XCTAssertEqual(
+            ordered.map(\.sequence),
+            Array(1...ordered.count)
+        )
+    }
+
+    @MainActor
+    func testScopedDayReplicationRejectsAChangedSourceStructure() throws {
+        let container = try TripMapStore.makeContainer(inMemoryOnly: true)
+        let context = container.mainContext
+        let sourceDay = OkinawaSample.trip.orderedDays[0]
+        let targetDay = OkinawaSample.trip.orderedDays[1]
+        let sourceActivities = sourceDay.orderedActivities
+        let generatedIDs = sourceActivities.map { _ in UUID() }
+        let mutation = TripMutation.replicateDayActivities(
+            ReplicateDayActivitiesMutation(
+                sourceDayID: sourceDay.id,
+                expectedSourceActivityIDs: sourceActivities.map(\.id),
+                targets: [
+                    DayReplicationTargetMutation(
+                        dayID: targetDay.id,
+                        activityIDs: generatedIDs,
+                        placeIDs: sourceActivities.map {
+                            $0.place == nil ? nil : UUID()
+                        }
+                    )
+                ]
+            )
+        )
+        let stored = try StoredTrip(validatingSnapshot: OkinawaSample.trip)
+        context.insert(stored)
+        try context.save()
+
+        let changed = try TripPlanEditor.appendActivity(
+            in: try XCTUnwrap(stored.snapshot),
+            to: sourceDay.id,
+            activityID: UUID(),
+            title: "コピー元に追加",
+            startTime: nil,
+            category: nil,
+            durationMinutes: nil
+        )
+        try stored.applyPlan(changed, in: context)
+        try context.save()
+
+        XCTAssertThrowsError(
+            try stored.applyMutation(mutation, in: context)
+        ) { error in
+            XCTAssertEqual(error as? TripPlanEditingError, .activityNotFound)
+        }
+        let allIDs = Set(
+            stored.snapshot?.days.flatMap(\.activities).map(\.id) ?? []
+        )
+        XCTAssertTrue(allIDs.isDisjoint(with: generatedIDs))
+    }
+
+    @MainActor
     func testScopedPlanActivityMutationPreservesExecutionFieldsAndReplacesVenue() throws {
         let container = try TripMapStore.makeContainer(inMemoryOnly: true)
         let context = container.mainContext

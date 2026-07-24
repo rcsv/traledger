@@ -500,6 +500,34 @@ struct PlanView: View {
 
     private func applyReplication(from sourceDayID: Day.ID, to targetDayIDs: Set<Day.ID>) {
         do {
+            if let onApplyMutation {
+                guard let source = trip.days.first(
+                    where: { $0.id == sourceDayID }
+                ) else {
+                    throw TripPlanEditingError.sourceDayNotFound
+                }
+                let sourceActivities = source.orderedActivities
+                let targets = targetDayIDs
+                    .sorted { $0.uuidString < $1.uuidString }
+                    .map { dayID in
+                        DayReplicationTargetMutation(
+                            dayID: dayID,
+                            activityIDs: sourceActivities.map { _ in UUID() },
+                            placeIDs: sourceActivities.map {
+                                $0.place == nil ? nil : UUID()
+                            }
+                        )
+                    }
+                let mutation = TripMutation.replicateDayActivities(
+                    ReplicateDayActivitiesMutation(
+                        sourceDayID: sourceDayID,
+                        expectedSourceActivityIDs: sourceActivities.map(\.id),
+                        targets: targets
+                    )
+                )
+                errorMessage = onApplyMutation(mutation)
+                return
+            }
             apply(try TripPlanEditor.replicateDayActivities(in: trip, from: sourceDayID, to: targetDayIDs))
         } catch {
             errorMessage = error.localizedDescription
