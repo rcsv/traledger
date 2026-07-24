@@ -152,7 +152,7 @@ iPhone は Guide を主目的とするが、閲覧専用にはしない。
 
 - 起動後は Trips から対象 Trip を開き、旅行中なら Today を第一候補にする。
 - Guide の最上段に Day、次に `Map / List` 切替を置く現在の構造は維持する。
-- Today / Now / Next が実装された後は、Guide の初期表示を Today Summary に昇格する。
+- 旅行日程中は Today Day を初期選択し、Guide 上部の Today Summary で Now / Next を最初に読めるようにする。
 - 時刻変更、完了、スキップ、短いメモ、Venue の再設定はクイック編集として提供する。
 - Day の複製や複雑な一括操作は macOS / iPadOS へ委ねる。
 - 重要操作は片手で届く領域に置き、地図上の小さなピンだけを操作入口にしない。
@@ -331,7 +331,20 @@ Guide は旅行中の認知負荷を最小化する。
 - 今日残っている Activity 数
 - 未完了の重要 Checklist
 
-Now 判定は Activity の開始時刻と滞在時間から行う。時刻未設定 Activity を無理に Now と判定しない。
+Now 判定は Activity の開始時刻と明示的な滞在時間から行う。時刻未設定または滞在時間未設定の
+Activity を無理に Now と判定しない。完了 / スキップは Now / Next から除外するが、時計だけで
+Activity progress を変更しない。詳細な境界は [`ADR 0006`](adr/0006-guide-now-next-projection.md)
+を正とする。
+
+2026-07-24 実装記録:
+
+- Trip timezone の Today Day、Now、Next、残り件数を純粋な `GuideTimelineProjection` として実装した。
+- Now は `[開始, 開始 + 明示的所要時間)`、Next は未来の時刻付き未着手 Activity とし、
+  completed / skipped、時刻未設定、所要時間未設定の境界を決定論テストで固定した。
+- Guide は一分周期で再投影し、Today Summary と Activity Card の文字 + SF Symbol で役割を表示する。
+- Now / Next が隣接し有効な Travel Leg 時間を持つ場合だけ、移動時間と出発目安を表示する。
+- iOS universal Debug-QA build と macOS 全77モデルテストは成功。Xcode beta の
+  CoreSimulatorService 切断により、今回追加 UI の実画面 viewport gate は安定版 Xcode 入手後へ保留した。
 
 #### Map
 
@@ -1163,7 +1176,7 @@ platform expansion 記録として分離する。
 
 ### P6 — Guide Readiness
 
-- Now / Next
+- Now / Next — pure Domain projection、Today 初期選択、Summary / Card 表示を実装済み。実画面 gate は保留
 - completed / skipped — Domain、SwiftData 永続化、Guide Quick Edit / Card 表示を実装済み
 - reservation reference
 - local notification
@@ -1223,13 +1236,14 @@ platform expansion 記録として分離する。
 
 次の実装担当者は、この順序で作業する。
 
-1. Activity progress を用いた Now / Next projection を、時刻から状態を書き換えない純粋な派生表示として定義する。
-2. Guide の offline review と予約参照の最小 Domain を定義する。
-3. Travel Leg route detail の価値と表示範囲を、常時 polyline を避ける前提で定義する。
+1. Guide の offline review と予約参照の最小 Domain を定義する。
+2. Travel Leg route detail の価値と表示範囲を、常時 polyline を避ける前提で定義する。
+3. Now / Next の実画面 viewport gate を、安定した Simulator が利用可能になった時点で再開する。
 
 Travel Leg calculation states、iPadOS adaptive workspace、Activity progress / iPhone Quick Edit
-第二段階、Travel Leg preference editor / explicit retry は 2026-07-24 に実装・代表 viewport
-確認済み。
+第二段階、Travel Leg preference editor / explicit retry、Guide Now / Next pure projection は
+2026-07-24 に実装済み。Travel Leg までは代表 viewport 確認済みで、Now / Next の実画面 gate
+だけを環境制約により保留している。
 
 新しい外部画像 provider、評価データ、独自サーバー、AI、CloudKit は、それぞれの Research Gate
 なしに開始しない。

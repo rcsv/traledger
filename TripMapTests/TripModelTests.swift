@@ -1293,6 +1293,73 @@ final class TripModelTests: XCTestCase {
         XCTAssertEqual(TripTimeline.visibleGroups(for: .upcoming), [.ongoing, .upcoming])
     }
 
+    func testGuideTimelineDerivesTodayNowAndNextWithoutChangingProgress() throws {
+        var trip = OkinawaSample.trip
+        trip.days[0].activities[0].durationMinutes = 60
+        trip.days[0].activities[2].progress = .completed
+        trip.days[0].activities[2].progressUpdatedAt = localDate(
+            2026, 10, 9, 16, 30,
+            timeZoneIdentifier: "Asia/Tokyo"
+        )
+        let original = trip
+
+        let summary = try XCTUnwrap(
+            GuideTimelineProjection.todaySummary(
+                for: trip,
+                now: localDate(2026, 10, 9, 12, 0, timeZoneIdentifier: "Asia/Tokyo")
+            )
+        )
+
+        XCTAssertEqual(summary.day.id, trip.days[0].id)
+        XCTAssertEqual(summary.nowActivity?.id, trip.days[0].activities[0].id)
+        XCTAssertEqual(summary.nextActivity?.id, trip.days[0].activities[1].id)
+        XCTAssertEqual(summary.remainingActivityCount, 2)
+        XCTAssertEqual(summary.rolesByActivityID[trip.days[0].activities[0].id], .now)
+        XCTAssertEqual(summary.rolesByActivityID[trip.days[0].activities[1].id], .next)
+        XCTAssertEqual(trip, original)
+    }
+
+    func testGuideTimelineExcludesCompletedAndSkippedActivities() throws {
+        var trip = OkinawaSample.trip
+        let changedAt = localDate(2026, 10, 9, 12, 0, timeZoneIdentifier: "Asia/Tokyo")
+        trip.days[0].activities[0].durationMinutes = 60
+        trip.days[0].activities[0].progress = .completed
+        trip.days[0].activities[0].progressUpdatedAt = changedAt
+        trip.days[0].activities[1].progress = .skipped
+        trip.days[0].activities[1].progressUpdatedAt = changedAt
+
+        let summary = try XCTUnwrap(
+            GuideTimelineProjection.todaySummary(for: trip, now: changedAt)
+        )
+
+        XCTAssertNil(summary.nowActivity)
+        XCTAssertEqual(summary.nextActivity?.id, trip.days[0].activities[2].id)
+        XCTAssertEqual(summary.remainingActivityCount, 1)
+    }
+
+    func testGuideTimelineDoesNotInferNowWithoutExplicitDuration() throws {
+        let trip = OkinawaSample.trip
+        let summary = try XCTUnwrap(
+            GuideTimelineProjection.todaySummary(
+                for: trip,
+                now: localDate(2026, 10, 9, 12, 0, timeZoneIdentifier: "Asia/Tokyo")
+            )
+        )
+
+        XCTAssertNil(summary.nowActivity)
+        XCTAssertEqual(summary.nextActivity?.id, trip.days[0].activities[1].id)
+        XCTAssertEqual(summary.remainingActivityCount, 3)
+    }
+
+    func testGuideTimelineReturnsNoTodayOutsideTripDates() {
+        XCTAssertNil(
+            GuideTimelineProjection.todaySummary(
+                for: OkinawaSample.trip,
+                now: localDate(2026, 10, 8, 12, 0, timeZoneIdentifier: "Asia/Tokyo")
+            )
+        )
+    }
+
     @MainActor
     func testParticipantRoundTripUsesLocalStore() throws {
         let container = try TripMapStore.makeContainer(inMemoryOnly: true)
@@ -1534,6 +1601,27 @@ final class TripModelTests: XCTestCase {
             kind: .exactVenue,
             fetchedAt: Date(timeIntervalSince1970: 1_000)
         )
+    }
+
+    private func localDate(
+        _ year: Int,
+        _ month: Int,
+        _ day: Int,
+        _ hour: Int,
+        _ minute: Int,
+        timeZoneIdentifier: String
+    ) -> Date {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: timeZoneIdentifier)!
+        return calendar.date(
+            from: DateComponents(
+                year: year,
+                month: month,
+                day: day,
+                hour: hour,
+                minute: minute
+            )
+        )!
     }
 
     #if TRIPMAP_LIVE_VENUE_IMAGE_QA

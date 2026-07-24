@@ -5,6 +5,7 @@ struct ActivityList: View {
     let selectedActivityID: Activity.ID?
     let doctorIssues: [TripDoctorIssue]
     let travelLegs: [TravelLeg]
+    let activityTemporalRoles: [Activity.ID: GuideActivityTemporalRole]
     let onSelectActivity: (Activity.ID) -> Void
     let onAddActivity: (() -> Void)?
     let onEditActivity: ((Activity.ID) -> Void)?
@@ -17,6 +18,7 @@ struct ActivityList: View {
         selectedActivityID: Activity.ID?,
         doctorIssues: [TripDoctorIssue] = [],
         travelLegs: [TravelLeg] = [],
+        activityTemporalRoles: [Activity.ID: GuideActivityTemporalRole] = [:],
         onSelectActivity: @escaping (Activity.ID) -> Void,
         onAddActivity: (() -> Void)? = nil,
         onEditActivity: ((Activity.ID) -> Void)? = nil,
@@ -28,6 +30,7 @@ struct ActivityList: View {
         self.selectedActivityID = selectedActivityID
         self.doctorIssues = doctorIssues
         self.travelLegs = travelLegs
+        self.activityTemporalRoles = activityTemporalRoles
         self.onSelectActivity = onSelectActivity
         self.onAddActivity = onAddActivity
         self.onEditActivity = onEditActivity
@@ -58,6 +61,7 @@ struct ActivityList: View {
                             ActivityCard(
                                 activity: activity,
                                 isSelected: selectedActivityID == activity.id,
+                                temporalRole: activityTemporalRoles[activity.id],
                                 doctorIssues: doctorIssues.filter { $0.target.activityID == activity.id },
                                 onSelect: { select(activity.id) },
                                 onEdit: onEditActivity.map { edit in
@@ -233,6 +237,7 @@ private struct TravelLegRow: View {
 private struct ActivityCard: View {
     let activity: Activity
     let isSelected: Bool
+    let temporalRole: GuideActivityTemporalRole?
     let doctorIssues: [TripDoctorIssue]
     let onSelect: () -> Void
     let onEdit: (() -> Void)?
@@ -265,6 +270,13 @@ private struct ActivityCard: View {
                         .font(.headline)
                         .foregroundStyle(.primary)
                         .multilineTextAlignment(.leading)
+
+                    if let temporalRole {
+                        Label(temporalRole.displayName, systemImage: temporalRole.systemImage)
+                            .font(.caption.bold())
+                            .foregroundStyle(.tint)
+                            .accessibilityIdentifier("activity-temporal-\(temporalRole.rawValue)")
+                    }
 
                     if activity.progress != .planned {
                         Label(activity.progress.displayName, systemImage: activity.progress.systemImage)

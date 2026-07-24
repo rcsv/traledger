@@ -11,6 +11,7 @@ struct GuideView: View {
 
     let trip: Trip
     let onApplyPlan: (Trip) -> String?
+    private let fixedReferenceDate: Date?
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @StateObject private var travelLoad = TripTravelLoadModel()
     @State private var interaction: TripInteractionState
@@ -30,9 +31,16 @@ struct GuideView: View {
     ) {
         self.trip = trip
         self.onApplyPlan = onApplyPlan
+        let fixedReferenceDate = Self.qaReferenceDate(for: trip)
+        self.fixedReferenceDate = fixedReferenceDate
         var initialInteraction = TripInteractionState(trip: trip)
         if let initialActivityID {
             initialInteraction.selectActivity(initialActivityID, source: .map, in: trip)
+        } else if let today = GuideTimelineProjection.todaySummary(
+            for: trip,
+            now: fixedReferenceDate ?? Date()
+        ) {
+            initialInteraction.selectDay(today.day.id, in: trip)
         }
         _interaction = State(initialValue: initialInteraction)
     }
@@ -49,14 +57,8 @@ struct GuideView: View {
     }
 
     var body: some View {
-        Group {
-            if trip.days.isEmpty {
-                emptyState
-            } else if usesRegularWorkspace {
-                regularWorkspace
-            } else {
-                compactWorkspace
-            }
+        TimelineView(.periodic(from: .now, by: 60)) { context in
+            workspace(at: fixedReferenceDate ?? context.date)
         }
         .navigationTitle(trip.title)
         .navigationBarTitleDisplayMode(.inline)
@@ -158,6 +160,17 @@ struct GuideView: View {
         horizontalSizeClass == .regular
     }
 
+    @ViewBuilder
+    private func workspace(at referenceDate: Date) -> some View {
+        if trip.days.isEmpty {
+            emptyState
+        } else if usesRegularWorkspace {
+            regularWorkspace(at: referenceDate)
+        } else {
+            compactWorkspace(at: referenceDate)
+        }
+    }
+
     private var emptyState: some View {
         ContentUnavailableView(
             "旅行日程がありません",
@@ -166,10 +179,12 @@ struct GuideView: View {
         )
     }
 
-    private var compactWorkspace: some View {
+    private func compactWorkspace(at referenceDate: Date) -> some View {
         VStack(spacing: 0) {
             DayPicker(days: trip.orderedDays, selectedDayID: selectedDayBinding)
                 .padding(.vertical, 8)
+
+            todaySummary(at: referenceDate)
 
             Picker("表示", selection: $mode) {
                 ForEach(Mode.allCases) { mode in
@@ -187,7 +202,7 @@ struct GuideView: View {
                         .allowsHitTesting(mode == .map)
                         .accessibilityHidden(mode != .map)
 
-                    activityList(for: selectedDay)
+                    activityList(for: selectedDay, at: referenceDate)
                         .opacity(mode == .list ? 1 : 0)
                         .allowsHitTesting(mode == .list)
                         .accessibilityHidden(mode != .list)
@@ -196,7 +211,7 @@ struct GuideView: View {
         }
     }
 
-    private var regularWorkspace: some View {
+    private func regularWorkspace(at referenceDate: Date) -> some View {
         NavigationSplitView {
             List(selection: selectedDayBinding) {
                 ForEach(trip.orderedDays) { day in
@@ -217,7 +232,10 @@ struct GuideView: View {
             .accessibilityIdentifier("guide-day-sidebar")
         } content: {
             if let selectedDay {
-                activityList(for: selectedDay)
+                VStack(spacing: 0) {
+                    todaySummary(at: referenceDate)
+                    activityList(for: selectedDay, at: referenceDate)
+                }
                     .navigationTitle("Day \(selectedDay.sequence)")
                     .navigationSplitViewColumnWidth(min: 300, ideal: 380, max: 480)
                     .accessibilityIdentifier("guide-activity-column")
@@ -253,15 +271,32 @@ struct GuideView: View {
         }
     }
 
-    private func activityList(for day: Day) -> some View {
-        ActivityList(
+    private func activityList(for day: Day, at referenceDate: Date) -> some View {
+        let summary = GuideTimelineProjection.todaySummary(for: trip, now: referenceDate)
+        return ActivityList(
             day: day,
             selectedActivityID: interaction.selectedActivityID,
             travelLegs: travelLoad.legs,
+            activityTemporalRoles: summary?.day.id == day.id ? summary?.rolesByActivityID ?? [:] : [:],
             onSelectActivity: selectActivityFromList,
             onEditActivity: presentQuickEdit,
             onEditTravelLeg: { travelLegEditTarget = $0 }
         )
+    }
+
+    @ViewBuilder
+    private func todaySummary(at referenceDate: Date) -> some View {
+        if let summary = GuideTimelineProjection.todaySummary(for: trip, now: referenceDate),
+           summary.day.id == selectedDay?.id {
+            TodaySummaryCard(
+                summary: summary,
+                travelLegToNext: travelLegToNext(in: summary),
+                timeZoneIdentifier: trip.timeZoneIdentifier,
+                onSelectActivity: selectSummaryActivity
+            )
+            .padding(.horizontal)
+            .padding(.bottom, 8)
+        }
     }
 
     private func map(for day: Day) -> some View {
@@ -279,6 +314,11 @@ struct GuideView: View {
 
     private func selectActivityFromMap(_ activityID: Activity.ID) {
         interaction.selectActivity(activityID, source: .map, in: trip)
+    }
+
+    private func selectSummaryActivity(_ activityID: Activity.ID) {
+        mode = .list
+        interaction.selectActivity(activityID, source: .list, in: trip)
     }
 
     private func presentQuickEdit(_ activityID: Activity.ID) {
@@ -308,6 +348,30 @@ struct GuideView: View {
             return nil
         }
         return (leg, fromActivity, toActivity)
+    }
+
+    private func travelLegToNext(in summary: GuideTodaySummary) -> TravelLeg? {
+        guard let nowActivity = summary.nowActivity,
+              let nextActivity = summary.nextActivity else {
+            return nil
+        }
+        let legID = TravelLegID(
+            fromActivityID: nowActivity.id,
+            toActivityID: nextActivity.id
+        )
+        return travelLoad.legs.first { $0.id == legID }
+    }
+
+    private static func qaReferenceDate(for trip: Trip) -> Date? {
+        #if TRIPMAP_QA
+        guard ProcessInfo.processInfo.arguments.contains("-tripmap-now-next-qa"),
+              let startTime = trip.orderedDays.first?.orderedActivities.first?.startTime else {
+            return nil
+        }
+        return startTime.addingTimeInterval(15 * 60)
+        #else
+        return nil
+        #endif
     }
 
     private func updateActivity(
@@ -400,6 +464,142 @@ struct GuideView: View {
             errorMessage = error.localizedDescription
             return false
         }
+    }
+}
+
+private struct TodaySummaryCard: View {
+    let summary: GuideTodaySummary
+    let travelLegToNext: TravelLeg?
+    let timeZoneIdentifier: String
+    let onSelectActivity: (Activity.ID) -> Void
+
+    private var timeZone: TimeZone {
+        TimeZone(identifier: timeZoneIdentifier) ?? TimeZone(secondsFromGMT: 0)!
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Today • Day \(summary.day.sequence)")
+                        .font(.headline)
+                    Text(summary.day.date, format: .dateTime.month().day().weekday())
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                Text("残り \(summary.remainingActivityCount)件")
+                    .font(.caption.bold())
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 5)
+                    .background(.tint.opacity(0.12), in: Capsule())
+            }
+
+            activityRow(
+                role: .now,
+                activity: summary.nowActivity,
+                emptyText: "現在進行中の予定はありません"
+            )
+
+            Divider()
+
+            activityRow(
+                role: .next,
+                activity: summary.nextActivity,
+                emptyText: "次の時刻付き予定はありません"
+            )
+
+            if let travelLegToNext,
+               let duration = travelLegToNext.effectiveDuration,
+               let nextStart = summary.nextActivity?.startTime {
+                HStack(spacing: 8) {
+                    Image(systemName: travelLegToNext.transportType.systemImage)
+                        .accessibilityHidden(true)
+                    Text("移動 \(formattedDuration(duration.minutes))")
+                    Spacer()
+                    Text("出発目安")
+                        .foregroundStyle(.secondary)
+                    Text(
+                        nextStart.addingTimeInterval(TimeInterval(-duration.minutes * 60)),
+                        format: .dateTime.hour().minute()
+                    )
+                    .monospacedDigit()
+                }
+                .font(.caption)
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("today-summary-travel")
+            }
+        }
+        .padding(14)
+        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(.separator.opacity(0.5), lineWidth: 0.5)
+        }
+        .environment(\.timeZone, timeZone)
+        .accessibilityIdentifier("today-summary")
+    }
+
+    @ViewBuilder
+    private func activityRow(
+        role: GuideActivityTemporalRole,
+        activity: Activity?,
+        emptyText: String
+    ) -> some View {
+        if let activity {
+            Button {
+                onSelectActivity(activity.id)
+            } label: {
+                HStack(spacing: 10) {
+                    Label(role.displayName, systemImage: role.systemImage)
+                        .font(.caption.bold())
+                        .foregroundStyle(.tint)
+                        .frame(width: 58, alignment: .leading)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(activity.title)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.primary)
+                            .multilineTextAlignment(.leading)
+                        if let startTime = activity.startTime {
+                            Text(startTime, format: .dateTime.hour().minute())
+                                .font(.caption.monospacedDigit())
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+
+                    Spacer(minLength: 4)
+
+                    Image(systemName: "chevron.right")
+                        .font(.caption.bold())
+                        .foregroundStyle(.tertiary)
+                        .accessibilityHidden(true)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("today-summary-\(role.rawValue)")
+        } else {
+            HStack(spacing: 10) {
+                Label(role.displayName, systemImage: role.systemImage)
+                    .font(.caption.bold())
+                    .foregroundStyle(.secondary)
+                    .frame(width: 58, alignment: .leading)
+                Text(emptyText)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private func formattedDuration(_ minutes: Int) -> String {
+        let hours = minutes / 60
+        let remainder = minutes % 60
+        if hours == 0 { return "\(minutes)分" }
+        if remainder == 0 { return "\(hours)時間" }
+        return "\(hours)時間\(remainder)分"
     }
 }
 
