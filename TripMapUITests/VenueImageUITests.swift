@@ -175,6 +175,32 @@ final class VenueImageUITests: XCTestCase {
     }
 
     @MainActor
+    func testTravelLegRowsExplainLoadedAndUnavailableStates() {
+        let app = launchUserImageFixture(
+            additionalArguments: ["-tripmap-travel-leg-qa"]
+        )
+        let loadedLeg = app.descendants(matching: .any)
+            .matching(identifier: "travel-leg-1-2")
+            .firstMatch
+        let unavailableLeg = app.descendants(matching: .any)
+            .matching(identifier: "travel-leg-2-3")
+            .firstMatch
+
+        XCTAssertTrue(loadedLeg.waitForExistence(timeout: 15))
+        XCTAssertTrue(loadedLeg.label.contains("車 25分"))
+        XCTAssertTrue(unavailableLeg.waitForExistence(timeout: 10))
+        XCTAssertTrue(unavailableLeg.label.contains("経路を利用できません"))
+
+        let screenshot = XCTAttachment(
+            screenshot: XCUIScreen.main.screenshot(),
+            quality: .original
+        )
+        screenshot.name = "Travel Leg rows"
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
+    }
+
+    @MainActor
     func testCategoryDurationSuggestionAppliesWhenUnset() {
         let app = launchUserImageFixture()
         let activityCard = app.buttons["activity-3"].firstMatch

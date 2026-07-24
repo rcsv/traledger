@@ -393,6 +393,7 @@ struct PlanView: View {
                 day: day,
                 selectedActivityID: interaction.selectedActivityID,
                 doctorIssues: doctorReport.issues(forDay: day.id),
+                travelLegs: travelLoad.legs,
                 onSelectActivity: selectActivityFromList,
                 onAddActivity: { isActivityCreationPresented = true },
                 onEditActivity: { activityID in

@@ -22,6 +22,23 @@ final class TripTravelLoadModel: ObservableObject {
         let generation = refreshGeneration
         refreshTask?.cancel()
 
+        #if TRIPMAP_QA
+        if ProcessInfo.processInfo.arguments.contains("-tripmap-travel-leg-qa") {
+            let now = Date()
+            let projectedLegs = TravelLegProjection.activeLegs(for: trip, now: now)
+            calculations = Dictionary(
+                uniqueKeysWithValues: projectedLegs.enumerated().map { index, leg in
+                    let state: TravelLegCalculationState = index == 0
+                        ? .loaded(TravelLegEstimate(durationMinutes: 25, calculatedAt: now))
+                        : .unavailable
+                    return (leg.routingFingerprint, state)
+                }
+            )
+            publishLegs(for: trip)
+            return
+        }
+        #endif
+
         let projectedLegs = TravelLegProjection.activeLegs(
             for: trip,
             calculations: calculations

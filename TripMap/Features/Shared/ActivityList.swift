@@ -4,6 +4,7 @@ struct ActivityList: View {
     let day: Day
     let selectedActivityID: Activity.ID?
     let doctorIssues: [TripDoctorIssue]
+    let travelLegs: [TravelLeg]
     let onSelectActivity: (Activity.ID) -> Void
     let onAddActivity: (() -> Void)?
     let onEditActivity: ((Activity.ID) -> Void)?
@@ -14,6 +15,7 @@ struct ActivityList: View {
         day: Day,
         selectedActivityID: Activity.ID?,
         doctorIssues: [TripDoctorIssue] = [],
+        travelLegs: [TravelLeg] = [],
         onSelectActivity: @escaping (Activity.ID) -> Void,
         onAddActivity: (() -> Void)? = nil,
         onEditActivity: ((Activity.ID) -> Void)? = nil,
@@ -23,6 +25,7 @@ struct ActivityList: View {
         self.day = day
         self.selectedActivityID = selectedActivityID
         self.doctorIssues = doctorIssues
+        self.travelLegs = travelLegs
         self.onSelectActivity = onSelectActivity
         self.onAddActivity = onAddActivity
         self.onEditActivity = onEditActivity
@@ -77,7 +80,21 @@ struct ActivityList: View {
                                         .draggable(activity.id.uuidString)
                                         .accessibilityLabel("予定を並べ替え")
                                         .accessibilityIdentifier("activity-drag-\(activity.sequence)")
-                                        .padding(.trailing, 8)
+                                    .padding(.trailing, 8)
+                                }
+                            }
+
+                            if day.orderedActivities.indices.contains(index + 1) {
+                                let nextActivity = day.orderedActivities[index + 1]
+                                if let leg = travelLeg(
+                                    from: activity.id,
+                                    to: nextActivity.id
+                                ) {
+                                    TravelLegRow(
+                                        leg: leg,
+                                        fromActivity: activity,
+                                        toActivity: nextActivity
+                                    )
                                 }
                             }
                         }
@@ -111,6 +128,100 @@ struct ActivityList: View {
             select(activity.id)
             onMoveActivity(activity.id, targetID)
         }
+    }
+
+    private func travelLeg(
+        from fromActivityID: Activity.ID,
+        to toActivityID: Activity.ID
+    ) -> TravelLeg? {
+        let id = TravelLegID(
+            fromActivityID: fromActivityID,
+            toActivityID: toActivityID
+        )
+        return travelLegs.first { $0.dayID == day.id && $0.id == id }
+    }
+}
+
+private struct TravelLegRow: View {
+    let leg: TravelLeg
+    let fromActivity: Activity
+    let toActivity: Activity
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Image(systemName: transportSystemImage)
+                .frame(width: 22)
+                .accessibilityHidden(true)
+
+            Text(statusText)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Spacer(minLength: 4)
+
+            if case .loading = leg.calculationState {
+                ProgressView()
+                    .controlSize(.small)
+                    .accessibilityHidden(true)
+            }
+        }
+        .font(.caption)
+        .foregroundStyle(.secondary)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 2)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(
+            "\(fromActivity.title)から\(toActivity.title)へ。\(statusText)"
+        )
+        .accessibilityIdentifier(
+            "travel-leg-\(fromActivity.sequence)-\(toActivity.sequence)"
+        )
+    }
+
+    private var statusText: String {
+        if let duration = leg.effectiveDuration {
+            let suffix = switch duration.source {
+            case .manual: "・手動設定"
+            case .mapKit: ""
+            case .staleMapKit: "・古い推定"
+            }
+            return "\(transportLabel) \(formattedDuration(duration.minutes))\(suffix)"
+        }
+
+        return switch leg.calculationState {
+        case .idle: "\(transportLabel)・未計算"
+        case .loading: "\(transportLabel)・計算中"
+        case .loaded: "\(transportLabel)・所要時間不明"
+        case .unavailable: "\(transportLabel)・経路を利用できません"
+        case .failed: "\(transportLabel)・取得に失敗しました"
+        case .stale: "\(transportLabel)・古い推定"
+        }
+    }
+
+    private var transportLabel: String {
+        switch leg.transportType {
+        case .automobile: "車"
+        case .walking: "徒歩"
+        case .transit: "公共交通"
+        case .other: "その他の移動"
+        }
+    }
+
+    private var transportSystemImage: String {
+        switch leg.transportType {
+        case .automobile: "car.fill"
+        case .walking: "figure.walk"
+        case .transit: "tram.fill"
+        case .other: "arrow.right"
+        }
+    }
+
+    private func formattedDuration(_ minutes: Int) -> String {
+        let hours = minutes / 60
+        let remainder = minutes % 60
+        if hours == 0 { return "\(minutes)分" }
+        if remainder == 0 { return "\(hours)時間" }
+        return "\(hours)時間\(remainder)分"
     }
 }
 

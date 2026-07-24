@@ -541,6 +541,13 @@ freshness、手動時間の優先順位を Domain で表現し、既存 MapKit l
 - Doctor の移動負荷は Travel Leg の合計から導く。
 - Map 上では必要な場合だけ route polyline を表示し、全 Day の経路を常時重ねて読みにくくしない。
 
+2026-07-24 時点で Plan と Guide の Activity Card 間に compact leg row を実装した。車、徒歩、
+公共交通、その他の symbol と名称、手動値、MapKit 推定、計算中、未計算、利用不可、失敗、古い
+推定を、色だけに依存せず文字で区別する。VoiceOver では前後 Activity 名を含む一要素として読む。
+macOS 実画面 UI test で `車 25分` と `経路を利用できません` を確認し、iPhone 17 Pro の標準
+Dynamic Type と Accessibility XXL でも実画面確認済みである。leg row は現時点では表示専用で、
+transport / manual duration editor と route detail は未実装である。
+
 ### 10.3 MapKit 境界
 
 - 保存済み Place Identifier から `MKMapItem` を再解決する。
@@ -1098,9 +1105,9 @@ P1 以降の platform expansion Gate として扱う。
 
 - Domain / MapKit boundary ADR — accepted in ADR 0004
 - stateful domain projection / deterministic tests — implemented
-- leg UI
+- leg UI / calculation-state presentation — implemented, macOS UI-tested and iPhone viewport-verified
 - transport type
-- calculation states
+- retry / explicit refresh behavior
 - route detail
 - Doctor integration
 

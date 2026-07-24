@@ -11,6 +11,7 @@ struct GuideView: View {
 
     let trip: Trip
     let onApplyPlan: (Trip) -> String?
+    @StateObject private var travelLoad = TripTravelLoadModel()
     @State private var interaction: TripInteractionState
     @State private var mode: Mode = .map
     @State private var quickEditTarget: GuideQuickEditTarget?
@@ -80,6 +81,7 @@ struct GuideView: View {
                         ActivityList(
                             day: selectedDay,
                             selectedActivityID: interaction.selectedActivityID,
+                            travelLegs: travelLoad.legs,
                             onSelectActivity: selectActivityFromList,
                             onEditActivity: presentQuickEdit
                         )
@@ -135,10 +137,17 @@ struct GuideView: View {
         .onChange(of: trip) { _, trip in
             interaction.reconcile(with: trip)
         }
+        .task(id: trip) {
+            travelLoad.refresh(for: trip)
+        }
         #if TRIPMAP_QA
         .task {
+            let arguments = ProcessInfo.processInfo.arguments
+            if arguments.contains("-tripmap-open-guide-list") {
+                mode = .list
+            }
             guard !didOpenQuickEditFromLaunchArgument,
-                  ProcessInfo.processInfo.arguments.contains("-tripmap-open-guide-quick-edit"),
+                  arguments.contains("-tripmap-open-guide-quick-edit"),
                   let selectedActivityID = interaction.selectedActivityID else {
                 return
             }
