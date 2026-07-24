@@ -31,8 +31,8 @@ struct ActivityMap: View {
     let selectedActivityID: Activity.ID?
     let cameraRequest: MapCameraRequest?
     let onSelectMapActivity: (Activity.ID) -> Void
-    let onUpdatePlaceImage: (Activity.ID, Data?) -> Void
-    let onUpdateExternalPlaceImage: (Activity.ID, ExternalPlaceImage?) -> Void
+    let onUpdatePlaceImage: (Activity.ID, PlaceSnapshot.ID, Data?) -> Void
+    let onUpdateExternalPlaceImage: (Activity.ID, PlaceSnapshot.ID, ExternalPlaceImage?) -> Void
     let allowsPlaceImageEditing: Bool
     let showsPlaceDetailOverlay: Bool
     let pinLabels: [Activity.ID: ActivityMapPinLabel]
@@ -44,8 +44,8 @@ struct ActivityMap: View {
         selectedActivityID: Activity.ID?,
         cameraRequest: MapCameraRequest?,
         onSelectMapActivity: @escaping (Activity.ID) -> Void,
-        onUpdatePlaceImage: @escaping (Activity.ID, Data?) -> Void = { _, _ in },
-        onUpdateExternalPlaceImage: @escaping (Activity.ID, ExternalPlaceImage?) -> Void = { _, _ in },
+        onUpdatePlaceImage: @escaping (Activity.ID, PlaceSnapshot.ID, Data?) -> Void = { _, _, _ in },
+        onUpdateExternalPlaceImage: @escaping (Activity.ID, PlaceSnapshot.ID, ExternalPlaceImage?) -> Void = { _, _, _ in },
         allowsPlaceImageEditing: Bool = false,
         showsPlaceDetailOverlay: Bool = true,
         pinLabels: [Activity.ID: ActivityMapPinLabel] = [:],
@@ -137,8 +137,12 @@ struct ActivityMap: View {
                         PlaceDetailOverlay(
                             activity: selectedActivity,
                             place: place,
-                            onUpdateImage: { imageData in onUpdatePlaceImage(selectedActivity.id, imageData) },
-                            onUpdateExternalImage: { image in onUpdateExternalPlaceImage(selectedActivity.id, image) },
+                            onUpdateImage: { imageData in
+                                onUpdatePlaceImage(selectedActivity.id, place.id, imageData)
+                            },
+                            onUpdateExternalImage: { image in
+                                onUpdateExternalPlaceImage(selectedActivity.id, place.id, image)
+                            },
                             allowsImageEditing: allowsPlaceImageEditing,
                             imageBudgetSummary: imageBudgetSummary
                         )

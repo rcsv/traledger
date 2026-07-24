@@ -110,6 +110,8 @@ Local preconditions completed on 2026-07-25:
 
 - C03 has a scoped Memory intent that owns completion, photo, and reflection.
 - C07 user image and external image metadata have separate scoped ownership.
+- C08 image mutations carry the initiating Place UUID and reject results after
+  that Venue has been replaced or cleared.
 - C09 has a scoped progress intent, although reminder editing remains on the
   full-snapshot path.
 - in-memory tests prove independent local fields survive scoped Cover, Venue

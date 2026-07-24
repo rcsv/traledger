@@ -530,14 +530,14 @@ extension StoredTrip {
         switch mutation {
         case .setCoverImage:
             coverImageData = updated.coverImageData
-        case .setVenueUserImage(let activityID, _):
+        case .setVenueUserImage(let activityID, _, _):
             let stored = try storedActivity(activityID)
             let desired = try updatedActivity(activityID)
             guard let storedPlace = stored.place, let desiredPlace = desired.place else {
                 throw TripPlanEditingError.placeNotFound
             }
             storedPlace.imageData = desiredPlace.imageData
-        case .setExternalVenueImage(let activityID, _):
+        case .setExternalVenueImage(let activityID, _, _):
             let stored = try storedActivity(activityID)
             let desired = try updatedActivity(activityID)
             guard let storedPlace = stored.place, let desiredPlace = desired.place else {

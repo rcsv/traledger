@@ -2088,7 +2088,17 @@ final class TripModelTests: XCTestCase {
         try context.save()
 
         try stored.applyMutation(
-            .setVenueUserImage(activityID: activityID, imageData: Data([0x01, 0x02]))
+            .setVenueUserImage(
+                activityID: activityID,
+                placeID: try XCTUnwrap(
+                    stored.snapshot?.days
+                        .flatMap(\.activities)
+                        .first(where: { $0.id == activityID })?
+                        .place?
+                        .id
+                ),
+                imageData: Data([0x01, 0x02])
+            )
         )
         try context.save()
 
@@ -2128,7 +2138,17 @@ final class TripModelTests: XCTestCase {
         try context.save()
 
         try stored.applyMutation(
-            .setExternalVenueImage(activityID: activityID, image: externalImage)
+            .setExternalVenueImage(
+                activityID: activityID,
+                placeID: try XCTUnwrap(
+                    stored.snapshot?.days
+                        .flatMap(\.activities)
+                        .first(where: { $0.id == activityID })?
+                        .place?
+                        .id
+                ),
+                image: externalImage
+            )
         )
         try context.save()
 
@@ -2141,6 +2161,63 @@ final class TripModelTests: XCTestCase {
         XCTAssertEqual(place.name, "ユーザーが選び直した場所")
         XCTAssertEqual(place.imageData, userImageData)
         XCTAssertEqual(place.externalImage, externalImage)
+    }
+
+    @MainActor
+    func testScopedVenueImageMutationRejectsAResultForAReplacedPlace() throws {
+        let container = try TripMapStore.makeContainer(inMemoryOnly: true)
+        let context = container.mainContext
+        let activityID = OkinawaSample.trip.days[0].activities[0].id
+        let stored = try StoredTrip(validatingSnapshot: OkinawaSample.trip)
+        context.insert(stored)
+        try context.save()
+
+        let originalPlaceID = try XCTUnwrap(
+            stored.snapshot?.days
+                .flatMap(\.activities)
+                .first(where: { $0.id == activityID })?
+                .place?
+                .id
+        )
+        let replacement = PlaceSnapshot(
+            id: UUID(),
+            name: "置換後の場所",
+            address: "沖縄県",
+            latitude: 26.2124,
+            longitude: 127.6809,
+            mapKitIdentifier: "replacement"
+        )
+        var concurrent = try XCTUnwrap(stored.snapshot)
+        let dayIndex = try XCTUnwrap(
+            concurrent.days.firstIndex(where: { $0.activities.contains(where: { $0.id == activityID }) })
+        )
+        let activityIndex = try XCTUnwrap(
+            concurrent.days[dayIndex].activities.firstIndex(where: { $0.id == activityID })
+        )
+        concurrent.days[dayIndex].activities[activityIndex].place = replacement
+        try stored.applyPlan(concurrent, in: context)
+        try context.save()
+
+        XCTAssertThrowsError(
+            try stored.applyMutation(
+                .setExternalVenueImage(
+                    activityID: activityID,
+                    placeID: originalPlaceID,
+                    image: externalPlaceImage(providerImageID: "Stale.jpg")
+                )
+            )
+        ) { error in
+            XCTAssertEqual(error as? TripPlanEditingError, .placeChanged)
+        }
+
+        let place = try XCTUnwrap(
+            stored.snapshot?.days
+                .flatMap(\.activities)
+                .first(where: { $0.id == activityID })?
+                .place
+        )
+        XCTAssertEqual(place.id, replacement.id)
+        XCTAssertNil(place.externalImage)
     }
 
     @MainActor

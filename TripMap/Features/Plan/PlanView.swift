@@ -13,7 +13,7 @@ private enum PlanDestination: Hashable {
 
 private enum PendingTripImageUpdate {
     case cover(Data)
-    case venue(activityID: Activity.ID, data: Data)
+    case venue(activityID: Activity.ID, placeID: PlaceSnapshot.ID, data: Data)
 }
 
 struct PlanView: View {
@@ -513,9 +513,17 @@ struct PlanView: View {
         }
     }
 
-    private func updatePlaceImage(activityID: Activity.ID, imageData: Data?) {
+    private func updatePlaceImage(
+        activityID: Activity.ID,
+        placeID: PlaceSnapshot.ID,
+        imageData: Data?
+    ) {
         guard let imageData else {
-            commitPlaceImage(activityID: activityID, imageData: nil)
+            commitPlaceImage(
+                activityID: activityID,
+                placeID: placeID,
+                imageData: nil
+            )
             return
         }
         let existingData = trip.days
@@ -524,7 +532,7 @@ struct PlanView: View {
             .place?
             .imageData
         requestImageUpdate(
-            .venue(activityID: activityID, data: imageData),
+            .venue(activityID: activityID, placeID: placeID, data: imageData),
             replacing: existingData
         )
     }
@@ -535,7 +543,7 @@ struct PlanView: View {
     ) {
         let candidateData: Data
         switch update {
-        case .cover(let data), .venue(_, let data):
+        case .cover(let data), .venue(_, _, let data):
             candidateData = data
         }
         let proposal = trip.imageStorageInventory.proposal(
@@ -558,19 +566,37 @@ struct PlanView: View {
             var updated = trip
             updated.coverImageData = data
             apply(updated)
-        case .venue(let activityID, let data):
-            commitPlaceImage(activityID: activityID, imageData: data)
+        case .venue(let activityID, let placeID, let data):
+            commitPlaceImage(
+                activityID: activityID,
+                placeID: placeID,
+                imageData: data
+            )
         }
     }
 
-    private func commitPlaceImage(activityID: Activity.ID, imageData: Data?) {
-        if applyMutationIfAvailable(.setVenueUserImage(activityID: activityID, imageData: imageData)) {
+    private func commitPlaceImage(
+        activityID: Activity.ID,
+        placeID: PlaceSnapshot.ID,
+        imageData: Data?
+    ) {
+        if applyMutationIfAvailable(
+            .setVenueUserImage(
+                activityID: activityID,
+                placeID: placeID,
+                imageData: imageData
+            )
+        ) {
             return
         }
         var updated = trip
         for dayIndex in updated.days.indices {
             guard let activityIndex = updated.days[dayIndex].activities.firstIndex(where: { $0.id == activityID }) else {
                 continue
+            }
+            guard updated.days[dayIndex].activities[activityIndex].place?.id == placeID else {
+                errorMessage = TripPlanEditingError.placeChanged.localizedDescription
+                return
             }
             updated.days[dayIndex].activities[activityIndex].place?.imageData = imageData
             apply(updated)
@@ -587,7 +613,7 @@ struct PlanView: View {
                 replacing: trip.coverImageData,
                 with: data
             )
-        case .venue(let activityID, let data):
+        case .venue(let activityID, _, let data):
             let existingData = trip.days
                 .flatMap(\.activities)
                 .first(where: { $0.id == activityID })?
@@ -615,14 +641,28 @@ struct PlanView: View {
         ByteCountFormatter.string(fromByteCount: Int64(byteCount), countStyle: .file)
     }
 
-    private func updateExternalPlaceImage(activityID: Activity.ID, image: ExternalPlaceImage?) {
-        if applyMutationIfAvailable(.setExternalVenueImage(activityID: activityID, image: image)) {
+    private func updateExternalPlaceImage(
+        activityID: Activity.ID,
+        placeID: PlaceSnapshot.ID,
+        image: ExternalPlaceImage?
+    ) {
+        if applyMutationIfAvailable(
+            .setExternalVenueImage(
+                activityID: activityID,
+                placeID: placeID,
+                image: image
+            )
+        ) {
             return
         }
         var updated = trip
         for dayIndex in updated.days.indices {
             guard let activityIndex = updated.days[dayIndex].activities.firstIndex(where: { $0.id == activityID }) else {
                 continue
+            }
+            guard updated.days[dayIndex].activities[activityIndex].place?.id == placeID else {
+                errorMessage = TripPlanEditingError.placeChanged.localizedDescription
+                return
             }
             updated.days[dayIndex].activities[activityIndex].place?.externalImage = image
             apply(updated)

@@ -57,8 +57,11 @@ been cleared.
 
 - Cover, Venue image, external image, progress, and Memory saves no longer
   replay stale unrelated values.
-- Missing Activity or Venue targets fail explicitly instead of silently
-  modifying a detached snapshot.
+- Venue image intents carry the Place UUID observed by their initiating UI.
+  A replaced or cleared Venue rejects the stale result, so an old Look
+  Around/Wikimedia task cannot decorate the new Venue.
+- Missing Activity or Venue targets and changed Place identities fail
+  explicitly instead of silently modifying a detached snapshot.
 - Memory completion and its content persist as one intent.
 - Reminder reconciliation after a Guide mutation uses the latest persisted
   snapshot.
@@ -71,6 +74,7 @@ In-memory SwiftData regression tests must prove that:
 
 - a cover update preserves a concurrent Activity edit;
 - a user Venue image changes only its owned image field;
+- an external image result for a replaced Place UUID is rejected;
 - Memory completion preserves an unrelated Activity edit and normalizes the
   reflection;
 - mutation errors do not fall back to a broad write.

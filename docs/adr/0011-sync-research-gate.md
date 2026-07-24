@@ -181,6 +181,8 @@ The first conflict-risk reduction landed on 2026-07-25:
   Activity progress, and Memory intents;
 - `StoredTrip.applyMutation` reapplies an intent to the latest valid local
   snapshot and writes only its owned fields;
+- Venue image intents require the initiating Place UUID and reject stale results
+  after Venue replacement or clear;
 - Plan and Guide production workspaces use the scoped path for those operations;
 - in-memory persistence tests prove that unrelated edits survive Cover, Venue
   image, and Memory writes.

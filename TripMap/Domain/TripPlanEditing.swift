@@ -17,6 +17,7 @@ enum TripPlanEditingError: LocalizedError, Equatable {
     case invalidReflection
     case invalidTimeZone
     case placeNotFound
+    case placeChanged
 
     var errorDescription: String? {
         switch self {
@@ -36,14 +37,23 @@ enum TripPlanEditingError: LocalizedError, Equatable {
         case .invalidReflection: "感想は500文字以内で入力してください。"
         case .invalidTimeZone: "タイムゾーンを確認してください。"
         case .placeNotFound: "場所が見つかりません。"
+        case .placeChanged: "場所が変更されたため、画像の更新を中止しました。"
         }
     }
 }
 
 enum TripMutation: Equatable, Sendable {
     case setCoverImage(Data?)
-    case setVenueUserImage(activityID: Activity.ID, imageData: Data?)
-    case setExternalVenueImage(activityID: Activity.ID, image: ExternalPlaceImage?)
+    case setVenueUserImage(
+        activityID: Activity.ID,
+        placeID: PlaceSnapshot.ID,
+        imageData: Data?
+    )
+    case setExternalVenueImage(
+        activityID: Activity.ID,
+        placeID: PlaceSnapshot.ID,
+        image: ExternalPlaceImage?
+    )
     case setActivityProgress(
         activityID: Activity.ID,
         progress: ActivityProgress,
@@ -62,12 +72,20 @@ enum TripMutation: Equatable, Sendable {
             var copy = trip
             copy.coverImageData = imageData
             return copy
-        case let .setVenueUserImage(activityID, imageData):
-            return try updatingPlace(in: trip, activityID: activityID) { place in
+        case let .setVenueUserImage(activityID, placeID, imageData):
+            return try updatingPlace(
+                in: trip,
+                activityID: activityID,
+                expectedPlaceID: placeID
+            ) { place in
                 place.imageData = imageData
             }
-        case let .setExternalVenueImage(activityID, image):
-            return try updatingPlace(in: trip, activityID: activityID) { place in
+        case let .setExternalVenueImage(activityID, placeID, image):
+            return try updatingPlace(
+                in: trip,
+                activityID: activityID,
+                expectedPlaceID: placeID
+            ) { place in
                 place.externalImage = image
             }
         case let .setActivityProgress(activityID, progress, changedAt):
@@ -96,6 +114,7 @@ enum TripMutation: Equatable, Sendable {
     private func updatingPlace(
         in trip: Trip,
         activityID: Activity.ID,
+        expectedPlaceID: PlaceSnapshot.ID,
         update: (inout PlaceSnapshot) -> Void
     ) throws -> Trip {
         guard let dayIndex = trip.days.firstIndex(where: { day in
@@ -107,6 +126,9 @@ enum TripMutation: Equatable, Sendable {
         }
         guard var place = trip.days[dayIndex].activities[activityIndex].place else {
             throw TripPlanEditingError.placeNotFound
+        }
+        guard place.id == expectedPlaceID else {
+            throw TripPlanEditingError.placeChanged
         }
         update(&place)
         var copy = trip
