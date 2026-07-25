@@ -1,6 +1,10 @@
 import AppIntents
 import SwiftData
 
+enum TripSystemExperienceReadError: Error, Equatable {
+    case invalidStoredTrip(Trip.ID)
+}
+
 struct CheckNextActivityIntent: AppIntent {
     static let title: LocalizedStringResource = "次の予定を確認"
     static let description = IntentDescription(
@@ -48,7 +52,20 @@ enum TripSystemExperienceReader {
     ) throws -> TripSystemExperienceSummary? {
         let container = try TripMapStore.makeContainer()
         let storedTrips = try container.mainContext.fetch(FetchDescriptor<StoredTrip>())
-        let trips = storedTrips.compactMap(\.snapshot)
+        let trips = try validSnapshots(from: storedTrips)
         return TripSystemExperienceProjection.currentSummary(for: trips, now: now)
+    }
+
+    static func validSnapshots(
+        from storedTrips: [StoredTrip]
+    ) throws -> [Trip] {
+        try storedTrips.map { storedTrip in
+            guard let trip = storedTrip.snapshot else {
+                throw TripSystemExperienceReadError.invalidStoredTrip(
+                    storedTrip.id
+                )
+            }
+            return trip
+        }
     }
 }

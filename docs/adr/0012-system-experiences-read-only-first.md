@@ -35,7 +35,9 @@ Start P9 with one parameterless, read-only App Intent:
   reservation note, Activity note, Participant data, reflection, image bytes,
   or derived online provider metadata.
 - Store or validation failure returns a non-destructive instruction to open the
-  app. The Intent does not reset, repair, or rewrite the store.
+  app. A malformed Trip is not silently omitted in favor of a potentially
+  misleading “no plan” or different-Trip response. The Intent does not reset,
+  repair, or rewrite the store.
 - App Shortcut phrases are static and require the application-name token.
 
 Apple documents App Intents as the action boundary used by Siri, Shortcuts, and
@@ -50,7 +52,8 @@ preconfigured actions:
 
 - Unit coverage proves the Intent projection selects shared Now / Next state,
   prefers an active Activity across overlapping Trips, formats the Trip time
-  zone, and excludes private reservation fields.
+  zone, excludes private reservation fields, and fails closed when any stored
+  Trip cannot produce a valid snapshot.
 - macOS tests compile the Intent at the macOS 14 deployment target.
 - the generic iOS build compiles at the iOS 17 deployment target;
 - Xcode's metadata processor emits exactly one discoverable

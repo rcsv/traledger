@@ -2185,6 +2185,29 @@ final class TripModelTests: XCTestCase {
         )
     }
 
+    @MainActor
+    func testSystemExperienceReaderFailsClosedForAnInvalidStoredTrip() throws {
+        let valid = try StoredTrip(validatingSnapshot: OkinawaSample.trip)
+        let invalid = try StoredTrip(validatingSnapshot: OkinawaSample.trip)
+        invalid.timeZoneIdentifier = "Invalid/TimeZone"
+
+        XCTAssertThrowsError(
+            try TripSystemExperienceReader.validSnapshots(
+                from: [valid, invalid]
+            )
+        ) { error in
+            XCTAssertEqual(
+                error as? TripSystemExperienceReadError,
+                .invalidStoredTrip(invalid.id)
+            )
+        }
+        XCTAssertEqual(
+            try TripSystemExperienceReader.validSnapshots(from: [valid])
+                .map(\.id),
+            [valid.id]
+        )
+    }
+
     func testReservationEditingNormalizesAndValidatesLocalReference() throws {
         let trip = OkinawaSample.trip
         let activityID = trip.days[0].activities[0].id
