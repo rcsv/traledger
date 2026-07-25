@@ -70,6 +70,11 @@ struct PlanView: View {
         return interaction.selectedDay(in: trip)
     }
 
+    private var tripTimeZone: TimeZone {
+        TimeZone(identifier: trip.timeZoneIdentifier)
+            ?? TimeZone(secondsFromGMT: 0)!
+    }
+
     private var tripParticipantAssignments: [StoredTripParticipant] {
         participantAssignments.filter { $0.trip?.id == trip.id }
     }
@@ -103,6 +108,7 @@ struct PlanView: View {
         }
         .navigationSplitViewStyle(.balanced)
         .navigationTitle(trip.title)
+        .environment(\.timeZone, tripTimeZone)
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
                 Button("思い出", systemImage: "photo.on.rectangle.angled") {

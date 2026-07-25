@@ -10,6 +10,9 @@ TripMap uses SwiftData as its local store. Persistent types are storage records 
 - Activity wall-clock times are stored as an optional minute offset in `0...1439`.
 - Each Trip stores an IANA time-zone identifier.
 - Domain `Date` values are produced only at the persistence adapter boundary using the Trip time zone.
+- Plan and Guide inject that Trip time zone at the workspace root so every
+  Day, Activity, Reservation, and Venue inspector format uses the same civil
+  calendar even when the device is in another time zone.
 - Relationships use cascade deletion and optional inverses. Application UUIDs remain ordinary attributes rather than SwiftData uniqueness constraints so the initial schema stays compatible with a future CloudKit spike.
 
 ## Why

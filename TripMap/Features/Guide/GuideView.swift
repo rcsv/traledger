@@ -60,6 +60,11 @@ struct GuideView: View {
         interaction.selectedDay(in: trip)
     }
 
+    private var tripTimeZone: TimeZone {
+        TimeZone(identifier: trip.timeZoneIdentifier)
+            ?? TimeZone(secondsFromGMT: 0)!
+    }
+
     private var selectedDayBinding: Binding<Day.ID?> {
         Binding(
             get: { interaction.selectedDayID },
@@ -73,6 +78,7 @@ struct GuideView: View {
         }
         .navigationTitle(trip.title)
         .navigationBarTitleDisplayMode(.inline)
+        .environment(\.timeZone, tripTimeZone)
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if !usesRegularWorkspace {
                 compactActionBar
