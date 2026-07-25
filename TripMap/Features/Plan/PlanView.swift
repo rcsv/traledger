@@ -1966,6 +1966,7 @@ private struct TripOverviewView: View {
     @State private var showsAllActivityCategories = false
     @State private var handledDateRangeCommandRequestID: UUID?
     @State private var handledParticipantCommandRequestID: UUID?
+    @State private var persistenceErrorMessage: String?
 
     private let timeZones = [
         "Asia/Tokyo", "Asia/Singapore", "Australia/Sydney", "Pacific/Auckland",
@@ -2249,7 +2250,7 @@ private struct TripOverviewView: View {
                             ForEach(tripChecklistItems) { item in
                                 Button {
                                     item.isCompleted.toggle()
-                                    save()
+                                    persistChanges()
                                 } label: {
                                     Label(item.title, systemImage: item.isCompleted ? "checkmark.circle.fill" : "circle")
                                         .foregroundStyle(item.isCompleted ? .secondary : .primary)
@@ -2337,6 +2338,23 @@ private struct TripOverviewView: View {
             }
             .frame(minWidth: 360, minHeight: 180)
         }
+        .alert(
+            "保存できませんでした",
+            isPresented: Binding(
+                get: { persistenceErrorMessage != nil },
+                set: {
+                    if !$0 {
+                        persistenceErrorMessage = nil
+                    }
+                }
+            )
+        ) {
+            Button("OK") {
+                persistenceErrorMessage = nil
+            }
+        } message: {
+            Text(persistenceErrorMessage ?? "不明なエラー")
+        }
     }
 
     private var activityAnalysis: ActivityAnalysisSummary {
@@ -2408,38 +2426,65 @@ private struct TripOverviewView: View {
         isParticipantPickerPresented = true
     }
 
-    private func assign(_ participant: StoredParticipant) {
-        guard let storedTrip else { return }
-        modelContext.insert(StoredTripParticipant(trip: storedTrip, participant: participant))
-        save()
+    private func assign(_ participant: StoredParticipant) -> Bool {
+        guard let storedTrip else {
+            persistenceErrorMessage = "旅行データを読み込めませんでした。"
+            return false
+        }
+        modelContext.insert(
+            StoredTripParticipant(
+                trip: storedTrip,
+                participant: participant
+            )
+        )
+        return persistChanges()
     }
 
     private func remove(_ assignment: StoredTripParticipant) {
         modelContext.delete(assignment)
-        save()
+        persistChanges()
     }
 
     private func addChecklistItem() {
-        guard let storedTrip else { return }
+        guard let storedTrip else {
+            persistenceErrorMessage = "旅行データを読み込めませんでした。"
+            return
+        }
         let title = checklistTitle.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !title.isEmpty else { return }
         modelContext.insert(StoredChecklistItem(title: title, trip: storedTrip))
-        save()
-        isChecklistEditorPresented = false
+        if persistChanges() {
+            isChecklistEditorPresented = false
+        }
     }
 
-    private func save() { try? modelContext.save() }
+    @discardableResult
+    private func persistChanges() -> Bool {
+        do {
+            try modelContext.save()
+            persistenceErrorMessage = nil
+            return true
+        } catch {
+            modelContext.rollback()
+            persistenceErrorMessage = error.localizedDescription
+            return false
+        }
+    }
 }
 
 private struct ParticipantPickerSheet: View {
     let participants: [StoredParticipant]
-    let onSelect: (StoredParticipant) -> Void
+    let onSelect: (StoredParticipant) -> Bool
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         NavigationStack {
             List(participants) { participant in
-                Button(participant.displayName) { onSelect(participant); dismiss() }
+                Button(participant.displayName) {
+                    if onSelect(participant) {
+                        dismiss()
+                    }
+                }
             }
             .overlay {
                 if participants.isEmpty { ContentUnavailableView("追加できるParticipantがいません", systemImage: "person.2") }
