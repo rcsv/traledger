@@ -377,6 +377,36 @@ final class TripModelTests: XCTestCase {
         XCTAssertEqual(storedImages, [currentImage])
     }
 
+    @MainActor
+    func testVenueImageResolutionCancellationBeforeFallbackSkipsWikimedia() async {
+        var lookAroundCalls = 0
+        var wikimediaCalls = 0
+        let resolutionTask = Task { @MainActor in
+            let result: VenueImageResolution<String> = await VenueImageResolutionCoordinator.resolve(
+                hasUserImage: false,
+                existingExternalImage: nil,
+                resolveLookAround: {
+                    lookAroundCalls += 1
+                    try? await Task.sleep(for: .seconds(1))
+                    return nil as String?
+                },
+                resolveWikimedia: {
+                    wikimediaCalls += 1
+                    return self.externalPlaceImage()
+                }
+            )
+            return result.source == .placeholder
+        }
+
+        await Task.yield()
+        resolutionTask.cancel()
+        let usedPlaceholder = await resolutionTask.value
+
+        XCTAssertTrue(usedPlaceholder)
+        XCTAssertEqual(lookAroundCalls, 1)
+        XCTAssertEqual(wikimediaCalls, 0)
+    }
+
     #if TRIPMAP_LIVE_VENUE_IMAGE_QA
     @MainActor
     func testLiveShibuyaCrossingResolvesLookAroundBeforeWikimedia() async throws {

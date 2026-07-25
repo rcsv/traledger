@@ -46,6 +46,8 @@ enum VenueImageResolutionCoordinator {
             return .lookAround(scene)
         }
 
+        guard !Task.isCancelled else { return .placeholder }
+
         if let existingExternalImage {
             return .wikimedia(existingExternalImage)
         }
