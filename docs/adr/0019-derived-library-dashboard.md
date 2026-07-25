@@ -52,6 +52,8 @@ legacy country-name inference.
 
 - Dashboard values update from the same SwiftData relationships as the
   Library and never need invalidation or migration.
+- The next Reservation is formatted in its owning Trip's timezone, not the
+  device timezone used to view the cross-Trip Dashboard.
 - An unreadable Trip is omitted from every content-derived metric instead of
   partially contributing inconsistent counts.
 - Duplicate assignments of the same Participant count once.

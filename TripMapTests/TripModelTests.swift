@@ -1920,6 +1920,7 @@ final class TripModelTests: XCTestCase {
             id: nextTripID,
             title: "次の予約があるTrip",
             dateRange: dayDate...dayDate,
+            timeZoneIdentifier: "Pacific/Honolulu",
             days: [
                 Day(
                     id: UUID(),
@@ -1984,6 +1985,14 @@ final class TripModelTests: XCTestCase {
         )
         XCTAssertEqual(summary.nextReservation?.tripID, nextTripID)
         XCTAssertEqual(summary.nextReservation?.id, nextReservationID)
+        XCTAssertEqual(
+            summary.nextReservation?.timeZoneIdentifier,
+            "Pacific/Honolulu"
+        )
+        XCTAssertEqual(
+            summary.nextReservation?.timeZone,
+            TimeZone(identifier: "Pacific/Honolulu")
+        )
         XCTAssertEqual(
             summary.nextReservation?.reservation.reservationTitle,
             "ホテル予約"

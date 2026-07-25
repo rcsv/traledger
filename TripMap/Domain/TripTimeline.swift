@@ -452,9 +452,14 @@ enum ActivityAnalysisProjection {
 struct LibraryUpcomingReservationSummary: Identifiable, Hashable, Sendable {
     let tripID: Trip.ID
     let tripTitle: String
+    let timeZoneIdentifier: String
     let reservation: UpcomingReservationSummary
 
     var id: ReservationReference.ID { reservation.id }
+    var timeZone: TimeZone {
+        TimeZone(identifier: timeZoneIdentifier)
+            ?? TimeZone(secondsFromGMT: 0)!
+    }
 }
 
 struct LibraryDashboardSummary: Hashable, Sendable {
@@ -524,6 +529,7 @@ enum LibraryDashboardProjection {
                     LibraryUpcomingReservationSummary(
                         tripID: item.trip.id,
                         tripTitle: item.trip.title,
+                        timeZoneIdentifier: item.trip.timeZoneIdentifier,
                         reservation: $0
                     )
                 }

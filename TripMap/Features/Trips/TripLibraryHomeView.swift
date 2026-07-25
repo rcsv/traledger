@@ -437,6 +437,7 @@ private struct LibraryDashboardContent: View {
                             Text("\(next.tripTitle) · Day \(next.reservation.daySequence) · \(next.reservation.startTime, format: .dateTime.month().day().hour().minute())")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
+                                .environment(\.timeZone, next.timeZone)
                             if showsNextReservationAction {
                                 Button("Tripを開く", systemImage: "arrow.up.forward.app") {
                                     onOpenTrip(next.tripID)
