@@ -76,6 +76,10 @@ same mutation; mobile does not maintain a second date editing contract. The
 sheet dismisses only after persistence succeeds, retaining the proposed range
 after a removal rejection, concurrent structure change, or save error.
 
+Trip rename also uses one shared macOS/iPhone/iPad sheet. It retains the title
+draft after validation, conflict, or persistence failure and dismisses only
+after the scoped rename succeeds.
+
 Interactive Activity insertion generates its UUID before persistence and
 records the previous and next Activity IDs of the selected gap. Unchanged gaps
 accept insertion and normalize the Day sequence; a changed gap is rejected

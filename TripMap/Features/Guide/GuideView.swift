@@ -183,7 +183,7 @@ struct GuideView: View {
             )
         }
         .sheet(isPresented: $isTripRenamePresented) {
-            GuideTripRenameSheet(title: trip.title) { title in
+            TripRenameSheet(title: trip.title) { title in
                 updateTripTitle(title)
             }
         }
@@ -705,46 +705,6 @@ struct GuideView: View {
             errorMessage = error.localizedDescription
             return false
         }
-    }
-}
-
-private struct GuideTripRenameSheet: View {
-    @Environment(\.dismiss) private var dismiss
-    @State private var title: String
-    let onSave: (String) -> Bool
-
-    init(title: String, onSave: @escaping (String) -> Bool) {
-        _title = State(initialValue: title)
-        self.onSave = onSave
-    }
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                TextField("旅行名", text: $title)
-                    .textInputAutocapitalization(.sentences)
-                    .accessibilityIdentifier("guide-trip-title-field")
-            }
-            .navigationTitle("旅行名を変更")
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("キャンセル") { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("保存") {
-                        if onSave(title) {
-                            dismiss()
-                        }
-                    }
-                    .disabled(
-                        title
-                            .trimmingCharacters(in: .whitespacesAndNewlines)
-                            .isEmpty
-                    )
-                }
-            }
-        }
-        .presentationDetents([.medium])
     }
 }
 

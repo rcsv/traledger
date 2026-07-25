@@ -883,15 +883,17 @@ struct PlanView: View {
         apply(updated)
     }
 
-    private func updateTripTitle(_ title: String) {
+    private func updateTripTitle(_ title: String) -> Bool {
         do {
             let mutation = TripMutation.renameTrip(title)
-            if applyMutationIfAvailable(mutation) {
-                return
+            if let onApplyMutation {
+                errorMessage = onApplyMutation(mutation)
+                return errorMessage == nil
             }
-            apply(try mutation.applying(to: trip))
+            return apply(try mutation.applying(to: trip))
         } catch {
             errorMessage = error.localizedDescription
+            return false
         }
     }
 
@@ -1950,7 +1952,7 @@ private struct TripOverviewView: View {
     let trip: Trip
     let doctorReport: TripDoctorReport
     @Binding var coverPickerItem: PhotosPickerItem?
-    let onRenameTrip: (String) -> Void
+    let onRenameTrip: (String) -> Bool
     let onChangeDateRange: (Date, Date) -> Bool
     let onSelectActivity: (Activity.ID) -> Void
     let dateRangeCommandRequestID: UUID?
@@ -1962,7 +1964,6 @@ private struct TripOverviewView: View {
     @State private var isChecklistEditorPresented = false
     @State private var checklistTitle = ""
     @State private var isRenameTripPresented = false
-    @State private var tripTitleDraft = ""
     @State private var isDateRangeEditorPresented = false
     @State private var showsAllActivityCategories = false
     @State private var handledDateRangeCommandRequestID: UUID?
@@ -1983,7 +1984,6 @@ private struct TripOverviewView: View {
                         .lineLimit(2)
 
                     Button("旅行名を変更", systemImage: "pencil") {
-                        tripTitleDraft = trip.title
                         isRenameTripPresented = true
                     }
                     .labelStyle(.iconOnly)
@@ -2295,19 +2295,11 @@ private struct TripOverviewView: View {
         .onChange(of: participantCommandRequestID) { _, requestID in
             handleParticipantCommand(requestID)
         }
-        .alert("旅行名を変更", isPresented: $isRenameTripPresented) {
-            TextField("旅行名", text: $tripTitleDraft)
-            Button("キャンセル", role: .cancel) {}
-            Button("保存") {
-                onRenameTrip(tripTitleDraft)
-            }
-            .disabled(
-                tripTitleDraft
-                    .trimmingCharacters(in: .whitespacesAndNewlines)
-                    .isEmpty
+        .sheet(isPresented: $isRenameTripPresented) {
+            TripRenameSheet(
+                title: trip.title,
+                onSave: onRenameTrip
             )
-        } message: {
-            Text("LibraryとTrip画面に表示する名前です。")
         }
         .sheet(isPresented: $isDateRangeEditorPresented) {
             TripDateRangeSheet(

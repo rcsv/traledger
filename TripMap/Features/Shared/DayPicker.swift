@@ -34,6 +34,50 @@ struct DayPicker: View {
         }
     }
 }
+
+struct TripRenameSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var title: String
+    let onSave: (String) -> Bool
+
+    init(title: String, onSave: @escaping (String) -> Bool) {
+        _title = State(initialValue: title)
+        self.onSave = onSave
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                TextField("旅行名", text: $title)
+                    .accessibilityIdentifier("trip-title-field")
+            }
+            .navigationTitle("旅行名を変更")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("キャンセル") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("保存") {
+                        if onSave(title) {
+                            dismiss()
+                        }
+                    }
+                    .disabled(
+                        title
+                            .trimmingCharacters(in: .whitespacesAndNewlines)
+                            .isEmpty
+                    )
+                }
+            }
+        }
+        #if os(macOS)
+        .frame(minWidth: 380, minHeight: 180)
+        #else
+        .presentationDetents([.medium])
+        #endif
+    }
+}
+
 struct TripDateRangeSheet: View {
     @Environment(\.dismiss) private var dismiss
     let timeZone: TimeZone
