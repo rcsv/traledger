@@ -530,6 +530,7 @@ private struct PlaceDetailOverlay: View {
             guard !Task.isCancelled else { return }
             guard let originalData,
                   let data = TripImageProcessor.normalizedJPEGData(from: originalData) else {
+                pickerItem = nil
                 imageError = "画像を読み込めませんでした。"
                 return
             }

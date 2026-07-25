@@ -211,6 +211,7 @@ struct PlanView: View {
             guard !Task.isCancelled else { return }
             guard let originalData,
                   let data = TripImageProcessor.normalizedJPEGData(from: originalData) else {
+                coverPickerItem = nil
                 errorMessage = "表紙画像を読み込めませんでした。"
                 return
             }
