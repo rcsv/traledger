@@ -1269,6 +1269,19 @@ enum GuideReminderScheduler {
         }
     }
 
+    static func removeAll(for tripID: Trip.ID) async {
+        try? await queue.run(for: tripID) {
+            let center = UNUserNotificationCenter.current()
+            let prefix = ActivityReminderProjection.identifierPrefix(for: tripID)
+            let pending = await center.pendingNotificationRequests()
+            center.removePendingNotificationRequests(
+                withIdentifiers: pending.map(\.identifier).filter {
+                    $0.hasPrefix(prefix)
+                }
+            )
+        }
+    }
+
     private static func performSync(
         trip: Trip,
         requestingAuthorization: Bool,

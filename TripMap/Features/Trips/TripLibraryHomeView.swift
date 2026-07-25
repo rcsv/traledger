@@ -295,6 +295,11 @@ struct TripLibraryHomeView: View {
             try modelContext.save()
             pendingDeletionID = nil
             onDeleteTrip(tripID)
+            #if os(iOS)
+            Task {
+                await GuideReminderScheduler.removeAll(for: tripID)
+            }
+            #endif
         } catch {
             modelContext.rollback()
             pendingDeletionID = nil
