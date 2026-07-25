@@ -45,8 +45,11 @@ duration, and category.
 
 Confirmation extends the existing `InsertActivityMutation` with an optional
 `PlaceSnapshot`. It uses the same gap validation, scoped persistence,
-validation, selection, and Undo registration as place-less insertion.
-Canceling the candidate search or draft therefore leaves the Trip unchanged.
+validation, selection, and Undo registration as place-less insertion. The
+draft dismisses only after persistence succeeds; a changed insertion gap or
+save error leaves the user's draft open so they can choose a valid position
+and retry. Canceling the candidate search or draft therefore leaves the Trip
+unchanged.
 
 Candidate image resolution follows the existing user → Look Around →
 Wikimedia → placeholder policy. A candidate has no user image, and derived

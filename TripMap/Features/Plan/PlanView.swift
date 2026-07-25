@@ -233,15 +233,15 @@ struct PlanView: View {
                 target: target,
                 timeZoneIdentifier: trip.timeZoneIdentifier
             ) { dayID, anchor, title, startTime, category, durationMinutes, place in
-                    addActivity(
-                        to: dayID,
-                        anchor: anchor,
-                        title: title,
-                        startTime: startTime,
-                        category: category,
-                        durationMinutes: durationMinutes,
-                        place: place
-                    )
+                addActivity(
+                    to: dayID,
+                    anchor: anchor,
+                    title: title,
+                    startTime: startTime,
+                    category: category,
+                    durationMinutes: durationMinutes,
+                    place: place
+                )
             }
         }
         .sheet(isPresented: $isVenueSearchPresented) {
@@ -995,7 +995,7 @@ struct PlanView: View {
         category: ActivityCategory?,
         durationMinutes: Int?,
         place: PlaceSnapshot? = nil
-    ) {
+    ) -> Bool {
         do {
             let activityID = UUID()
             let mutation = TripMutation.insertActivity(
@@ -1019,7 +1019,7 @@ struct PlanView: View {
             }
             if let persistenceError {
                 errorMessage = persistenceError
-                return
+                return false
             }
             let inverse = TripMutation.deleteActivity(
                 DeleteActivityMutation(
@@ -1042,8 +1042,10 @@ struct PlanView: View {
             }
             interaction.selectActivity(activityID, source: .list, in: updated)
             venueCandidate = nil
+            return true
         } catch {
             errorMessage = error.localizedDescription
+            return false
         }
     }
 
@@ -1661,7 +1663,7 @@ private struct ActivityCreationSheet: View {
         ActivityCategory?,
         Int?,
         PlaceSnapshot?
-    ) -> Void
+    ) -> Bool
     @Environment(\.dismiss) private var dismiss
     @State private var selection: ActivityInsertionOption
     @State private var title: String
@@ -1683,7 +1685,7 @@ private struct ActivityCreationSheet: View {
             ActivityCategory?,
             Int?,
             PlaceSnapshot?
-        ) -> Void
+        ) -> Bool
     ) {
         self.days = days
         self.target = target
@@ -1773,7 +1775,7 @@ private struct ActivityCreationSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("追加") {
-                        onCreate(
+                        if onCreate(
                             selection.dayID,
                             selection.anchor,
                             title,
@@ -1781,8 +1783,9 @@ private struct ActivityCreationSheet: View {
                             category,
                             hasDuration ? durationMinutes : nil,
                             target.initialPlace
-                        )
-                        dismiss()
+                        ) {
+                            dismiss()
+                        }
                     }
                     .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
