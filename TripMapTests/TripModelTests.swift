@@ -7,6 +7,25 @@ import XCTest
 @testable import TripMap
 
 final class TripModelTests: XCTestCase {
+    @MainActor
+    func testMacCommandRouterPublishesDistinctLibraryIntents() throws {
+        let router = MacCommandRouter()
+
+        router.sendToLibrary(.showLibrary)
+        let showRequest = try XCTUnwrap(router.libraryRequest)
+        XCTAssertEqual(showRequest.kind, .showLibrary)
+
+        router.sendToLibrary(.createTrip)
+        let tripRequest = try XCTUnwrap(router.libraryRequest)
+        XCTAssertEqual(tripRequest.kind, .createTrip)
+        XCTAssertNotEqual(tripRequest.id, showRequest.id)
+
+        router.sendToLibrary(.registerParticipant)
+        let participantRequest = try XCTUnwrap(router.libraryRequest)
+        XCTAssertEqual(participantRequest.kind, .registerParticipant)
+        XCTAssertNotEqual(participantRequest.id, tripRequest.id)
+    }
+
     func testProductionBroadPlanWritesFailClosed() {
         XCTAssertEqual(
             TripPersistenceBoundary.rejectBroadPlanWrite(

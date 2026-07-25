@@ -7,6 +7,12 @@ struct ParticipantsView: View {
     @State private var editor: ParticipantEditorTarget?
     @State private var pendingDeletionID: UUID?
     @State private var errorMessage: String?
+    @State private var handledCreationRequestID: UUID?
+    private let creationRequestID: UUID?
+
+    init(creationRequestID: UUID? = nil) {
+        self.creationRequestID = creationRequestID
+    }
 
     var body: some View {
         List {
@@ -53,6 +59,10 @@ struct ParticipantsView: View {
             }
         }
         .navigationTitle("People")
+        .onAppear { handleCreationRequest(creationRequestID) }
+        .onChange(of: creationRequestID) { _, requestID in
+            handleCreationRequest(requestID)
+        }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button("Participantを追加", systemImage: "plus") {
@@ -113,6 +123,15 @@ struct ParticipantsView: View {
             modelContext.rollback()
             return error.localizedDescription
         }
+    }
+
+    private func handleCreationRequest(_ requestID: UUID?) {
+        guard let requestID,
+              requestID != handledCreationRequestID else {
+            return
+        }
+        handledCreationRequestID = requestID
+        editor = ParticipantEditorTarget(participantID: nil)
     }
 
     private func deletePendingParticipant() {

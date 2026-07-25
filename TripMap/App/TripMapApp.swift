@@ -5,6 +5,9 @@ import SwiftUI
 struct TripMapApp: App {
     private let modelContainer: ModelContainer?
     private let storeErrorMessage: String?
+    #if os(macOS)
+    @StateObject private var commandRouter = MacCommandRouter()
+    #endif
 
     init() {
         do {
@@ -24,13 +27,17 @@ struct TripMapApp: App {
 
     var body: some Scene {
         #if os(macOS)
-        WindowGroup {
+        Window("TripMap", id: "library") {
             if let modelContainer {
                 MacLibraryRootView()
                     .modelContainer(modelContainer)
+                    .environmentObject(commandRouter)
             } else {
                 StoreUnavailableView(message: storeErrorMessage)
             }
+        }
+        .commands {
+            MacAppCommands(commandRouter: commandRouter)
         }
 
         WindowGroup(id: "trip", for: UUID.self) { $tripID in
@@ -40,6 +47,9 @@ struct TripMapApp: App {
             } else {
                 StoreUnavailableView(message: storeErrorMessage)
             }
+        }
+        .commands {
+            MacAppCommands(commandRouter: commandRouter)
         }
 
         Settings {
@@ -62,6 +72,73 @@ struct TripMapApp: App {
         #endif
     }
 }
+
+#if os(macOS)
+private struct MacAppCommands: Commands {
+    @ObservedObject var commandRouter: MacCommandRouter
+    @Environment(\.openWindow) private var openWindow
+    @FocusedValue(\.macTripCommandActions) private var tripActions
+
+    var body: some Commands {
+        CommandGroup(replacing: .newItem) {
+            Button("新しい Trip") {
+                sendToLibrary(.createTrip)
+            }
+            .keyboardShortcut("n", modifiers: .command)
+
+            Button("Activityを追加") {
+                tripActions?.createActivity()
+            }
+            .keyboardShortcut("n", modifiers: [.command, .shift])
+            .disabled(tripActions?.canCreateActivity != true)
+        }
+
+        CommandGroup(after: .newItem) {
+            Button("Participantを登録") {
+                sendToLibrary(.registerParticipant)
+            }
+            .keyboardShortcut("p", modifiers: [.command, .option])
+        }
+
+        CommandMenu("Trip") {
+            Button("Activityを追加") {
+                tripActions?.createActivity()
+            }
+            .disabled(tripActions?.canCreateActivity != true)
+
+            Button("Activityを編集") {
+                tripActions?.editActivity()
+            }
+            .keyboardShortcut("e", modifiers: .command)
+            .disabled(tripActions?.canEditActivity != true)
+
+            Divider()
+
+            Button("日程を変更") {
+                tripActions?.changeDateRange()
+            }
+            .disabled(tripActions == nil)
+
+            Button("Participantを割り当て") {
+                tripActions?.assignParticipant()
+            }
+            .disabled(tripActions == nil)
+        }
+
+        CommandGroup(after: .sidebar) {
+            Button("Library Windowを表示") {
+                sendToLibrary(.showLibrary)
+            }
+            .keyboardShortcut("l", modifiers: [.command, .option])
+        }
+    }
+
+    private func sendToLibrary(_ kind: MacLibraryCommandKind) {
+        commandRouter.sendToLibrary(kind)
+        openWindow(id: "library")
+    }
+}
+#endif
 
 #if TRIPMAP_QA
 @MainActor

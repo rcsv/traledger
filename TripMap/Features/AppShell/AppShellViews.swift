@@ -128,6 +128,46 @@ private struct TripGuideWorkspaceView: View {
 #endif
 
 #if os(macOS)
+enum MacLibraryCommandKind: Equatable, Sendable {
+    case showLibrary
+    case createTrip
+    case registerParticipant
+}
+
+struct MacLibraryCommandRequest: Equatable, Sendable {
+    let id: UUID
+    let kind: MacLibraryCommandKind
+}
+
+@MainActor
+final class MacCommandRouter: ObservableObject {
+    @Published private(set) var libraryRequest: MacLibraryCommandRequest?
+
+    func sendToLibrary(_ kind: MacLibraryCommandKind) {
+        libraryRequest = MacLibraryCommandRequest(id: UUID(), kind: kind)
+    }
+}
+
+struct MacTripCommandActions {
+    let canCreateActivity: Bool
+    let canEditActivity: Bool
+    let createActivity: () -> Void
+    let editActivity: () -> Void
+    let changeDateRange: () -> Void
+    let assignParticipant: () -> Void
+}
+
+private struct MacTripCommandActionsKey: FocusedValueKey {
+    typealias Value = MacTripCommandActions
+}
+
+extension FocusedValues {
+    var macTripCommandActions: MacTripCommandActions? {
+        get { self[MacTripCommandActionsKey.self] }
+        set { self[MacTripCommandActionsKey.self] = newValue }
+    }
+}
+
 private enum MacLibraryDestination: Hashable {
     case trips(TripLibraryScope)
     case people
@@ -137,7 +177,11 @@ private enum MacLibraryDestination: Hashable {
 struct MacLibraryRootView: View {
     @Environment(\.openWindow) private var openWindow
     @Environment(\.dismissWindow) private var dismissWindow
+    @EnvironmentObject private var commandRouter: MacCommandRouter
     @State private var destination: MacLibraryDestination? = .trips(.upcoming)
+    @State private var newTripRequestID: UUID?
+    @State private var newParticipantRequestID: UUID?
+    @State private var handledCommandID: UUID?
     #if TRIPMAP_QA
     @State private var didOpenVenueImageQA = false
     #endif
@@ -168,6 +212,12 @@ struct MacLibraryRootView: View {
             detailView
         }
         .frame(minWidth: 900, minHeight: 620)
+        .onAppear {
+            handleLibraryCommand(commandRouter.libraryRequest)
+        }
+        .onChange(of: commandRouter.libraryRequest) { _, request in
+            handleLibraryCommand(request)
+        }
         #if TRIPMAP_QA
         .task {
             guard !didOpenVenueImageQA,
@@ -188,12 +238,17 @@ struct MacLibraryRootView: View {
                 TripLibraryHomeView(
                     scope: tripScopeBinding,
                     showsScopePicker: false,
+                    creationRequestID: newTripRequestID,
                     onOpenTrip: { openWindow(id: "trip", value: $0) },
                     onDeleteTrip: { dismissWindow(id: "trip", value: $0) }
                 )
             }
         case .people:
-            NavigationStack { ParticipantsView() }
+            NavigationStack {
+                ParticipantsView(
+                    creationRequestID: newParticipantRequestID
+                )
+            }
         case .profile:
             NavigationStack { ProfileView() }
         }
@@ -207,6 +262,23 @@ struct MacLibraryRootView: View {
             },
             set: { destination = .trips($0) }
         )
+    }
+
+    private func handleLibraryCommand(
+        _ request: MacLibraryCommandRequest?
+    ) {
+        guard let request, request.id != handledCommandID else { return }
+        handledCommandID = request.id
+        switch request.kind {
+        case .showLibrary:
+            break
+        case .createTrip:
+            destination = .trips(.upcoming)
+            newTripRequestID = request.id
+        case .registerParticipant:
+            destination = .people
+            newParticipantRequestID = request.id
+        }
     }
 }
 

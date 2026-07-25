@@ -36,6 +36,8 @@ struct PlanView: View {
     @State private var isMemoryPresented = false
     @State private var errorMessage: String?
     @State private var pendingImageUpdate: PendingTripImageUpdate?
+    @State private var dateRangeCommandRequestID: UUID?
+    @State private var participantCommandRequestID: UUID?
 
     init(
         trip: Trip,
@@ -145,6 +147,31 @@ struct PlanView: View {
         // continue behind it instead of reserving a separate white strip.
         .toolbarBackground(.hidden, for: .windowToolbar)
         .frame(minWidth: isMapVisible ? 1000 : 760, minHeight: 620)
+        .focusedSceneValue(
+            \.macTripCommandActions,
+            MacTripCommandActions(
+                canCreateActivity: selectedDay != nil,
+                canEditActivity: selectedActivity != nil,
+                createActivity: {
+                    guard selectedDay != nil else { return }
+                    isActivityCreationPresented = true
+                },
+                editActivity: {
+                    guard let selectedActivity else { return }
+                    activityEditor = ActivityEditorTarget(
+                        activityID: selectedActivity.id
+                    )
+                },
+                changeDateRange: {
+                    destination = .overview
+                    dateRangeCommandRequestID = UUID()
+                },
+                assignParticipant: {
+                    destination = .overview
+                    participantCommandRequestID = UUID()
+                }
+            )
+        )
         .onAppear {
             planUndo.configure(
                 undoManager: undoManager,
@@ -382,6 +409,8 @@ struct PlanView: View {
             onRenameTrip: updateTripTitle,
             onChangeDateRange: updateTripDateRange,
             onSelectActivity: selectActivityFromOverviewSummary,
+            dateRangeCommandRequestID: dateRangeCommandRequestID,
+            participantCommandRequestID: participantCommandRequestID,
             onSelectCurrency: updateTripCurrency,
             onSelectTimeZone: updateTripTimeZone,
             onSelectDoctorIssue: selectDoctorIssue
@@ -1523,6 +1552,8 @@ private struct TripOverviewView: View {
     let onRenameTrip: (String) -> Void
     let onChangeDateRange: (Date, Date) -> Void
     let onSelectActivity: (Activity.ID) -> Void
+    let dateRangeCommandRequestID: UUID?
+    let participantCommandRequestID: UUID?
     let onSelectCurrency: (String) -> Void
     let onSelectTimeZone: (String) -> Void
     let onSelectDoctorIssue: (TripDoctorIssue) -> Void
@@ -1533,6 +1564,8 @@ private struct TripOverviewView: View {
     @State private var tripTitleDraft = ""
     @State private var isDateRangeEditorPresented = false
     @State private var showsAllActivityCategories = false
+    @State private var handledDateRangeCommandRequestID: UUID?
+    @State private var handledParticipantCommandRequestID: UUID?
 
     private let timeZones = [
         "Asia/Tokyo", "Asia/Singapore", "Australia/Sydney", "Pacific/Auckland",
@@ -1850,6 +1883,16 @@ private struct TripOverviewView: View {
         }
         .background(Color(nsColor: .windowBackgroundColor))
         .accessibilityIdentifier("trip-overview-content")
+        .onAppear {
+            handleDateRangeCommand(dateRangeCommandRequestID)
+            handleParticipantCommand(participantCommandRequestID)
+        }
+        .onChange(of: dateRangeCommandRequestID) { _, requestID in
+            handleDateRangeCommand(requestID)
+        }
+        .onChange(of: participantCommandRequestID) { _, requestID in
+            handleParticipantCommand(requestID)
+        }
         .alert("旅行名を変更", isPresented: $isRenameTripPresented) {
             TextField("旅行名", text: $tripTitleDraft)
             Button("キャンセル", role: .cancel) {}
@@ -1945,6 +1988,24 @@ private struct TripOverviewView: View {
         } label: {
             Label(title, systemImage: systemImage)
         }
+    }
+
+    private func handleDateRangeCommand(_ requestID: UUID?) {
+        guard let requestID,
+              requestID != handledDateRangeCommandRequestID else {
+            return
+        }
+        handledDateRangeCommandRequestID = requestID
+        isDateRangeEditorPresented = true
+    }
+
+    private func handleParticipantCommand(_ requestID: UUID?) {
+        guard let requestID,
+              requestID != handledParticipantCommandRequestID else {
+            return
+        }
+        handledParticipantCommandRequestID = requestID
+        isParticipantPickerPresented = true
     }
 
     private func assign(_ participant: StoredParticipant) {

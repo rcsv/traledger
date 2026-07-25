@@ -15,22 +15,26 @@ struct TripLibraryHomeView: View {
     ]) private var storedTrips: [StoredTrip]
     @Binding private var scope: TripLibraryScope
     private let showsScopePicker: Bool
+    private let creationRequestID: UUID?
     private let onOpenTrip: (UUID) -> Void
     private let onDeleteTrip: (UUID) -> Void
     @State private var searchText = ""
     @State private var isNewTripPresented = false
     @State private var pendingDeletionID: UUID?
     @State private var errorMessage: String?
+    @State private var handledCreationRequestID: UUID?
     @AppStorage("planning.baseCurrencyCode") private var baseCurrencyCode = SupportedCurrency.jpy.rawValue
 
     init(
         scope: Binding<TripLibraryScope>,
         showsScopePicker: Bool,
+        creationRequestID: UUID? = nil,
         onOpenTrip: @escaping (UUID) -> Void,
         onDeleteTrip: @escaping (UUID) -> Void = { _ in }
     ) {
         _scope = scope
         self.showsScopePicker = showsScopePicker
+        self.creationRequestID = creationRequestID
         self.onOpenTrip = onOpenTrip
         self.onDeleteTrip = onDeleteTrip
     }
@@ -110,6 +114,10 @@ struct TripLibraryHomeView: View {
         }
         .navigationTitle(scope.title)
         .searchable(text: $searchText, prompt: "旅行を検索")
+        .onAppear { handleCreationRequest(creationRequestID) }
+        .onChange(of: creationRequestID) { _, requestID in
+            handleCreationRequest(requestID)
+        }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button("新しい旅行", systemImage: "plus") {
@@ -239,6 +247,15 @@ struct TripLibraryHomeView: View {
             modelContext.rollback()
             return error.localizedDescription
         }
+    }
+
+    private func handleCreationRequest(_ requestID: UUID?) {
+        guard let requestID,
+              requestID != handledCreationRequestID else {
+            return
+        }
+        handledCreationRequestID = requestID
+        isNewTripPresented = true
     }
 
     private func deletePendingTrip() {
