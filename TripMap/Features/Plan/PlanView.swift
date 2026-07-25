@@ -880,7 +880,7 @@ struct PlanView: View {
     private func updateTripDateRange(
         startDate: Date,
         endDate: Date
-    ) {
+    ) -> Bool {
         do {
             guard let timeZone = TimeZone(
                 identifier: trip.timeZoneIdentifier
@@ -900,12 +900,14 @@ struct PlanView: View {
                     )
                 )
             )
-            if applyMutationIfAvailable(mutation) {
-                return
+            if let onApplyMutation {
+                errorMessage = onApplyMutation(mutation)
+                return errorMessage == nil
             }
-            apply(try mutation.applying(to: trip))
+            return apply(try mutation.applying(to: trip))
         } catch {
             errorMessage = error.localizedDescription
+            return false
         }
     }
 
@@ -1931,7 +1933,7 @@ private struct TripOverviewView: View {
     let doctorReport: TripDoctorReport
     @Binding var coverPickerItem: PhotosPickerItem?
     let onRenameTrip: (String) -> Void
-    let onChangeDateRange: (Date, Date) -> Void
+    let onChangeDateRange: (Date, Date) -> Bool
     let onSelectActivity: (Activity.ID) -> Void
     let dateRangeCommandRequestID: UUID?
     let participantCommandRequestID: UUID?

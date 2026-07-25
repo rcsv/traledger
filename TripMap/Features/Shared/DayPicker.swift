@@ -37,7 +37,7 @@ struct DayPicker: View {
 struct TripDateRangeSheet: View {
     @Environment(\.dismiss) private var dismiss
     let timeZone: TimeZone
-    let onSave: (Date, Date) -> Void
+    let onSave: (Date, Date) -> Bool
     @State private var startDate: Date
     @State private var endDate: Date
 
@@ -45,7 +45,7 @@ struct TripDateRangeSheet: View {
         startDate: Date,
         endDate: Date,
         timeZoneIdentifier: String,
-        onSave: @escaping (Date, Date) -> Void
+        onSave: @escaping (Date, Date) -> Bool
     ) {
         timeZone = TimeZone(identifier: timeZoneIdentifier) ?? .current
         self.onSave = onSave
@@ -85,8 +85,9 @@ struct TripDateRangeSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("保存") {
-                        onSave(startDate, endDate)
-                        dismiss()
+                        if onSave(startDate, endDate) {
+                            dismiss()
+                        }
                     }
                 }
             }

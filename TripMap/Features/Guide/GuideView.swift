@@ -600,7 +600,7 @@ struct GuideView: View {
     private func updateTripDateRange(
         startDate: Date,
         endDate: Date
-    ) {
+    ) -> Bool {
         do {
             guard let timeZone = TimeZone(
                 identifier: trip.timeZoneIdentifier
@@ -630,9 +630,12 @@ struct GuideView: View {
             }
             if let persistenceError {
                 errorMessage = persistenceError
+                return false
             }
+            return true
         } catch {
             errorMessage = error.localizedDescription
+            return false
         }
     }
 

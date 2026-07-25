@@ -72,7 +72,9 @@ Activity must be cleared or moved first. A changed Day identity/date/order
 rejects the stale intent. Retained Days and all their current fields remain
 untouched except for the sequence needed by the new contiguous range. macOS
 Planner and iPhone/iPad Guide present the same date-range sheet and submit this
-same mutation; mobile does not maintain a second date editing contract.
+same mutation; mobile does not maintain a second date editing contract. The
+sheet dismisses only after persistence succeeds, retaining the proposed range
+after a removal rejection, concurrent structure change, or save error.
 
 Interactive Activity insertion generates its UUID before persistence and
 records the previous and next Activity IDs of the selected gap. Unchanged gaps
