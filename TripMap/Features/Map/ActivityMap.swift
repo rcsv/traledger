@@ -525,11 +525,15 @@ private struct PlaceDetailOverlay: View {
             }
         }
         .task(id: pickerItem) {
-            guard let originalData = try? await pickerItem?.loadTransferable(type: Data.self),
+            guard let selectedItem = pickerItem else { return }
+            let originalData = try? await selectedItem.loadTransferable(type: Data.self)
+            guard !Task.isCancelled else { return }
+            guard let originalData,
                   let data = TripImageProcessor.normalizedJPEGData(from: originalData) else {
-                if pickerItem != nil { imageError = "画像を読み込めませんでした。" }
+                imageError = "画像を読み込めませんでした。"
                 return
             }
+            guard !Task.isCancelled else { return }
             onUpdateImage(data)
             pickerItem = nil
         }

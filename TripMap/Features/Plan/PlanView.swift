@@ -206,11 +206,15 @@ struct PlanView: View {
             travelLoad.refresh(for: trip)
         }
         .task(id: coverPickerItem) {
-            guard let originalData = try? await coverPickerItem?.loadTransferable(type: Data.self),
+            guard let selectedItem = coverPickerItem else { return }
+            let originalData = try? await selectedItem.loadTransferable(type: Data.self)
+            guard !Task.isCancelled else { return }
+            guard let originalData,
                   let data = TripImageProcessor.normalizedJPEGData(from: originalData) else {
-                if coverPickerItem != nil { errorMessage = "表紙画像を読み込めませんでした。" }
+                errorMessage = "表紙画像を読み込めませんでした。"
                 return
             }
+            guard !Task.isCancelled else { return }
             coverPickerItem = nil
             requestImageUpdate(.cover(data), replacing: trip.coverImageData)
         }

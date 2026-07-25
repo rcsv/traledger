@@ -304,11 +304,14 @@ private struct MemoryEditorSheet: View {
         }
         .task(id: pickerItem) {
             guard let pickerItem else { return }
-            guard let original = try? await pickerItem.loadTransferable(type: Data.self),
+            let original = try? await pickerItem.loadTransferable(type: Data.self)
+            guard !Task.isCancelled else { return }
+            guard let original,
                   let normalized = TripImageProcessor.normalizedJPEGData(from: original) else {
                 imageError = "選択した写真を読み込めませんでした。"
                 return
             }
+            guard !Task.isCancelled else { return }
             photoData = normalized
         }
         .alert("写真を読み込めませんでした", isPresented: Binding(
