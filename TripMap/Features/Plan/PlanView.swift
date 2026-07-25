@@ -629,7 +629,10 @@ struct PlanView: View {
         }
     }
 
-    private func applyReplication(from sourceDayID: Day.ID, to targetDayIDs: Set<Day.ID>) {
+    private func applyReplication(
+        from sourceDayID: Day.ID,
+        to targetDayIDs: Set<Day.ID>
+    ) -> Bool {
         do {
             if let onApplyMutation {
                 guard let source = trip.days.first(
@@ -657,15 +660,22 @@ struct PlanView: View {
                     )
                 )
                 errorMessage = onApplyMutation(mutation)
-                return
+                return errorMessage == nil
             }
-            apply(try TripPlanEditor.replicateDayActivities(in: trip, from: sourceDayID, to: targetDayIDs))
+            return apply(
+                try TripPlanEditor.replicateDayActivities(
+                    in: trip,
+                    from: sourceDayID,
+                    to: targetDayIDs
+                )
+            )
         } catch {
             errorMessage = error.localizedDescription
+            return false
         }
     }
 
-    private func applySwap(first: Day.ID, second: Day.ID) {
+    private func applySwap(first: Day.ID, second: Day.ID) -> Bool {
         do {
             if let onApplyMutation {
                 guard let firstDay = trip.days.first(
@@ -687,11 +697,18 @@ struct PlanView: View {
                         )
                     )
                 )
-                return
+                return errorMessage == nil
             }
-            apply(try TripPlanEditor.swapDayPlans(in: trip, firstDayID: first, secondDayID: second))
+            return apply(
+                try TripPlanEditor.swapDayPlans(
+                    in: trip,
+                    firstDayID: first,
+                    secondDayID: second
+                )
+            )
         } catch {
             errorMessage = error.localizedDescription
+            return false
         }
     }
 
@@ -2480,7 +2497,7 @@ private enum DayOperation: Identifiable {
 private struct DayReplicationSheet: View {
     let days: [Day]
     let sourceDayID: Day.ID
-    let onConfirm: (Set<Day.ID>) -> Void
+    let onConfirm: (Set<Day.ID>) -> Bool
     @Environment(\.dismiss) private var dismiss
     @State private var targets: Set<Day.ID> = []
 
@@ -2502,7 +2519,12 @@ private struct DayReplicationSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("キャンセル") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("末尾へ追加") { onConfirm(targets); dismiss() }.disabled(targets.isEmpty)
+                    Button("末尾へ追加") {
+                        if onConfirm(targets) {
+                            dismiss()
+                        }
+                    }
+                    .disabled(targets.isEmpty)
                 }
             }
         }
@@ -2513,7 +2535,7 @@ private struct DayReplicationSheet: View {
 private struct DaySwapSheet: View {
     let days: [Day]
     let sourceDayID: Day.ID
-    let onConfirm: (Day.ID) -> Void
+    let onConfirm: (Day.ID) -> Bool
     @Environment(\.dismiss) private var dismiss
     @State private var targetDayID: Day.ID?
 
@@ -2528,8 +2550,11 @@ private struct DaySwapSheet: View {
                 ToolbarItem(placement: .cancellationAction) { Button("キャンセル") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("入れ替え") {
-                        if let targetDayID { onConfirm(targetDayID); dismiss() }
-                    }.disabled(targetDayID == nil)
+                        if let targetDayID, onConfirm(targetDayID) {
+                            dismiss()
+                        }
+                    }
+                    .disabled(targetDayID == nil)
                 }
             }
         }

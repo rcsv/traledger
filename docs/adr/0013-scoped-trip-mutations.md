@@ -95,13 +95,15 @@ all destination Activity and Place UUIDs before persistence. It reapplies the
 latest source fields only when that source structure is unchanged, appends the
 copies to the latest target Days, and therefore preserves target Activities
 added after the sheet opened. A changed source structure rejects the stale
-intent.
+intent. The target selection remains open when persistence rejects the
+operation.
 
 Day swap records both complete Activity UUID orders. When both structures still
 match, it swaps the latest Day titles and existing Activity relationships
 without replaying Activity fields or unrelated Trip fields. An append, delete,
 or reorder on either Day rejects the stale swap. Cross-replica ordering still
-needs an explicit convergence policy.
+needs an explicit convergence policy. The selected swap target remains open
+after a rejection or save error.
 
 Changing time zone is validated against the latest Domain snapshot but writes
 only `timeZoneIdentifier`. Local day codes and minute-of-day storage remain
