@@ -206,24 +206,46 @@ private struct ActivityInsertionButton: View {
     @FocusState private var isFocused: Bool
 
     var body: some View {
+        #if os(macOS)
+        let isActive = isHovered || isFocused
+        #else
+        let isActive = true
+        #endif
         Button {
             onInsert(anchor)
         } label: {
-            HStack(spacing: 10) {
-                Image(systemName: "plus")
-                    .font(.caption.bold())
-                    .foregroundStyle(.white)
-                    .frame(width: 26, height: 26)
-                    .background(Color.accentColor, in: Circle())
-                    .overlay {
-                        Circle().stroke(.background, lineWidth: 2)
+            HStack(spacing: 0) {
+                ZStack {
+                    Circle()
+                        .fill(
+                            isActive
+                                ? Color.accentColor
+                                : Color.accentColor.opacity(0.34)
+                        )
+                        .frame(
+                            width: isActive ? 22 : 8,
+                            height: isActive ? 22 : 8
+                        )
+
+                    Image(systemName: "plus")
+                        .font(.caption2.bold())
+                        .foregroundStyle(.white)
+                        .opacity(isActive ? 1 : 0)
+                }
+                .frame(width: 48, height: 26)
+                .overlay {
+                    if isActive {
+                        Circle()
+                            .stroke(.background, lineWidth: 2)
+                            .frame(width: 22, height: 22)
                     }
+                }
 
                 Text("予定を追加")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
                     #if os(macOS)
-                    .opacity(isHovered || isFocused ? 1 : 0)
+                    .opacity(isActive ? 1 : 0)
                     #endif
 
                 Spacer(minLength: 0)
@@ -238,6 +260,7 @@ private struct ActivityInsertionButton: View {
         .buttonStyle(.plain)
         .focused($isFocused)
         .onHover { isHovered = $0 }
+        .animation(.snappy(duration: 0.18), value: isActive)
         .accessibilityLabel("予定を追加")
         .accessibilityHint("挿入位置: \(positionLabel)")
         .accessibilityIdentifier("activity-insert-\(accessibilitySuffix)")
@@ -441,7 +464,7 @@ private struct ActivityCard: View {
             )
             .overlay {
                 RoundedRectangle(cornerRadius: 14)
-                    .stroke(isSelected ? Color.accentColor : .clear, lineWidth: 2)
+                    .stroke(isSelected ? Color.accentColor : .clear, lineWidth: 1.5)
             }
         }
         .buttonStyle(.plain)

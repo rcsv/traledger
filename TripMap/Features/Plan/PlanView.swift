@@ -157,9 +157,6 @@ struct PlanView: View {
                 }
             }
         }
-        // Keep the map-control in the window toolbar while allowing the map to
-        // continue behind it instead of reserving a separate white strip.
-        .toolbarBackground(.hidden, for: .windowToolbar)
         .frame(minWidth: isMapVisible ? 1000 : 760, minHeight: 620)
         .focusedSceneValue(
             \.macTripCommandActions,
@@ -467,7 +464,7 @@ struct PlanView: View {
             showsPlaceDetailOverlay: false,
             pinLabels: overviewPinLabels
         )
-        .ignoresSafeArea(edges: [.top, .bottom])
+        .ignoresSafeArea(edges: .bottom)
     }
 
     private var overviewDay: Day {
@@ -555,7 +552,7 @@ struct PlanView: View {
                 onDismissVenueCandidate: { venueCandidate = nil },
                 onAddVenueCandidate: presentActivityDraft
             )
-        .ignoresSafeArea(edges: [.top, .bottom])
+        .ignoresSafeArea(edges: .bottom)
     }
 
     private func selectActivityFromList(_ activityID: Activity.ID) {

@@ -158,7 +158,9 @@ struct ActivityMap: View {
                         }
                         .buttonStyle(.borderedProminent)
                         .padding()
-                        .frame(maxWidth: .infinity, alignment: .topTrailing)
+                        // Keep the top-trailing map ornament area available to
+                        // MapKit's compass, scale, and pitch controls.
+                        .frame(maxWidth: .infinity, alignment: .topLeading)
                         .accessibilityIdentifier("map-venue-search-button")
                     }
 

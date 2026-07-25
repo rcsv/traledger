@@ -57,6 +57,43 @@ final class VenueImageUITests: XCTestCase {
     }
 
     @MainActor
+    func testTimelineAndMapControlsKeepClearVisualHierarchy() {
+        let app = launchUserImageFixture(
+            additionalArguments: ["-tripmap-venue-image-qa-regular"]
+        )
+        let mapSearch = app.buttons["map-venue-search-button"].firstMatch
+        let toolbar = app.toolbars.firstMatch
+
+        XCTAssertTrue(mapSearch.waitForExistence(timeout: 15))
+        XCTAssertTrue(mapSearch.isHittable)
+        XCTAssertTrue(toolbar.exists)
+        XCTAssertGreaterThanOrEqual(
+            mapSearch.frame.minY,
+            toolbar.frame.maxY - 2,
+            "Map actions must start below the window toolbar."
+        )
+
+        for identifier in [
+            "activity-insert-start",
+            "activity-insert-between-1",
+            "activity-insert-between-2",
+            "activity-insert-end"
+        ] {
+            let insertionPoint = app.buttons[identifier].firstMatch
+            XCTAssertTrue(insertionPoint.exists, "\(identifier) must remain available.")
+            XCTAssertTrue(insertionPoint.isHittable, "\(identifier) must remain operable.")
+        }
+
+        let screenshot = XCTAttachment(
+            screenshot: XCUIScreen.main.screenshot(),
+            quality: .original
+        )
+        screenshot.name = "Timeline and map control hierarchy"
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
+    }
+
+    @MainActor
     func testWikimediaFallbackInVenueCard() {
         let app = XCUIApplication()
         app.launchArguments = [
