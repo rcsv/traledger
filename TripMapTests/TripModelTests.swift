@@ -889,6 +889,46 @@ final class TripModelTests: XCTestCase {
         })
     }
 
+    @MainActor
+    func testTravelLegRefreshRestartsARequestCanceledByTripUpdate() async throws {
+        var trip = OkinawaSample.trip
+        let day = trip.days[1]
+        trip.days = [
+            Day(
+                id: day.id,
+                sequence: 1,
+                date: day.date,
+                title: day.title,
+                activities: Array(day.orderedActivities.prefix(2))
+            )
+        ]
+        trip.dateRange = day.date...day.date
+
+        let firstRequestStarted = expectation(description: "First route request started")
+        let estimate = TravelLegEstimate(durationMinutes: 12, calculatedAt: Date())
+        var calculationCalls = 0
+        let model = TripTravelLoadModel { _, _, _ in
+            calculationCalls += 1
+            if calculationCalls == 1 {
+                firstRequestStarted.fulfill()
+                try? await Task.sleep(for: .seconds(1))
+            }
+            return .loaded(estimate)
+        }
+
+        model.refresh(for: trip)
+        await fulfillment(of: [firstRequestStarted], timeout: 1)
+
+        var updatedTrip = trip
+        updatedTrip.title = "Updated while calculating"
+        model.refresh(for: updatedTrip)
+        await model.awaitCurrentRefresh()
+
+        XCTAssertEqual(calculationCalls, 2)
+        XCTAssertEqual(try XCTUnwrap(model.legs.first).calculationState, .loaded(estimate))
+        XCTAssertFalse(model.legs.contains(where: { $0.calculationState == .loading }))
+    }
+
     func testTravelLegIdentityIsDirectionalAndSurvivesUnrelatedActivityEdits() {
         var trip = OkinawaSample.trip
         let originalLegs = TravelLegProjection.activeLegs(for: trip)

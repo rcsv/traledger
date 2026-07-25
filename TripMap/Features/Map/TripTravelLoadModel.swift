@@ -12,6 +12,21 @@ final class TripTravelLoadModel: ObservableObject {
     private var calculations: [TravelLegRoutingFingerprint: TravelLegCalculationState] = [:]
     private var refreshTask: Task<Void, Never>?
     private var refreshGeneration = 0
+    private let calculateRoute: @MainActor (
+        CLLocationCoordinate2D,
+        CLLocationCoordinate2D,
+        TravelTransportType
+    ) async -> TravelLegCalculationState
+
+    init(
+        calculateRoute: @escaping @MainActor (
+            CLLocationCoordinate2D,
+            CLLocationCoordinate2D,
+            TravelTransportType
+        ) async -> TravelLegCalculationState = TripTravelLoadModel.calculate
+    ) {
+        self.calculateRoute = calculateRoute
+    }
 
     deinit {
         refreshTask?.cancel()
@@ -21,6 +36,13 @@ final class TripTravelLoadModel: ObservableObject {
         refreshGeneration += 1
         let generation = refreshGeneration
         refreshTask?.cancel()
+        refreshTask = nil
+        calculations = calculations.mapValues { state in
+            if case .loading = state {
+                return .idle
+            }
+            return state
+        }
 
         #if TRIPMAP_QA
         if ProcessInfo.processInfo.arguments.contains("-tripmap-travel-leg-qa") {
@@ -79,12 +101,17 @@ final class TripTravelLoadModel: ObservableObject {
         publishLegs(for: trip)
         guard !requests.isEmpty else { return }
 
+        let calculateRoute = calculateRoute
         refreshTask = Task { [weak self] in
             for request in requests {
                 guard !Task.isCancelled else { return }
-                let result = await Self.calculate(for: request)
+                let calculationState = await calculateRoute(
+                    request.fromCoordinate,
+                    request.toCoordinate,
+                    request.transportType
+                )
                 guard let self, !Task.isCancelled, self.refreshGeneration == generation else { return }
-                self.calculations[request.fingerprint] = result.calculationState
+                self.calculations[request.fingerprint] = calculationState
                 self.publishLegs(for: trip)
             }
         }
@@ -102,6 +129,11 @@ final class TripTravelLoadModel: ObservableObject {
         refresh(for: trip)
     }
 
+    /// Test seam for deterministic cancellation and refresh verification.
+    func awaitCurrentRefresh() async {
+        await refreshTask?.value
+    }
+
     private func publishLegs(for trip: Trip) {
         legs = TravelLegProjection.activeLegs(
             for: trip,
@@ -117,11 +149,15 @@ final class TripTravelLoadModel: ObservableObject {
         )
     }
 
-    private static func calculate(for request: RouteRequest) async -> RouteCalculationResult {
+    private static func calculate(
+        from fromCoordinate: CLLocationCoordinate2D,
+        to toCoordinate: CLLocationCoordinate2D,
+        transportType: TravelTransportType
+    ) async -> TravelLegCalculationState {
         let directionsRequest = MKDirections.Request()
-        directionsRequest.source = MKMapItem(placemark: MKPlacemark(coordinate: request.fromCoordinate))
-        directionsRequest.destination = MKMapItem(placemark: MKPlacemark(coordinate: request.toCoordinate))
-        directionsRequest.transportType = request.transportType.mapKitTransportType
+        directionsRequest.source = MKMapItem(placemark: MKPlacemark(coordinate: fromCoordinate))
+        directionsRequest.destination = MKMapItem(placemark: MKPlacemark(coordinate: toCoordinate))
+        directionsRequest.transportType = transportType.mapKitTransportType
 
         do {
             let response = try await MKDirections(request: directionsRequest).calculate()
@@ -145,20 +181,6 @@ private extension TravelTransportType {
         case .walking: .walking
         case .transit: .transit
         case .other: .any
-        }
-    }
-}
-
-private enum RouteCalculationResult {
-    case loaded(TravelLegEstimate)
-    case unavailable
-    case failed
-
-    var calculationState: TravelLegCalculationState {
-        switch self {
-        case .loaded(let estimate): .loaded(estimate)
-        case .unavailable: .unavailable
-        case .failed: .failed
         }
     }
 }
