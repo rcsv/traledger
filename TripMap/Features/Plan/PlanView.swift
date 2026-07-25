@@ -2222,68 +2222,6 @@ private struct TripOverviewView: View {
     private func save() { try? modelContext.save() }
 }
 
-private struct TripDateRangeSheet: View {
-    @Environment(\.dismiss) private var dismiss
-    let timeZone: TimeZone
-    let onSave: (Date, Date) -> Void
-    @State private var startDate: Date
-    @State private var endDate: Date
-
-    init(
-        startDate: Date,
-        endDate: Date,
-        timeZoneIdentifier: String,
-        onSave: @escaping (Date, Date) -> Void
-    ) {
-        timeZone = TimeZone(identifier: timeZoneIdentifier) ?? .current
-        self.onSave = onSave
-        _startDate = State(initialValue: startDate)
-        _endDate = State(initialValue: endDate)
-    }
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                DatePicker(
-                    "開始日",
-                    selection: $startDate,
-                    displayedComponents: .date
-                )
-                DatePicker(
-                    "終了日",
-                    selection: $endDate,
-                    in: startDate...,
-                    displayedComponents: .date
-                )
-
-                Text("予定があるDayは日程から削除できません。先に予定を移動または削除してください。")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            .environment(\.timeZone, timeZone)
-            .navigationTitle("旅行の日程を変更")
-            .onChange(of: startDate) { _, newStartDate in
-                if endDate < newStartDate {
-                    endDate = newStartDate
-                }
-            }
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("キャンセル") { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("保存") {
-                        onSave(startDate, endDate)
-                        dismiss()
-                    }
-                }
-            }
-        }
-        .frame(minWidth: 380, minHeight: 240)
-        .accessibilityIdentifier("trip-date-range-editor")
-    }
-}
-
 private struct ParticipantPickerSheet: View {
     let participants: [StoredParticipant]
     let onSelect: (StoredParticipant) -> Void

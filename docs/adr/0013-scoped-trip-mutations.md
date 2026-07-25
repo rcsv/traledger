@@ -70,13 +70,19 @@ pre-generates stable UUIDs for every added Day. Extending a range creates only
 empty Days. Contracting a range may remove only empty Days; a Day with an
 Activity must be cleared or moved first. A changed Day identity/date/order
 rejects the stale intent. Retained Days and all their current fields remain
-untouched except for the sequence needed by the new contiguous range.
+untouched except for the sequence needed by the new contiguous range. macOS
+Planner and iPhone/iPad Guide present the same date-range sheet and submit this
+same mutation; mobile does not maintain a second date editing contract.
 
-Activity append generates its UUID before persistence and assigns sequence
-against the latest Day, so concurrent appends survive. Activity delete requires
-the Day UUID observed by the initiating UI, renumbers only that Day, deletes
-owned Venue/reservation records and referencing travel-leg preferences, and
-rejects an Activity that moved to another Day.
+Interactive Activity insertion generates its UUID before persistence and
+records the previous and next Activity IDs of the selected gap. Unchanged gaps
+accept insertion and normalize the Day sequence; a changed gap is rejected
+instead of falling back to an index. Activity delete requires the Day UUID
+observed by the initiating UI, renumbers only that Day, deletes owned
+Venue/reservation records and referencing travel-leg preferences, and rejects
+an Activity that moved to another Day. Its inverse restores the complete
+Activity and its directly referencing travel-leg preferences at the original
+gap, enabling scoped Undo/Redo without replaying a Trip snapshot.
 
 Move/reorder records whether the dragged Activity belongs before or after a
 stable anchor Activity. Undo records the original neighbor as an inverse
@@ -117,7 +123,8 @@ been cleared.
   Activity changes.
 - Trip date-range extension preserves retained Day identities and fields,
   creates stable empty Days, and rejects contraction over a Day with Activities
-  or any concurrently changed Day structure.
+  or any concurrently changed Day structure. The same editor and mutation are
+  reachable from macOS, iPhone, and iPad.
 - Plan and Guide Activity edits preserve fields owned by the other workflow.
 - Venue replacement/clear and reservation replacement/clear delete superseded
   SwiftData children in the same `ModelContext` transaction.
@@ -125,9 +132,11 @@ been cleared.
   preserves other legs and Activity fields.
 - Currency and time-zone changes preserve concurrent Activity edits; time-zone
   changes preserve local calendar days and start minutes.
-- Activity append preserves concurrent appends with stable identities.
+- Activity insertion preserves unrelated concurrent additions, rejects a
+  changed selected gap, and uses stable identities.
 - Activity delete preserves concurrent additions, cascades owned children and
-  referencing leg preferences, and rejects a changed parent Day.
+  referencing leg preferences, rejects a changed parent Day, and has a scoped
+  restore inverse.
 - Activity move and its inverse update only sequence fields and preserve edits
   made before Undo.
 - Day replication preserves target-side appends, copies the latest source
@@ -164,9 +173,11 @@ In-memory SwiftData regression tests must prove that:
   clearing the default preference removes only its own record;
 - currency/time-zone changes preserve concurrent Activity data and local
   calendar semantics;
-- concurrent Activity appends both survive with contiguous local sequence;
+- beginning, middle, and end insertion normalize sequence; unrelated concurrent
+  additions survive while a changed insertion gap is rejected;
 - Activity delete removes owned children and referencing leg preferences while
-  preserving unrelated additions and preferences;
+  preserving unrelated additions and preferences; scoped restore recovers the
+  complete Activity and its leg intent without removing a concurrent append;
 - Activity move followed by concurrent edits and its inverse restores relative
   order without discarding the edits or an appended Activity;
 - Day replication preserves a target append, uses its pre-generated

@@ -116,8 +116,9 @@ Local preconditions completed on 2026-07-25:
   sequence. Local tests preserve retained UUIDs and concurrent Activity fields,
   create added Days with pre-generated UUIDs, remove only empty Days, and reject
   an Activity added to a removal target or any changed Day identity/date/order.
-  The macOS Overview sheet is implemented; visual confirmation remains an
-  environment gate.
+  macOS Overview and the iPhone/iPad Guide Trip menu open the same sheet and
+  submit the same mutation; mobile viewport confirmation remains an environment
+  gate.
 - C03 has a scoped Memory intent that owns completion, photo, and reflection.
 - C02/C09 Plan and Guide Activity edits have separate field ownership; Guide
   owns progress, reservation, and reminder without replaying planning fields.

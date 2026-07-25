@@ -26,6 +26,7 @@ struct GuideView: View {
     @State private var isOfflineReviewPresented = false
     @State private var isMemoryPresented = false
     @State private var isTripRenamePresented = false
+    @State private var isDateRangeEditorPresented = false
     @State private var errorMessage: String?
     #if TRIPMAP_QA
     @State private var didOpenQuickEditFromLaunchArgument = false
@@ -93,6 +94,11 @@ struct GuideView: View {
                     isTripRenamePresented = true
                 }
                 .accessibilityIdentifier("guide-trip-rename-button")
+
+                Button("日程を変更", systemImage: "calendar.badge.clock") {
+                    isDateRangeEditorPresented = true
+                }
+                .accessibilityIdentifier("guide-date-range-edit-button")
             }
 
             if let selectedActivityID = interaction.selectedActivityID,
@@ -180,6 +186,14 @@ struct GuideView: View {
             GuideTripRenameSheet(title: trip.title) { title in
                 updateTripTitle(title)
             }
+        }
+        .sheet(isPresented: $isDateRangeEditorPresented) {
+            TripDateRangeSheet(
+                startDate: trip.dateRange.lowerBound,
+                endDate: trip.dateRange.upperBound,
+                timeZoneIdentifier: trip.timeZoneIdentifier,
+                onSave: updateTripDateRange
+            )
         }
         .alert("操作を完了できませんでした", isPresented: Binding(
             get: { errorMessage != nil },
@@ -580,6 +594,45 @@ struct GuideView: View {
         } catch {
             errorMessage = error.localizedDescription
             return false
+        }
+    }
+
+    private func updateTripDateRange(
+        startDate: Date,
+        endDate: Date
+    ) {
+        do {
+            guard let timeZone = TimeZone(
+                identifier: trip.timeZoneIdentifier
+            ) else {
+                throw TripPlanEditingError.invalidTimeZone
+            }
+            let mutation = TripMutation.changeTripDateRange(
+                try TripPlanEditor.makeDateRangeMutation(
+                    in: trip,
+                    startDate: LocalDate(
+                        date: startDate,
+                        timeZone: timeZone
+                    ),
+                    endDate: LocalDate(
+                        date: endDate,
+                        timeZone: timeZone
+                    )
+                )
+            )
+            let persistenceError: String?
+            if let onApplyMutation {
+                persistenceError = onApplyMutation(mutation)
+            } else {
+                persistenceError = onApplyPlan(
+                    try mutation.applying(to: trip)
+                )
+            }
+            if let persistenceError {
+                errorMessage = persistenceError
+            }
+        } catch {
+            errorMessage = error.localizedDescription
         }
     }
 
