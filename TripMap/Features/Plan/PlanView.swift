@@ -31,6 +31,7 @@ struct PlanView: View {
     @State private var coverPickerItem: PhotosPickerItem?
     @State private var isActivityCreationPresented = false
     @State private var activityEditor: ActivityEditorTarget?
+    @State private var travelLegEditTarget: TravelLegID?
     @State private var pendingActivityDeletion: ActivityEditorTarget?
     @State private var pendingVenueFocusActivityID: Activity.ID?
     @State private var isMemoryPresented = false
@@ -243,6 +244,22 @@ struct PlanView: View {
                     day: day,
                     timeZoneIdentifier: trip.timeZoneIdentifier,
                     onSave: updateActivity
+                )
+            }
+        }
+        .sheet(item: $travelLegEditTarget) { legID in
+            if let (leg, fromActivity, toActivity) = legAndActivities(for: legID) {
+                TravelLegEditSheet(
+                    leg: leg,
+                    fromActivityTitle: fromActivity.title,
+                    toActivityTitle: toActivity.title,
+                    onSave: updateTravelLeg,
+                    onRetry: retryTravelLeg
+                )
+            } else {
+                ContentUnavailableView(
+                    "移動区間が見つかりません",
+                    systemImage: "arrow.trianglehead.swap"
                 )
             }
         }
@@ -475,7 +492,8 @@ struct PlanView: View {
                         activityID: activityID,
                         relativeTo: targetActivityID
                     )
-                }
+                },
+                onEditTravelLeg: { travelLegEditTarget = $0 }
             )
         }
     }
@@ -504,6 +522,21 @@ struct PlanView: View {
 
     private func selectActivityFromMap(_ activityID: Activity.ID) {
         interaction.selectActivity(activityID, source: .map, in: trip)
+    }
+
+    private func legAndActivities(
+        for legID: TravelLegID
+    ) -> (TravelLeg, Activity, Activity)? {
+        guard let leg = travelLoad.legs.first(where: { $0.id == legID }),
+              let fromActivity = trip.days
+                .flatMap(\.activities)
+                .first(where: { $0.id == legID.fromActivityID }),
+              let toActivity = trip.days
+                .flatMap(\.activities)
+                .first(where: { $0.id == legID.toActivityID }) else {
+            return nil
+        }
+        return (leg, fromActivity, toActivity)
     }
 
     private func selectActivityFromOverviewMap(_ activityID: Activity.ID) {
@@ -831,6 +864,73 @@ struct PlanView: View {
             apply(try TripPlanEditor.changeTimeZone(in: trip, to: identifier))
         } catch {
             errorMessage = error.localizedDescription
+        }
+    }
+
+    private func updateTravelLeg(
+        legID: TravelLegID,
+        transportType: TravelTransportType,
+        manualDurationMinutes: Int?,
+        note: String?
+    ) -> Bool {
+        persistTravelLegPreference(
+            legID: legID,
+            transportType: transportType,
+            manualDurationMinutes: manualDurationMinutes,
+            note: note
+        ) { updated in
+            travelLoad.refresh(for: updated)
+        }
+    }
+
+    private func retryTravelLeg(
+        legID: TravelLegID,
+        transportType: TravelTransportType,
+        manualDurationMinutes: Int?,
+        note: String?
+    ) -> Bool {
+        persistTravelLegPreference(
+            legID: legID,
+            transportType: transportType,
+            manualDurationMinutes: manualDurationMinutes,
+            note: note
+        ) { updated in
+            travelLoad.retry(legID, for: updated)
+        }
+    }
+
+    private func persistTravelLegPreference(
+        legID: TravelLegID,
+        transportType: TravelTransportType,
+        manualDurationMinutes: Int?,
+        note: String?,
+        afterPersistence: (Trip) -> Void
+    ) -> Bool {
+        do {
+            let mutation = TripMutation.setTravelLegPreference(
+                TravelLegPreferenceMutation(
+                    legID: legID,
+                    transportType: transportType,
+                    manualDurationMinutes: manualDurationMinutes,
+                    note: note
+                )
+            )
+            let updated = try mutation.applying(to: trip)
+            let persistenceError: String?
+            if let onApplyMutation {
+                persistenceError = onApplyMutation(mutation)
+            } else {
+                persistenceError = onApplyPlan(updated)
+            }
+            if let persistenceError {
+                errorMessage = persistenceError
+                return false
+            }
+            afterPersistence(updated)
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
         }
     }
 
