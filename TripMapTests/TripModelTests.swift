@@ -515,6 +515,24 @@ final class TripModelTests: XCTestCase {
         XCTAssertNil(PlaceMapItemResolver.bestMatch(in: [unrelated], for: place))
     }
 
+    @MainActor
+    func testCancelingPlaceResolutionRestoresTheMapsButtonToIdle() throws {
+        let place = try XCTUnwrap(OkinawaSample.trip.days[1].activities[0].place)
+        let model = PlaceResolutionModel(resolver: { _ in
+            try await Task.sleep(for: .seconds(1))
+            throw CancellationError()
+        })
+
+        model.load(place)
+        XCTAssertEqual(model.phase, .loading)
+
+        model.cancel()
+
+        XCTAssertEqual(model.phase, .idle)
+        XCTAssertNil(model.mapItem)
+        XCTAssertNil(model.errorMessage)
+    }
+
     func testEmptyTripIsReportedWithoutCreatingASelection() {
         let trip = PrototypeEdgeCases.emptyTrip
         let interaction = TripInteractionState(trip: trip)

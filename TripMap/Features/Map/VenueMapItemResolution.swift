@@ -70,6 +70,13 @@ final class PlaceResolutionModel: ObservableObject {
 
     private var resolutionTask: Task<Void, Never>?
     private var timeoutTask: Task<Void, Never>?
+    private let resolver: @MainActor (PlaceSnapshot) async throws -> MKMapItem
+
+    init(
+        resolver: @escaping @MainActor (PlaceSnapshot) async throws -> MKMapItem = PlaceMapItemResolver.resolve
+    ) {
+        self.resolver = resolver
+    }
 
     func load(_ place: PlaceSnapshot, onSuccess: @escaping @MainActor (MKMapItem) -> Void = { _ in }) {
         cancel()
@@ -77,9 +84,10 @@ final class PlaceResolutionModel: ObservableObject {
         mapItem = nil
         errorMessage = nil
 
+        let resolver = resolver
         resolutionTask = Task { [weak self] in
             do {
-                let item = try await PlaceMapItemResolver.resolve(place)
+                let item = try await resolver(place)
                 guard let self, !Task.isCancelled, self.phase == .loading else { return }
                 self.timeoutTask?.cancel()
                 self.mapItem = item
@@ -112,6 +120,9 @@ final class PlaceResolutionModel: ObservableObject {
         timeoutTask?.cancel()
         resolutionTask = nil
         timeoutTask = nil
+        if phase == .loading {
+            phase = .idle
+        }
     }
 
     func dismissError() {
