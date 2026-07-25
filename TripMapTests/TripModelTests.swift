@@ -46,6 +46,27 @@ final class TripModelTests: XCTestCase {
     }
 
     @MainActor
+    func testAsyncSerialTaskQueueContinuesAfterAnOperationFails() async throws {
+        let queue = AsyncSerialTaskQueue<UUID>()
+        let tripID = UUID()
+
+        do {
+            try await queue.run(for: tripID) {
+                throw CancellationError()
+            }
+            XCTFail("The first operation must surface its error.")
+        } catch is CancellationError {
+        }
+
+        var didRunNextOperation = false
+        try await queue.run(for: tripID) {
+            didRunNextOperation = true
+        }
+
+        XCTAssertTrue(didRunNextOperation)
+    }
+
+    @MainActor
     func testMacCommandRouterPublishesDistinctLibraryIntents() throws {
         let router = MacCommandRouter()
 
