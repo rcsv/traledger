@@ -8,6 +8,44 @@ import XCTest
 
 final class TripModelTests: XCTestCase {
     @MainActor
+    func testAsyncSerialTaskQueuePreservesOrderForTheSameTrip() async throws {
+        let queue = AsyncSerialTaskQueue<UUID>()
+        let tripID = UUID()
+        var events: [String] = []
+        let firstStarted = expectation(description: "First operation started")
+        var releaseFirst: CheckedContinuation<Void, Never>?
+
+        let first = Task { @MainActor in
+            try await queue.run(for: tripID) {
+                events.append("first-start")
+                firstStarted.fulfill()
+                await withCheckedContinuation {
+                    releaseFirst = $0
+                }
+                events.append("first-end")
+            }
+        }
+        await fulfillment(of: [firstStarted], timeout: 1)
+        let second = Task { @MainActor in
+            try await queue.run(for: tripID) {
+                events.append("second-start")
+                events.append("second-end")
+            }
+        }
+        await Task.yield()
+        XCTAssertEqual(events, ["first-start"])
+        releaseFirst?.resume()
+
+        try await first.value
+        try await second.value
+
+        XCTAssertEqual(
+            events,
+            ["first-start", "first-end", "second-start", "second-end"]
+        )
+    }
+
+    @MainActor
     func testMacCommandRouterPublishesDistinctLibraryIntents() throws {
         let router = MacCommandRouter()
 

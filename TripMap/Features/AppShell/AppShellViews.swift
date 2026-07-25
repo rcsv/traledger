@@ -1,6 +1,40 @@
 import SwiftData
 import SwiftUI
 
+/// Serializes async side effects for one domain object while allowing different
+/// objects to proceed independently.
+@MainActor
+final class AsyncSerialTaskQueue<Key: Hashable> {
+    private var tails: [Key: Task<Void, Never>] = [:]
+    private var activeTokens: [Key: UUID] = [:]
+
+    func run(
+        for key: Key,
+        operation: @escaping @MainActor () async throws -> Void
+    ) async throws {
+        let previous = tails[key]
+        let token = UUID()
+        activeTokens[key] = token
+
+        let operationTask = Task { @MainActor in
+            await previous?.value
+            try await operation()
+        }
+        let tail = Task { @MainActor in
+            _ = try? await operationTask.value
+        }
+        tails[key] = tail
+
+        defer {
+            if activeTokens[key] == token {
+                activeTokens[key] = nil
+                tails[key] = nil
+            }
+        }
+        try await operationTask.value
+    }
+}
+
 #if os(macOS)
 import AppKit
 #endif

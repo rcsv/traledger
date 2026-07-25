@@ -1253,10 +1253,26 @@ private enum GuideReminderSchedulingError: LocalizedError {
 
 @MainActor
 enum GuideReminderScheduler {
+    private static let queue = AsyncSerialTaskQueue<Trip.ID>()
+
     static func sync(
         trip: Trip,
         requestingAuthorization: Bool,
         now: Date = Date()
+    ) async throws {
+        try await queue.run(for: trip.id) {
+            try await performSync(
+                trip: trip,
+                requestingAuthorization: requestingAuthorization,
+                now: now
+            )
+        }
+    }
+
+    private static func performSync(
+        trip: Trip,
+        requestingAuthorization: Bool,
+        now: Date
     ) async throws {
         let center = UNUserNotificationCenter.current()
         let prefix = ActivityReminderProjection.identifierPrefix(for: trip.id)
