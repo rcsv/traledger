@@ -380,3 +380,178 @@ enum MemoryProjection {
         )
     }
 }
+
+struct ActivityCategoryAnalysis: Identifiable, Hashable, Sendable {
+    let category: ActivityCategory
+    let count: Int
+    let fraction: Double
+
+    var id: ActivityCategory { category }
+}
+
+struct ActivityAnalysisSummary: Hashable, Sendable {
+    let totalActivityCount: Int
+    let unclassifiedCount: Int
+    let unclassifiedFraction: Double
+    let categories: [ActivityCategoryAnalysis]
+}
+
+enum ActivityAnalysisProjection {
+    static func summary(for trip: Trip) -> ActivityAnalysisSummary {
+        let activities = trip.orderedDays
+            .flatMap(\.orderedActivities)
+            .filter { $0.progress != .skipped }
+        let total = activities.count
+        let counts = Dictionary(
+            grouping: activities.compactMap(\.category),
+            by: { $0 }
+        )
+        .mapValues(\.count)
+        let categoryOrder = Dictionary(
+            uniqueKeysWithValues: ActivityCategory.allCases.enumerated().map {
+                ($0.element, $0.offset)
+            }
+        )
+        let categories = counts
+            .map { category, count in
+                ActivityCategoryAnalysis(
+                    category: category,
+                    count: count,
+                    fraction: fraction(count, of: total)
+                )
+            }
+            .sorted {
+                if $0.count != $1.count {
+                    return $0.count > $1.count
+                }
+                return categoryOrder[$0.category, default: .max]
+                    < categoryOrder[$1.category, default: .max]
+            }
+        let unclassifiedCount = activities.filter {
+            $0.category == nil
+        }.count
+        return ActivityAnalysisSummary(
+            totalActivityCount: total,
+            unclassifiedCount: unclassifiedCount,
+            unclassifiedFraction: fraction(unclassifiedCount, of: total),
+            categories: categories
+        )
+    }
+
+    private static func fraction(_ count: Int, of total: Int) -> Double {
+        guard total > 0 else { return 0 }
+        return Double(count) / Double(total)
+    }
+}
+
+struct ReservationKindSummary: Identifiable, Hashable, Sendable {
+    let kind: ReservationKind
+    let count: Int
+
+    var id: ReservationKind { kind }
+}
+
+struct UpcomingReservationSummary: Identifiable, Hashable, Sendable {
+    let reservationID: ReservationReference.ID
+    let activityID: Activity.ID
+    let dayID: Day.ID
+    let daySequence: Int
+    let activityTitle: String
+    let reservationTitle: String
+    let kind: ReservationKind
+    let startTime: Date
+
+    var id: ReservationReference.ID { reservationID }
+}
+
+struct ReservationSummary: Hashable, Sendable {
+    let totalCount: Int
+    let unscheduledCount: Int
+    let kinds: [ReservationKindSummary]
+    let nextReservation: UpcomingReservationSummary?
+}
+
+enum ReservationSummaryProjection {
+    static func summary(
+        for trip: Trip,
+        now: Date = Date()
+    ) -> ReservationSummary {
+        let entries = trip.orderedDays.flatMap { day in
+            day.orderedActivities.compactMap { activity in
+                activity.reservation.map {
+                    (
+                        day: day,
+                        activity: activity,
+                        reservation: $0
+                    )
+                }
+            }
+        }
+        let counts = Dictionary(
+            grouping: entries.map(\.reservation.kind),
+            by: { $0 }
+        )
+        .mapValues(\.count)
+        let kinds = ReservationKind.allCases.compactMap { kind in
+            counts[kind].map {
+                ReservationKindSummary(kind: kind, count: $0)
+            }
+        }
+        let next = entries
+            .filter {
+                $0.activity.progress == .planned
+                    && ($0.activity.startTime ?? .distantPast) >= now
+            }
+            .sorted(by: upcomingOrder)
+            .first
+            .flatMap { entry -> UpcomingReservationSummary? in
+                guard let startTime = entry.activity.startTime else {
+                    return nil
+                }
+                return UpcomingReservationSummary(
+                    reservationID: entry.reservation.id,
+                    activityID: entry.activity.id,
+                    dayID: entry.day.id,
+                    daySequence: entry.day.sequence,
+                    activityTitle: entry.activity.title,
+                    reservationTitle: entry.reservation.title,
+                    kind: entry.reservation.kind,
+                    startTime: startTime
+                )
+            }
+        return ReservationSummary(
+            totalCount: entries.count,
+            unscheduledCount: entries.filter {
+                $0.activity.startTime == nil
+            }.count,
+            kinds: kinds,
+            nextReservation: next
+        )
+    }
+
+    private static func upcomingOrder(
+        _ lhs: (
+            day: Day,
+            activity: Activity,
+            reservation: ReservationReference
+        ),
+        _ rhs: (
+            day: Day,
+            activity: Activity,
+            reservation: ReservationReference
+        )
+    ) -> Bool {
+        let lhsStart = lhs.activity.startTime ?? .distantFuture
+        let rhsStart = rhs.activity.startTime ?? .distantFuture
+        if lhsStart != rhsStart {
+            return lhsStart < rhsStart
+        }
+        if lhs.day.sequence != rhs.day.sequence {
+            return lhs.day.sequence < rhs.day.sequence
+        }
+        if lhs.activity.sequence != rhs.activity.sequence {
+            return lhs.activity.sequence < rhs.activity.sequence
+        }
+        return lhs.activity.id.uuidString < rhs.activity.id.uuidString
+    }
+}

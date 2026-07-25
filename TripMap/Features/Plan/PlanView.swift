@@ -381,6 +381,7 @@ struct PlanView: View {
             coverPickerItem: $coverPickerItem,
             onRenameTrip: updateTripTitle,
             onChangeDateRange: updateTripDateRange,
+            onSelectActivity: selectActivityFromOverviewSummary,
             onSelectCurrency: updateTripCurrency,
             onSelectTimeZone: updateTripTimeZone,
             onSelectDoctorIssue: selectDoctorIssue
@@ -477,12 +478,25 @@ struct PlanView: View {
     }
 
     private func selectActivityFromOverviewMap(_ activityID: Activity.ID) {
+        selectActivityFromOverview(activityID, source: .map)
+    }
+
+    private func selectActivityFromOverviewSummary(
+        _ activityID: Activity.ID
+    ) {
+        selectActivityFromOverview(activityID, source: .list)
+    }
+
+    private func selectActivityFromOverview(
+        _ activityID: Activity.ID,
+        source: ActivitySelectionSource
+    ) {
         guard let day = trip.days.first(where: { day in
             day.activities.contains(where: { $0.id == activityID })
         }) else { return }
         destination = .day(day.id)
         interaction.selectDay(day.id, in: trip)
-        interaction.selectActivity(activityID, source: .map, in: trip)
+        interaction.selectActivity(activityID, source: source, in: trip)
     }
 
     private func selectDoctorIssue(_ issue: TripDoctorIssue) {
@@ -1508,6 +1522,7 @@ private struct TripOverviewView: View {
     @Binding var coverPickerItem: PhotosPickerItem?
     let onRenameTrip: (String) -> Void
     let onChangeDateRange: (Date, Date) -> Void
+    let onSelectActivity: (Activity.ID) -> Void
     let onSelectCurrency: (String) -> Void
     let onSelectTimeZone: (String) -> Void
     let onSelectDoctorIssue: (TripDoctorIssue) -> Void
@@ -1517,6 +1532,7 @@ private struct TripOverviewView: View {
     @State private var isRenameTripPresented = false
     @State private var tripTitleDraft = ""
     @State private var isDateRangeEditorPresented = false
+    @State private var showsAllActivityCategories = false
 
     private let timeZones = [
         "Asia/Tokyo", "Asia/Singapore", "Australia/Sydney", "Pacific/Auckland",
@@ -1590,6 +1606,8 @@ private struct TripOverviewView: View {
                         VStack(spacing: 12) {
                             LabeledContent("日程", value: "\(trip.orderedDays.count) days")
                             Divider()
+                            LabeledContent("Venues", value: "\(placeCount)")
+                            Divider()
                             LabeledContent("タイムゾーン") {
                                 Menu {
                                     ForEach(timeZones, id: \.self) { identifier in
@@ -1615,18 +1633,158 @@ private struct TripOverviewView: View {
                         .padding(.top, 6)
                     }
 
-                    GroupBox("Plan summary") {
-                        VStack(spacing: 12) {
-                            LabeledContent("Activities", value: "\(activityCount)")
-                            Divider()
-                            LabeledContent("Venues", value: "\(placeCount)")
-                            Divider()
-                            LabeledContent("Expenses estimated", value: "—")
-                            Divider()
-                            LabeledContent("Total distance", value: "—")
+                    GroupBox("Activity Analysis") {
+                        if activityAnalysis.totalActivityCount == 0 {
+                            ContentUnavailableView(
+                                "分析できる予定がありません",
+                                systemImage: "chart.bar.xaxis",
+                                description: Text("Activityを追加するとカテゴリ分布を表示します。")
+                            )
+                        } else {
+                            VStack(spacing: 12) {
+                                LabeledContent(
+                                    "Activities",
+                                    value: "\(activityAnalysis.totalActivityCount)"
+                                )
+                                Divider()
+                                analysisRow(
+                                    title: "未分類",
+                                    systemImage: "questionmark.circle",
+                                    count: activityAnalysis.unclassifiedCount,
+                                    fraction: activityAnalysis.unclassifiedFraction
+                                )
+                                ForEach(visibleActivityCategories) { item in
+                                    Divider()
+                                    analysisRow(
+                                        title: item.category.displayName,
+                                        systemImage: item.category.systemImage,
+                                        count: item.count,
+                                        fraction: item.fraction
+                                    )
+                                }
+                                if activityAnalysis.categories.count > 5 {
+                                    Divider()
+                                    Button(
+                                        showsAllActivityCategories
+                                            ? "上位5件を表示"
+                                            : "すべて表示",
+                                        systemImage: showsAllActivityCategories
+                                            ? "chevron.up"
+                                            : "chevron.down"
+                                    ) {
+                                        withAnimation {
+                                            showsAllActivityCategories.toggle()
+                                        }
+                                    }
+                                    .frame(
+                                        maxWidth: .infinity,
+                                        alignment: .leading
+                                    )
+                                }
+                            }
+                            .padding(.top, 6)
                         }
-                        .padding(.top, 6)
                     }
+                    .accessibilityIdentifier("activity-analysis-summary")
+
+                    GroupBox("Reservation Summary") {
+                        if reservationSummary.totalCount == 0 {
+                            ContentUnavailableView(
+                                "予約なし",
+                                systemImage: "bookmark",
+                                description: Text("予約が必要なActivityから登録できます。")
+                            )
+                        } else {
+                            VStack(spacing: 12) {
+                                LabeledContent(
+                                    "Reservations",
+                                    value: "\(reservationSummary.totalCount)"
+                                )
+                                ForEach(reservationSummary.kinds) { item in
+                                    Divider()
+                                    LabeledContent {
+                                        Text("\(item.count)")
+                                    } label: {
+                                        Label(
+                                            item.kind.displayName,
+                                            systemImage: item.kind.systemImage
+                                        )
+                                    }
+                                }
+                                if reservationSummary.unscheduledCount > 0 {
+                                    Divider()
+                                    LabeledContent(
+                                        "時刻未設定",
+                                        value: "\(reservationSummary.unscheduledCount)"
+                                    )
+                                }
+                                Divider()
+                                if let next = reservationSummary.nextReservation {
+                                    Button {
+                                        onSelectActivity(next.activityID)
+                                    } label: {
+                                        VStack(alignment: .leading, spacing: 5) {
+                                            Label(
+                                                "次の予約",
+                                                systemImage: "clock.badge.checkmark"
+                                            )
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                            Label(
+                                                next.reservationTitle,
+                                                systemImage: next.kind.systemImage
+                                            )
+                                                .font(.headline)
+                                            Text(
+                                                next.startTime,
+                                                format: .dateTime
+                                                    .month(.abbreviated)
+                                                    .day()
+                                                    .hour()
+                                                    .minute()
+                                            )
+                                            .font(.subheadline)
+                                            .foregroundStyle(.secondary)
+                                            Text(
+                                                "Day \(next.daySequence) · \(next.activityTitle)"
+                                            )
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                        }
+                                        .frame(
+                                            maxWidth: .infinity,
+                                            alignment: .leading
+                                        )
+                                        .contentShape(Rectangle())
+                                    }
+                                    .buttonStyle(.plain)
+                                    .accessibilityHint(
+                                        "該当するActivityへ移動します"
+                                    )
+                                    .accessibilityIdentifier(
+                                        "next-reservation-summary"
+                                    )
+                                } else {
+                                    Label(
+                                        "今後の時刻付き予約はありません",
+                                        systemImage: "calendar.badge.checkmark"
+                                    )
+                                    .foregroundStyle(.secondary)
+                                    .frame(
+                                        maxWidth: .infinity,
+                                        alignment: .leading
+                                    )
+                                }
+                            }
+                            .padding(.top, 6)
+                        }
+                    }
+                    .environment(
+                        \.timeZone,
+                        TimeZone(identifier: trip.timeZoneIdentifier)
+                            ?? .current
+                    )
+                    .accessibilityIdentifier("reservation-summary")
 
                     GroupBox("People & checklist") {
                         VStack(spacing: 12) {
@@ -1738,8 +1896,19 @@ private struct TripOverviewView: View {
         }
     }
 
-    private var activityCount: Int {
-        trip.days.reduce(0) { $0 + $1.activities.count }
+    private var activityAnalysis: ActivityAnalysisSummary {
+        ActivityAnalysisProjection.summary(for: trip)
+    }
+
+    private var visibleActivityCategories: [ActivityCategoryAnalysis] {
+        if showsAllActivityCategories {
+            return activityAnalysis.categories
+        }
+        return Array(activityAnalysis.categories.prefix(5))
+    }
+
+    private var reservationSummary: ReservationSummary {
+        ReservationSummaryProjection.summary(for: trip)
     }
 
     private var placeCount: Int {
@@ -1763,6 +1932,20 @@ private struct TripOverviewView: View {
     }
 
     private var completedChecklistCount: Int { tripChecklistItems.filter(\.isCompleted).count }
+
+    private func analysisRow(
+        title: String,
+        systemImage: String,
+        count: Int,
+        fraction: Double
+    ) -> some View {
+        LabeledContent {
+            Text("\(count) · \(fraction, format: .percent.precision(.fractionLength(0)))")
+                .monospacedDigit()
+        } label: {
+            Label(title, systemImage: systemImage)
+        }
+    }
 
     private func assign(_ participant: StoredParticipant) {
         guard let storedTrip else { return }

@@ -1555,6 +1555,235 @@ final class TripModelTests: XCTestCase {
         XCTAssertFalse(summary.spokenSummary.contains("非表示の予約"))
     }
 
+    func testActivityAnalysisExcludesSkippedAndIncludesUnclassifiedInDenominator() throws {
+        let localDate = try XCTUnwrap(
+            LocalDate(year: 2026, month: 11, day: 5)
+        )
+        let date = try XCTUnwrap(
+            localDate.date(in: TimeZone(identifier: "Asia/Tokyo")!)
+        )
+        var trip = Trip(
+            id: UUID(),
+            title: "分析",
+            dateRange: date...date,
+            days: [
+                Day(
+                    id: UUID(),
+                    sequence: 1,
+                    date: date,
+                    title: "",
+                    activities: [
+                        Activity(
+                            id: UUID(),
+                            sequence: 1,
+                            title: "観光1",
+                            startTime: nil,
+                            category: .sightseeing
+                        ),
+                        Activity(
+                            id: UUID(),
+                            sequence: 2,
+                            title: "観光2",
+                            startTime: nil,
+                            category: .sightseeing
+                        ),
+                        Activity(
+                            id: UUID(),
+                            sequence: 3,
+                            title: "食事",
+                            startTime: nil,
+                            category: .restaurant
+                        ),
+                        Activity(
+                            id: UUID(),
+                            sequence: 4,
+                            title: "その他",
+                            startTime: nil,
+                            category: .other
+                        ),
+                        Activity(
+                            id: UUID(),
+                            sequence: 5,
+                            title: "未分類",
+                            startTime: nil
+                        ),
+                        Activity(
+                            id: UUID(),
+                            sequence: 6,
+                            title: "スキップ",
+                            startTime: nil,
+                            category: .shopping,
+                            progress: .skipped
+                        )
+                    ]
+                )
+            ]
+        )
+        trip.days[0].activities[0].progress = .completed
+
+        let summary = ActivityAnalysisProjection.summary(for: trip)
+
+        XCTAssertEqual(summary.totalActivityCount, 5)
+        XCTAssertEqual(summary.unclassifiedCount, 1)
+        XCTAssertEqual(summary.unclassifiedFraction, 0.2, accuracy: 0.000_1)
+        XCTAssertEqual(
+            summary.categories.map(\.category),
+            [.sightseeing, .restaurant, .other]
+        )
+        XCTAssertEqual(summary.categories.map(\.count), [2, 1, 1])
+        XCTAssertEqual(
+            try XCTUnwrap(summary.categories.first).fraction,
+            0.4,
+            accuracy: 0.000_1
+        )
+        XCTAssertNil(
+            summary.categories.first(where: { $0.category == .shopping })
+        )
+    }
+
+    func testReservationSummaryCountsKindsAndSelectsTheNextSafeReference() throws {
+        let timeZone = try XCTUnwrap(TimeZone(identifier: "Asia/Tokyo"))
+        func date(_ day: Int, _ hour: Int) throws -> Date {
+            try XCTUnwrap(
+                Calendar(identifier: .gregorian).date(
+                    from: DateComponents(
+                        timeZone: timeZone,
+                        year: 2026,
+                        month: 11,
+                        day: day,
+                        hour: hour
+                    )
+                )
+            )
+        }
+        let now = try date(5, 12)
+        let nextActivityID = UUID()
+        let nextReservationID = UUID()
+        let dayDate = try date(5, 0)
+        let activities = [
+            Activity(
+                id: UUID(),
+                sequence: 1,
+                title: "過去の宿",
+                startTime: try date(5, 9),
+                reservation: ReservationReference(
+                    id: UUID(),
+                    kind: .accommodation,
+                    title: "過去の宿",
+                    confirmationCode: "PRIVATE-PAST",
+                    url: URL(string: "https://example.com/past"),
+                    note: "非公開"
+                )
+            ),
+            Activity(
+                id: nextActivityID,
+                sequence: 2,
+                title: "空港へ",
+                startTime: try date(5, 13),
+                reservation: ReservationReference(
+                    id: nextReservationID,
+                    kind: .transport,
+                    title: "空港バス",
+                    confirmationCode: "PRIVATE-NEXT",
+                    url: URL(string: "https://example.com/next"),
+                    note: "非公開"
+                )
+            ),
+            Activity(
+                id: UUID(),
+                sequence: 3,
+                title: "夕食",
+                startTime: try date(5, 18),
+                reservation: ReservationReference(
+                    id: UUID(),
+                    kind: .restaurant,
+                    title: "夕食予約",
+                    confirmationCode: nil,
+                    url: nil,
+                    note: nil
+                )
+            ),
+            Activity(
+                id: UUID(),
+                sequence: 4,
+                title: "時刻未設定",
+                startTime: nil,
+                reservation: ReservationReference(
+                    id: UUID(),
+                    kind: .admission,
+                    title: "入場券",
+                    confirmationCode: nil,
+                    url: nil,
+                    note: nil
+                )
+            ),
+            Activity(
+                id: UUID(),
+                sequence: 5,
+                title: "完了した直近候補",
+                startTime: try date(5, 12),
+                progress: .completed,
+                reservation: ReservationReference(
+                    id: UUID(),
+                    kind: .other,
+                    title: "完了",
+                    confirmationCode: nil,
+                    url: nil,
+                    note: nil
+                )
+            ),
+            Activity(
+                id: UUID(),
+                sequence: 6,
+                title: "スキップした直近候補",
+                startTime: try date(5, 12),
+                progress: .skipped,
+                reservation: ReservationReference(
+                    id: UUID(),
+                    kind: .other,
+                    title: "スキップ",
+                    confirmationCode: nil,
+                    url: nil,
+                    note: nil
+                )
+            )
+        ]
+        let dayID = UUID()
+        let trip = Trip(
+            id: UUID(),
+            title: "予約集約",
+            dateRange: dayDate...dayDate,
+            days: [
+                Day(
+                    id: dayID,
+                    sequence: 1,
+                    date: dayDate,
+                    title: "",
+                    activities: activities
+                )
+            ]
+        )
+
+        let summary = ReservationSummaryProjection.summary(
+            for: trip,
+            now: now
+        )
+
+        XCTAssertEqual(summary.totalCount, 6)
+        XCTAssertEqual(summary.unscheduledCount, 1)
+        XCTAssertEqual(
+            summary.kinds.map(\.kind),
+            ReservationKind.allCases
+        )
+        XCTAssertEqual(summary.kinds.map(\.count), [1, 1, 1, 1, 2])
+        XCTAssertEqual(summary.nextReservation?.id, nextReservationID)
+        XCTAssertEqual(summary.nextReservation?.activityID, nextActivityID)
+        XCTAssertEqual(summary.nextReservation?.dayID, dayID)
+        XCTAssertEqual(summary.nextReservation?.reservationTitle, "空港バス")
+        XCTAssertEqual(summary.nextReservation?.kind, .transport)
+        XCTAssertEqual(summary.nextReservation?.startTime, try date(5, 13))
+    }
+
     func testSystemExperienceProjectionPrefersAnActiveActivityAcrossTrips() throws {
         var active = OkinawaSample.trip
         active.title = "進行中のTrip"
