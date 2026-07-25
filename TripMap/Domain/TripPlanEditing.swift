@@ -6,6 +6,7 @@ enum TripPlanEditingError: LocalizedError, Equatable {
     case activityNotFound
     case activityAlreadyExists
     case activityChangedDay
+    case activityInsertionAnchorChanged
     case targetIncludesSource
     case sameDay
     case blankActivityTitle
@@ -31,6 +32,8 @@ enum TripPlanEditingError: LocalizedError, Equatable {
         case .activityNotFound: "予定が見つかりません。"
         case .activityAlreadyExists: "同じ予定がすでに追加されています。"
         case .activityChangedDay: "予定の所属日が変更されたため、操作を中止しました。"
+        case .activityInsertionAnchorChanged:
+            "予定の並び順が別の画面で変更されたため、挿入位置を選び直してください。"
         case .targetIncludesSource: "コピー元と同じDayにはコピーできません。"
         case .sameDay: "同じDay同士は入れ替えできません。"
         case .blankActivityTitle: "予定の名前を入力してください。"
@@ -109,9 +112,31 @@ struct AppendActivityMutation: Equatable, Sendable {
     let durationMinutes: Int?
 }
 
+struct ActivityInsertionAnchor: Equatable, Sendable {
+    let previousActivityID: Activity.ID?
+    let nextActivityID: Activity.ID?
+}
+
+struct InsertActivityMutation: Equatable, Sendable {
+    let dayID: Day.ID
+    let anchor: ActivityInsertionAnchor
+    let activityID: Activity.ID
+    let title: String
+    let startTime: Date?
+    let category: ActivityCategory?
+    let durationMinutes: Int?
+}
+
 struct DeleteActivityMutation: Equatable, Sendable {
     let dayID: Day.ID
     let activityID: Activity.ID
+}
+
+struct RestoreActivityMutation: Equatable, Sendable {
+    let dayID: Day.ID
+    let anchor: ActivityInsertionAnchor
+    let activity: Activity
+    let travelLegPreferences: [TravelLegPreference]
 }
 
 enum ActivityMovePlacement: Equatable, Sendable {
@@ -172,7 +197,9 @@ enum TripMutation: Equatable, Sendable {
     case editGuideActivity(GuideActivityMutation)
     case setTravelLegPreference(TravelLegPreferenceMutation)
     case appendActivity(AppendActivityMutation)
+    case insertActivity(InsertActivityMutation)
     case deleteActivity(DeleteActivityMutation)
+    case restoreActivity(RestoreActivityMutation)
     case moveActivity(MoveActivityMutation)
     case replicateDayActivities(ReplicateDayActivitiesMutation)
     case swapDayPlans(SwapDayPlansMutation)
@@ -275,6 +302,11 @@ enum TripMutation: Equatable, Sendable {
                 category: activity.category,
                 durationMinutes: activity.durationMinutes
             )
+        case .insertActivity(let activity):
+            return try TripPlanEditor.insertActivity(
+                in: trip,
+                mutation: activity
+            )
         case .deleteActivity(let activity):
             guard let currentDay = trip.days.first(
                 where: {
@@ -291,6 +323,11 @@ enum TripMutation: Equatable, Sendable {
             return try TripPlanEditor.deleteActivity(
                 in: trip,
                 activityID: activity.activityID
+            )
+        case .restoreActivity(let restoration):
+            return try TripPlanEditor.restoreActivity(
+                in: trip,
+                mutation: restoration
             )
         case .moveActivity(let activity):
             return try TripPlanEditor.positionActivity(
@@ -576,38 +613,156 @@ enum TripPlanEditor {
         category: ActivityCategory? = nil,
         durationMinutes: Int? = nil
     ) throws -> Trip {
-        guard let dayIndex = trip.days.firstIndex(where: { $0.id == dayID }) else {
+        guard let day = trip.days.first(where: { $0.id == dayID }) else {
+            throw TripPlanEditingError.targetDayNotFound
+        }
+        return try insertActivity(
+            in: trip,
+            mutation: InsertActivityMutation(
+                dayID: dayID,
+                anchor: ActivityInsertionAnchor(
+                    previousActivityID: day.orderedActivities.last?.id,
+                    nextActivityID: nil
+                ),
+                activityID: activityID,
+                title: title,
+                startTime: startTime,
+                category: category,
+                durationMinutes: durationMinutes
+            )
+        )
+    }
+
+    static func insertActivity(
+        in trip: Trip,
+        mutation: InsertActivityMutation
+    ) throws -> Trip {
+        guard let dayIndex = trip.days.firstIndex(
+            where: { $0.id == mutation.dayID }
+        ) else {
             throw TripPlanEditingError.targetDayNotFound
         }
         guard !trip.days
             .flatMap(\.activities)
-            .contains(where: { $0.id == activityID }) else {
+            .contains(where: { $0.id == mutation.activityID }) else {
             throw TripPlanEditingError.activityAlreadyExists
         }
-        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let ordered = trip.days[dayIndex].orderedActivities
+        let insertionIndex = try insertionIndex(
+            for: mutation.anchor,
+            in: ordered
+        )
+        let trimmedTitle = mutation.title.trimmingCharacters(
+            in: .whitespacesAndNewlines
+        )
         guard !trimmedTitle.isEmpty else { throw TripPlanEditingError.blankActivityTitle }
 
         var copy = trip
-        let sequence = (copy.days[dayIndex].activities.map(\.sequence).max() ?? 0) + 1
         let timeZone = TimeZone(identifier: trip.timeZoneIdentifier) ?? TimeZone(secondsFromGMT: 0)!
         let normalizedStartTime = time(
             on: copy.days[dayIndex].date,
-            matching: startTime,
+            matching: mutation.startTime,
             timeZone: timeZone
         )
-        try validate(durationMinutes: durationMinutes)
-        copy.days[dayIndex].activities.append(
+        try validate(durationMinutes: mutation.durationMinutes)
+        var reordered = ordered
+        reordered.insert(
             Activity(
-                id: activityID,
-                sequence: sequence,
+                id: mutation.activityID,
+                sequence: insertionIndex + 1,
                 title: trimmedTitle,
                 startTime: normalizedStartTime,
-                category: category,
-                durationMinutes: durationMinutes,
+                category: mutation.category,
+                durationMinutes: mutation.durationMinutes,
                 note: nil,
                 place: nil
-            )
+            ),
+            at: insertionIndex
         )
+        copy.days[dayIndex].activities = reordered.enumerated().map {
+            index, activity in
+            var updated = activity
+            updated.sequence = index + 1
+            return updated
+        }
+        return copy
+    }
+
+    private static func insertionIndex(
+        for anchor: ActivityInsertionAnchor,
+        in activities: [Activity]
+    ) throws -> Int {
+        switch (
+            anchor.previousActivityID,
+            anchor.nextActivityID
+        ) {
+        case (nil, nil):
+            guard activities.isEmpty else {
+                throw TripPlanEditingError.activityInsertionAnchorChanged
+            }
+            return 0
+        case (nil, let nextID?):
+            guard activities.first?.id == nextID else {
+                throw TripPlanEditingError.activityInsertionAnchorChanged
+            }
+            return 0
+        case (let previousID?, nil):
+            guard activities.last?.id == previousID else {
+                throw TripPlanEditingError.activityInsertionAnchorChanged
+            }
+            return activities.count
+        case (let previousID?, let nextID?):
+            guard let previousIndex = activities.firstIndex(
+                where: { $0.id == previousID }
+            ), activities.indices.contains(previousIndex + 1),
+              activities[previousIndex + 1].id == nextID else {
+                throw TripPlanEditingError.activityInsertionAnchorChanged
+            }
+            return previousIndex + 1
+        }
+    }
+
+    static func restoreActivity(
+        in trip: Trip,
+        mutation: RestoreActivityMutation
+    ) throws -> Trip {
+        guard let dayIndex = trip.days.firstIndex(
+            where: { $0.id == mutation.dayID }
+        ) else {
+            throw TripPlanEditingError.targetDayNotFound
+        }
+        guard !trip.days
+            .flatMap(\.activities)
+            .contains(where: { $0.id == mutation.activity.id }) else {
+            throw TripPlanEditingError.activityAlreadyExists
+        }
+        let ordered = trip.days[dayIndex].orderedActivities
+        let index = try insertionIndex(for: mutation.anchor, in: ordered)
+        var restoredActivity = mutation.activity
+        restoredActivity.sequence = index + 1
+        var reordered = ordered
+        reordered.insert(restoredActivity, at: index)
+
+        var copy = trip
+        copy.days[dayIndex].activities = reordered.enumerated().map {
+            sequenceIndex, activity in
+            var updated = activity
+            updated.sequence = sequenceIndex + 1
+            return updated
+        }
+        for preference in mutation.travelLegPreferences {
+            guard preference.legID.fromActivityID == mutation.activity.id
+                    || preference.legID.toActivityID == mutation.activity.id else {
+                throw TripPlanEditingError.invalidTravelLegReference
+            }
+            copy = try setTravelLegPreference(
+                in: copy,
+                legID: preference.legID,
+                transportType: preference.transportType,
+                manualDurationMinutes: preference.manualDurationMinutes,
+                note: preference.note
+            )
+        }
         return copy
     }
 

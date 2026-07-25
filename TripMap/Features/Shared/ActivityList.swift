@@ -13,6 +13,7 @@ struct ActivityList: View {
     let onDeleteActivity: ((Activity.ID) -> Void)?
     let onMoveActivity: ((Activity.ID, Activity.ID) -> Void)?
     let onEditTravelLeg: ((TravelLegID) -> Void)?
+    let onInsertActivity: ((ActivityInsertionAnchor) -> Void)?
 
     init(
         day: Day,
@@ -25,7 +26,8 @@ struct ActivityList: View {
         onEditActivity: ((Activity.ID) -> Void)? = nil,
         onDeleteActivity: ((Activity.ID) -> Void)? = nil,
         onMoveActivity: ((Activity.ID, Activity.ID) -> Void)? = nil,
-        onEditTravelLeg: ((TravelLegID) -> Void)? = nil
+        onEditTravelLeg: ((TravelLegID) -> Void)? = nil,
+        onInsertActivity: ((ActivityInsertionAnchor) -> Void)? = nil
     ) {
         self.day = day
         self.selectedActivityID = selectedActivityID
@@ -38,6 +40,7 @@ struct ActivityList: View {
         self.onDeleteActivity = onDeleteActivity
         self.onMoveActivity = onMoveActivity
         self.onEditTravelLeg = onEditTravelLeg
+        self.onInsertActivity = onInsertActivity
     }
 
     var body: some View {
@@ -58,6 +61,19 @@ struct ActivityList: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 10) {
+                        if let firstActivity = day.orderedActivities.first,
+                           let onInsertActivity {
+                            ActivityInsertionButton(
+                                positionLabel: "先頭",
+                                accessibilitySuffix: "start",
+                                anchor: ActivityInsertionAnchor(
+                                    previousActivityID: nil,
+                                    nextActivityID: firstActivity.id
+                                ),
+                                onInsert: onInsertActivity
+                            )
+                        }
+
                         ForEach(Array(day.orderedActivities.enumerated()), id: \.element.id) { index, activity in
                             ActivityCard(
                                 activity: activity,
@@ -108,7 +124,35 @@ struct ActivityList: View {
                                     )
                                 }
                             }
+
+                            if let onInsertActivity {
+                                let nextActivityID = day.orderedActivities.indices
+                                    .contains(index + 1)
+                                    ? day.orderedActivities[index + 1].id
+                                    : nil
+                                ActivityInsertionButton(
+                                    positionLabel: nextActivityID == nil
+                                        ? "末尾"
+                                        : "\(activity.sequence)と\(activity.sequence + 1)の間",
+                                    accessibilitySuffix: nextActivityID == nil
+                                        ? "end"
+                                        : "between-\(activity.sequence)",
+                                    anchor: ActivityInsertionAnchor(
+                                        previousActivityID: activity.id,
+                                        nextActivityID: nextActivityID
+                                    ),
+                                    onInsert: onInsertActivity
+                                )
+                            }
                         }
+                    }
+                    .background(alignment: .leading) {
+                        Rectangle()
+                            .fill(Color.accentColor.opacity(0.32))
+                            .frame(width: 2)
+                            .padding(.leading, 24)
+                            .accessibilityHidden(true)
+                            .allowsHitTesting(false)
                     }
                     .padding()
                 }
@@ -150,6 +194,53 @@ struct ActivityList: View {
             toActivityID: toActivityID
         )
         return travelLegs.first { $0.dayID == day.id && $0.id == id }
+    }
+}
+
+private struct ActivityInsertionButton: View {
+    let positionLabel: String
+    let accessibilitySuffix: String
+    let anchor: ActivityInsertionAnchor
+    let onInsert: (ActivityInsertionAnchor) -> Void
+    @State private var isHovered = false
+    @FocusState private var isFocused: Bool
+
+    var body: some View {
+        Button {
+            onInsert(anchor)
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "plus")
+                    .font(.caption.bold())
+                    .foregroundStyle(.white)
+                    .frame(width: 26, height: 26)
+                    .background(Color.accentColor, in: Circle())
+                    .overlay {
+                        Circle().stroke(.background, lineWidth: 2)
+                    }
+
+                Text("予定を追加")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    #if os(macOS)
+                    .opacity(isHovered || isFocused ? 1 : 0)
+                    #endif
+
+                Spacer(minLength: 0)
+            }
+            #if os(iOS)
+            .frame(minHeight: 44)
+            #else
+            .frame(minHeight: 30)
+            #endif
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .focused($isFocused)
+        .onHover { isHovered = $0 }
+        .accessibilityLabel("予定を追加")
+        .accessibilityHint("挿入位置: \(positionLabel)")
+        .accessibilityIdentifier("activity-insert-\(accessibilitySuffix)")
     }
 }
 

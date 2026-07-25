@@ -699,6 +699,38 @@ extension StoredTrip {
                     timeZone: timeZone
                 )
             )
+        case .insertActivity(let mutation):
+            guard !days
+                .flatMap(\.activities)
+                .contains(where: { $0.id == mutation.activityID }) else {
+                throw TripPlanEditingError.activityAlreadyExists
+            }
+            guard let desiredDay = updated.days.first(
+                where: { $0.id == mutation.dayID }
+            ), let desiredActivity = desiredDay.activities.first(
+                where: { $0.id == mutation.activityID }
+            ) else {
+                throw TripPlanEditingError.activityNotFound
+            }
+            let day = try storedDay(mutation.dayID)
+            day.activities.append(
+                StoredActivity(
+                    snapshot: desiredActivity,
+                    dayDate: desiredDay.date,
+                    timeZone: timeZone
+                )
+            )
+            let desiredSequences = Dictionary(
+                uniqueKeysWithValues: desiredDay.activities.map {
+                    ($0.id, $0.sequence)
+                }
+            )
+            for activity in day.activities {
+                guard let sequence = desiredSequences[activity.id] else {
+                    throw TripPlanEditingError.activityNotFound
+                }
+                activity.sequence = sequence
+            }
         case .deleteActivity(let mutation):
             let day = try storedDay(mutation.dayID)
             guard let activity = day.activities.first(
@@ -735,6 +767,54 @@ extension StoredTrip {
                 modelContext.delete(preference)
             }
             modelContext.delete(activity)
+        case .restoreActivity(let mutation):
+            guard !days
+                .flatMap(\.activities)
+                .contains(where: { $0.id == mutation.activity.id }) else {
+                throw TripPlanEditingError.activityAlreadyExists
+            }
+            guard let desiredDay = updated.days.first(
+                where: { $0.id == mutation.dayID }
+            ), let desiredActivity = desiredDay.activities.first(
+                where: { $0.id == mutation.activity.id }
+            ) else {
+                throw TripPlanEditingError.activityNotFound
+            }
+            let day = try storedDay(mutation.dayID)
+            day.activities.append(
+                StoredActivity(
+                    snapshot: desiredActivity,
+                    dayDate: desiredDay.date,
+                    timeZone: timeZone
+                )
+            )
+            let desiredSequences = Dictionary(
+                uniqueKeysWithValues: desiredDay.activities.map {
+                    ($0.id, $0.sequence)
+                }
+            )
+            for activity in day.activities {
+                guard let sequence = desiredSequences[activity.id] else {
+                    throw TripPlanEditingError.activityNotFound
+                }
+                activity.sequence = sequence
+            }
+            for preference in mutation.travelLegPreferences {
+                guard let desired = updated.travelLegPreferences.first(
+                    where: { $0.legID == preference.legID }
+                ) else {
+                    throw TripPlanEditingError.invalidTravelLegReference
+                }
+                if let existing = travelLegPreferences.first(
+                    where: { $0.snapshotID == desired.legID }
+                ) {
+                    existing.apply(desired)
+                } else {
+                    travelLegPreferences.append(
+                        StoredTravelLegPreference(snapshot: desired)
+                    )
+                }
+            }
         case .moveActivity(let mutation):
             let day = try storedDay(mutation.dayID)
             let dayActivityIDs = Set(day.activities.map(\.id))

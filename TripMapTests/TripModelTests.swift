@@ -1009,6 +1009,57 @@ final class TripModelTests: XCTestCase {
         XCTAssertTrue(deleted.travelLegPreferences.isEmpty)
     }
 
+    func testRestoreActivityMutationReversesDeletionWithTravelPreferences() throws {
+        var trip = OkinawaSample.trip
+        let day = trip.orderedDays[0]
+        let first = try XCTUnwrap(day.orderedActivities.first)
+        let second = try XCTUnwrap(day.orderedActivities.dropFirst().first)
+        trip = try TripPlanEditor.setTravelLegPreference(
+            in: trip,
+            legID: TravelLegID(
+                fromActivityID: first.id,
+                toActivityID: second.id
+            ),
+            transportType: .walking,
+            manualDurationMinutes: 18,
+            note: "地下通路"
+        )
+        let preferences = trip.travelLegPreferences.filter {
+            $0.legID.fromActivityID == first.id
+                || $0.legID.toActivityID == first.id
+        }
+        let deletion = TripMutation.deleteActivity(
+            DeleteActivityMutation(dayID: day.id, activityID: first.id)
+        )
+        let restoration = TripMutation.restoreActivity(
+            RestoreActivityMutation(
+                dayID: day.id,
+                anchor: ActivityInsertionAnchor(
+                    previousActivityID: nil,
+                    nextActivityID: second.id
+                ),
+                activity: first,
+                travelLegPreferences: preferences
+            )
+        )
+
+        let deleted = try deletion.applying(to: trip)
+        let restored = try restoration.applying(to: deleted)
+        XCTAssertEqual(
+            restored.orderedDays[0].orderedActivities.first,
+            first
+        )
+        XCTAssertEqual(restored.travelLegPreferences, preferences)
+
+        let redone = try deletion.applying(to: restored)
+        XCTAssertFalse(
+            redone.orderedDays[0].activities.contains {
+                $0.id == first.id
+            }
+        )
+        XCTAssertTrue(redone.travelLegPreferences.isEmpty)
+    }
+
     func testAdversarialFixturesCoverEmptyOverlapAndDensity() {
         XCTAssertTrue(PrototypeEdgeCases.emptyDayTrip.days[0].activities.isEmpty)
         XCTAssertTrue(PrototypeEdgeCases.noPlaceTrip.days[0].activities.allSatisfy { $0.place == nil })
@@ -1138,6 +1189,122 @@ final class TripModelTests: XCTestCase {
         XCTAssertEqual(added.title, "夕食")
         XCTAssertEqual(added.sequence, (day.activities.map(\.sequence).max() ?? 0) + 1)
         XCTAssertNil(added.place)
+    }
+
+    func testInsertingActivitySupportsStartBetweenAndEndAnchors() throws {
+        let trip = OkinawaSample.trip
+        let day = trip.orderedDays[0]
+        let activities = day.orderedActivities
+        let first = try XCTUnwrap(activities.first)
+        let second = try XCTUnwrap(activities.dropFirst().first)
+        let last = try XCTUnwrap(activities.last)
+
+        let startID = UUID()
+        let atStart = try TripMutation.insertActivity(
+            InsertActivityMutation(
+                dayID: day.id,
+                anchor: ActivityInsertionAnchor(
+                    previousActivityID: nil,
+                    nextActivityID: first.id
+                ),
+                activityID: startID,
+                title: "先頭",
+                startTime: nil,
+                category: nil,
+                durationMinutes: nil
+            )
+        ).applying(to: trip)
+        XCTAssertEqual(
+            atStart.orderedDays[0].orderedActivities.first?.id,
+            startID
+        )
+
+        let betweenID = UUID()
+        let between = try TripMutation.insertActivity(
+            InsertActivityMutation(
+                dayID: day.id,
+                anchor: ActivityInsertionAnchor(
+                    previousActivityID: first.id,
+                    nextActivityID: second.id
+                ),
+                activityID: betweenID,
+                title: "区間",
+                startTime: nil,
+                category: .other,
+                durationMinutes: 15
+            )
+        ).applying(to: trip)
+        XCTAssertEqual(
+            Array(between.orderedDays[0].orderedActivities.prefix(3)).map(\.id),
+            [first.id, betweenID, second.id]
+        )
+
+        let endID = UUID()
+        let atEnd = try TripMutation.insertActivity(
+            InsertActivityMutation(
+                dayID: day.id,
+                anchor: ActivityInsertionAnchor(
+                    previousActivityID: last.id,
+                    nextActivityID: nil
+                ),
+                activityID: endID,
+                title: "末尾",
+                startTime: nil,
+                category: nil,
+                durationMinutes: nil
+            )
+        ).applying(to: trip)
+        XCTAssertEqual(
+            atEnd.orderedDays[0].orderedActivities.last?.id,
+            endID
+        )
+        XCTAssertEqual(
+            between.orderedDays[0].orderedActivities.map(\.sequence),
+            Array(1...between.orderedDays[0].activities.count)
+        )
+    }
+
+    func testInsertingActivityRejectsAChangedGap() throws {
+        let trip = OkinawaSample.trip
+        let day = trip.orderedDays[0]
+        let first = try XCTUnwrap(day.orderedActivities.first)
+        let second = try XCTUnwrap(day.orderedActivities.dropFirst().first)
+        let anchor = ActivityInsertionAnchor(
+            previousActivityID: first.id,
+            nextActivityID: second.id
+        )
+        let concurrent = try TripPlanEditor.insertActivity(
+            in: trip,
+            mutation: InsertActivityMutation(
+                dayID: day.id,
+                anchor: anchor,
+                activityID: UUID(),
+                title: "先に挿入",
+                startTime: nil,
+                category: nil,
+                durationMinutes: nil
+            )
+        )
+
+        XCTAssertThrowsError(
+            try TripPlanEditor.insertActivity(
+                in: concurrent,
+                mutation: InsertActivityMutation(
+                    dayID: day.id,
+                    anchor: anchor,
+                    activityID: UUID(),
+                    title: "競合した挿入",
+                    startTime: nil,
+                    category: nil,
+                    durationMinutes: nil
+                )
+            )
+        ) { error in
+            XCTAssertEqual(
+                error as? TripPlanEditingError,
+                .activityInsertionAnchorChanged
+            )
+        }
     }
 
     @MainActor
@@ -2795,6 +2962,127 @@ final class TripModelTests: XCTestCase {
             activities.map(\.sequence),
             Array(1...activities.count)
         )
+    }
+
+    @MainActor
+    func testScopedActivityInsertionPreservesUnrelatedConcurrentAppend() throws {
+        let container = try TripMapStore.makeContainer(inMemoryOnly: true)
+        let context = container.mainContext
+        let day = OkinawaSample.trip.orderedDays[0]
+        let first = try XCTUnwrap(day.orderedActivities.first)
+        let second = try XCTUnwrap(day.orderedActivities.dropFirst().first)
+        let concurrentID = UUID()
+        let insertedID = UUID()
+        let stored = try StoredTrip(validatingSnapshot: OkinawaSample.trip)
+        context.insert(stored)
+        try context.save()
+
+        let concurrent = try TripPlanEditor.appendActivity(
+            in: try XCTUnwrap(stored.snapshot),
+            to: day.id,
+            activityID: concurrentID,
+            title: "別画面の末尾追加",
+            startTime: nil
+        )
+        try stored.applyPlan(concurrent, in: context)
+        try context.save()
+
+        try stored.applyMutation(
+            .insertActivity(
+                InsertActivityMutation(
+                    dayID: day.id,
+                    anchor: ActivityInsertionAnchor(
+                        previousActivityID: first.id,
+                        nextActivityID: second.id
+                    ),
+                    activityID: insertedID,
+                    title: "区間へ追加",
+                    startTime: nil,
+                    category: .sightseeing,
+                    durationMinutes: 45
+                )
+            ),
+            in: context
+        )
+        try context.save()
+
+        let activities = try XCTUnwrap(
+            stored.snapshot?.days.first(where: { $0.id == day.id })
+        ).orderedActivities
+        XCTAssertEqual(
+            Array(activities.prefix(3)).map(\.id),
+            [first.id, insertedID, second.id]
+        )
+        XCTAssertEqual(activities.last?.id, concurrentID)
+        XCTAssertEqual(
+            activities.map(\.sequence),
+            Array(1...activities.count)
+        )
+    }
+
+    @MainActor
+    func testScopedActivityRestorePreservesConcurrentAppendAndTravelPreference() throws {
+        let container = try TripMapStore.makeContainer(inMemoryOnly: true)
+        let context = container.mainContext
+        var fixture = OkinawaSample.trip
+        let day = fixture.orderedDays[0]
+        let first = try XCTUnwrap(day.orderedActivities.first)
+        let second = try XCTUnwrap(day.orderedActivities.dropFirst().first)
+        fixture = try TripPlanEditor.setTravelLegPreference(
+            in: fixture,
+            legID: TravelLegID(
+                fromActivityID: first.id,
+                toActivityID: second.id
+            ),
+            transportType: .walking,
+            manualDurationMinutes: 12,
+            note: "復元対象"
+        )
+        let preferences = fixture.travelLegPreferences.filter {
+            $0.legID.fromActivityID == first.id
+                || $0.legID.toActivityID == first.id
+        }
+        let deletion = TripMutation.deleteActivity(
+            DeleteActivityMutation(dayID: day.id, activityID: first.id)
+        )
+        let restoration = TripMutation.restoreActivity(
+            RestoreActivityMutation(
+                dayID: day.id,
+                anchor: ActivityInsertionAnchor(
+                    previousActivityID: nil,
+                    nextActivityID: second.id
+                ),
+                activity: first,
+                travelLegPreferences: preferences
+            )
+        )
+        let stored = try StoredTrip(validatingSnapshot: fixture)
+        context.insert(stored)
+        try context.save()
+
+        try stored.applyMutation(deletion, in: context)
+        try context.save()
+        let concurrentID = UUID()
+        let concurrent = try TripPlanEditor.appendActivity(
+            in: try XCTUnwrap(stored.snapshot),
+            to: day.id,
+            activityID: concurrentID,
+            title: "削除後の別追加",
+            startTime: nil
+        )
+        try stored.applyPlan(concurrent, in: context)
+        try context.save()
+
+        try stored.applyMutation(restoration, in: context)
+        try context.save()
+
+        let restored = try XCTUnwrap(stored.snapshot)
+        XCTAssertEqual(
+            restored.orderedDays[0].orderedActivities.first,
+            first
+        )
+        XCTAssertEqual(restored.orderedDays[0].orderedActivities.last?.id, concurrentID)
+        XCTAssertEqual(restored.travelLegPreferences, preferences)
     }
 
     @MainActor

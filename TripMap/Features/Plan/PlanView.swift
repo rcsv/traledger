@@ -29,7 +29,7 @@ struct PlanView: View {
     @State private var interaction: TripInteractionState
     @State private var operation: DayOperation?
     @State private var coverPickerItem: PhotosPickerItem?
-    @State private var isActivityCreationPresented = false
+    @State private var activityCreationTarget: ActivityInsertionTarget?
     @State private var activityEditor: ActivityEditorTarget?
     @State private var travelLegEditTarget: TravelLegID?
     @State private var pendingActivityDeletion: ActivityEditorTarget?
@@ -117,7 +117,7 @@ struct PlanView: View {
 
                 if let selectedDay {
                     Button("予定を追加", systemImage: "plus") {
-                        isActivityCreationPresented = true
+                        presentActivityCreationAtEnd(of: selectedDay)
                     }
 
                     Menu("Day", systemImage: "calendar.badge.gearshape") {
@@ -154,8 +154,8 @@ struct PlanView: View {
                 canCreateActivity: selectedDay != nil,
                 canEditActivity: selectedActivity != nil,
                 createActivity: {
-                    guard selectedDay != nil else { return }
-                    isActivityCreationPresented = true
+                    guard let selectedDay else { return }
+                    presentActivityCreationAtEnd(of: selectedDay)
                 },
                 editActivity: {
                     guard let selectedActivity else { return }
@@ -220,14 +220,15 @@ struct PlanView: View {
                 onApplyMutation: onApplyMutation
             )
         }
-        .sheet(isPresented: $isActivityCreationPresented) {
-            if let selectedDay {
+        .sheet(item: $activityCreationTarget) { target in
+            if let day = trip.days.first(where: { $0.id == target.dayID }) {
                 ActivityCreationSheet(
-                    day: selectedDay,
+                    day: day,
                     timeZoneIdentifier: trip.timeZoneIdentifier
                 ) { title, startTime, category, durationMinutes in
                     addActivity(
-                        to: selectedDay.id,
+                        to: day.id,
+                        anchor: target.anchor,
                         title: title,
                         startTime: startTime,
                         category: category,
@@ -479,7 +480,15 @@ struct PlanView: View {
                 doctorIssues: doctorReport.issues(forDay: day.id),
                 travelLegs: travelLoad.legs,
                 onSelectActivity: selectActivityFromList,
-                onAddActivity: { isActivityCreationPresented = true },
+                onAddActivity: {
+                    activityCreationTarget = ActivityInsertionTarget(
+                        dayID: day.id,
+                        anchor: ActivityInsertionAnchor(
+                            previousActivityID: nil,
+                            nextActivityID: nil
+                        )
+                    )
+                },
                 onEditActivity: { activityID in
                     activityEditor = ActivityEditorTarget(activityID: activityID)
                 },
@@ -493,7 +502,13 @@ struct PlanView: View {
                         relativeTo: targetActivityID
                     )
                 },
-                onEditTravelLeg: { travelLegEditTarget = $0 }
+                onEditTravelLeg: { travelLegEditTarget = $0 },
+                onInsertActivity: { anchor in
+                    activityCreationTarget = ActivityInsertionTarget(
+                        dayID: day.id,
+                        anchor: anchor
+                    )
+                }
             )
         }
     }
@@ -936,6 +951,7 @@ struct PlanView: View {
 
     private func addActivity(
         to dayID: Day.ID,
+        anchor: ActivityInsertionAnchor,
         title: String,
         startTime: Date?,
         category: ActivityCategory?,
@@ -943,9 +959,10 @@ struct PlanView: View {
     ) {
         do {
             let activityID = UUID()
-            let mutation = TripMutation.appendActivity(
-                AppendActivityMutation(
+            let mutation = TripMutation.insertActivity(
+                InsertActivityMutation(
                     dayID: dayID,
+                    anchor: anchor,
                     activityID: activityID,
                     title: title,
                     startTime: startTime,
@@ -964,10 +981,39 @@ struct PlanView: View {
                 errorMessage = persistenceError
                 return
             }
+            let inverse = TripMutation.deleteActivity(
+                DeleteActivityMutation(
+                    dayID: dayID,
+                    activityID: activityID
+                )
+            )
+            if onApplyMutation != nil {
+                planUndo.registerMutation(
+                    forward: mutation,
+                    inverse: inverse,
+                    actionName: "予定の追加"
+                )
+            } else {
+                planUndo.registerTransition(
+                    from: trip,
+                    to: updated,
+                    actionName: "予定の追加"
+                )
+            }
             interaction.selectActivity(activityID, source: .list, in: updated)
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    private func presentActivityCreationAtEnd(of day: Day) {
+        activityCreationTarget = ActivityInsertionTarget(
+            dayID: day.id,
+            anchor: ActivityInsertionAnchor(
+                previousActivityID: day.orderedActivities.last?.id,
+                nextActivityID: nil
+            )
+        )
     }
 
     private func updateActivity(
@@ -1039,17 +1085,43 @@ struct PlanView: View {
 
     private func deleteActivity(_ activityID: Activity.ID) {
         do {
-            guard let dayID = trip.days.first(
+            guard let day = trip.days.first(
                 where: {
                     $0.activities.contains(where: { $0.id == activityID })
                 }
-            )?.id else {
+            ) else {
                 throw TripPlanEditingError.activityNotFound
             }
+            let ordered = day.orderedActivities
+            guard let activityIndex = ordered.firstIndex(
+                where: { $0.id == activityID }
+            ) else {
+                throw TripPlanEditingError.activityNotFound
+            }
+            let activity = ordered[activityIndex]
+            let restoreAnchor = ActivityInsertionAnchor(
+                previousActivityID: activityIndex > 0
+                    ? ordered[activityIndex - 1].id
+                    : nil,
+                nextActivityID: ordered.indices.contains(activityIndex + 1)
+                    ? ordered[activityIndex + 1].id
+                    : nil
+            )
             let mutation = TripMutation.deleteActivity(
                 DeleteActivityMutation(
-                    dayID: dayID,
+                    dayID: day.id,
                     activityID: activityID
+                )
+            )
+            let inverse = TripMutation.restoreActivity(
+                RestoreActivityMutation(
+                    dayID: day.id,
+                    anchor: restoreAnchor,
+                    activity: activity,
+                    travelLegPreferences: trip.travelLegPreferences.filter {
+                        $0.legID.fromActivityID == activityID
+                            || $0.legID.toActivityID == activityID
+                    }
                 )
             )
             let updated = try mutation.applying(to: trip)
@@ -1062,6 +1134,19 @@ struct PlanView: View {
             if let persistenceError {
                 errorMessage = persistenceError
                 return
+            }
+            if onApplyMutation != nil {
+                planUndo.registerMutation(
+                    forward: mutation,
+                    inverse: inverse,
+                    actionName: "予定の削除"
+                )
+            } else {
+                planUndo.registerTransition(
+                    from: trip,
+                    to: updated,
+                    actionName: "予定の削除"
+                )
             }
             interaction.reconcile(with: updated)
         } catch {
@@ -1258,6 +1343,12 @@ private final class PlanUndoCoordinator: ObservableObject {
 private struct ActivityEditorTarget: Identifiable {
     let activityID: Activity.ID
     var id: Activity.ID { activityID }
+}
+
+private struct ActivityInsertionTarget: Identifiable {
+    let dayID: Day.ID
+    let anchor: ActivityInsertionAnchor
+    let id = UUID()
 }
 
 private struct ActivityEditorSheet: View {
