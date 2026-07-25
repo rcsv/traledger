@@ -1873,6 +1873,123 @@ final class TripModelTests: XCTestCase {
         )
     }
 
+    func testLibraryDashboardAggregatesReadableTripsAndDeduplicatesAssignedParticipants() throws {
+        let now = Date(timeIntervalSinceReferenceDate: 1_000)
+        let dayDate = Date(timeIntervalSinceReferenceDate: 0)
+        let nextReservationID = UUID()
+        let nextTripID = UUID()
+        let firstTrip = Trip(
+            id: UUID(),
+            title: "最初のTrip",
+            dateRange: dayDate...dayDate,
+            days: [
+                Day(
+                    id: UUID(),
+                    sequence: 1,
+                    date: dayDate,
+                    title: "",
+                    activities: [
+                        Activity(
+                            id: UUID(),
+                            sequence: 1,
+                            title: "観光",
+                            startTime: nil,
+                            category: .sightseeing
+                        ),
+                        Activity(
+                            id: UUID(),
+                            sequence: 2,
+                            title: "スキップした予約",
+                            startTime: now.addingTimeInterval(300),
+                            category: .restaurant,
+                            progress: .skipped,
+                            reservation: ReservationReference(
+                                id: UUID(),
+                                kind: .restaurant,
+                                title: "利用しない予約",
+                                confirmationCode: nil,
+                                url: nil,
+                                note: nil
+                            )
+                        )
+                    ]
+                )
+            ]
+        )
+        let secondTrip = Trip(
+            id: nextTripID,
+            title: "次の予約があるTrip",
+            dateRange: dayDate...dayDate,
+            days: [
+                Day(
+                    id: UUID(),
+                    sequence: 1,
+                    date: dayDate,
+                    title: "",
+                    activities: [
+                        Activity(
+                            id: UUID(),
+                            sequence: 1,
+                            title: "ホテル",
+                            startTime: now.addingTimeInterval(600),
+                            category: .accommodation,
+                            reservation: ReservationReference(
+                                id: nextReservationID,
+                                kind: .accommodation,
+                                title: "ホテル予約",
+                                confirmationCode: "PRIVATE",
+                                url: URL(string: "https://example.com/private"),
+                                note: "表示しない"
+                            )
+                        ),
+                        Activity(
+                            id: UUID(),
+                            sequence: 2,
+                            title: "未分類",
+                            startTime: nil
+                        )
+                    ]
+                )
+            ]
+        )
+        let firstParticipantID = UUID()
+        let secondParticipantID = UUID()
+
+        let summary = LibraryDashboardProjection.summary(
+            for: [firstTrip, secondTrip],
+            assignedParticipantIDs: [
+                firstParticipantID,
+                firstParticipantID,
+                secondParticipantID
+            ],
+            now: now
+        )
+
+        XCTAssertEqual(summary.readableTripCount, 2)
+        XCTAssertEqual(summary.assignedParticipantCount, 2)
+        XCTAssertEqual(summary.activityAnalysis.totalActivityCount, 3)
+        XCTAssertEqual(summary.activityAnalysis.unclassifiedCount, 1)
+        XCTAssertEqual(
+            summary.activityAnalysis.categories.map(\.category),
+            [.accommodation, .sightseeing]
+        )
+        XCTAssertEqual(
+            summary.leadingActivityCategory?.category,
+            .accommodation
+        )
+        XCTAssertEqual(summary.reservationCount, 2)
+        XCTAssertEqual(
+            summary.reservationKinds.map(\.kind),
+            [.accommodation, .restaurant]
+        )
+        XCTAssertEqual(summary.nextReservation?.tripID, nextTripID)
+        XCTAssertEqual(summary.nextReservation?.id, nextReservationID)
+        XCTAssertEqual(
+            summary.nextReservation?.reservation.reservationTitle,
+            "ホテル予約"
+        )
+    }
+
     func testReservationSummaryCountsKindsAndSelectsTheNextSafeReference() throws {
         let timeZone = try XCTUnwrap(TimeZone(identifier: "Asia/Tokyo"))
         func date(_ day: Int, _ hour: Int) throws -> Date {

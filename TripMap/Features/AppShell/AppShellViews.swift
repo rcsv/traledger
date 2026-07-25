@@ -169,6 +169,7 @@ extension FocusedValues {
 }
 
 private enum MacLibraryDestination: Hashable {
+    case dashboard
     case trips(TripLibraryScope)
     case people
     case profile
@@ -189,6 +190,10 @@ struct MacLibraryRootView: View {
     var body: some View {
         NavigationSplitView {
             List(selection: $destination) {
+                Section("Overview") {
+                    Label("Dashboard", systemImage: "chart.bar.xaxis")
+                        .tag(MacLibraryDestination.dashboard)
+                }
                 Section("Trips") {
                     Label("Upcoming", systemImage: "calendar.badge.clock")
                         .tag(MacLibraryDestination.trips(.upcoming))
@@ -233,6 +238,12 @@ struct MacLibraryRootView: View {
     @ViewBuilder
     private var detailView: some View {
         switch destination ?? .trips(.upcoming) {
+        case .dashboard:
+            NavigationStack {
+                LibraryDashboardView(
+                    onOpenTrip: { openWindow(id: "trip", value: $0) }
+                )
+            }
         case .trips:
             NavigationStack {
                 TripLibraryHomeView(

@@ -13,6 +13,7 @@ struct TripLibraryHomeView: View {
         SortDescriptor(\StoredTrip.endDateCode),
         SortDescriptor(\StoredTrip.title)
     ]) private var storedTrips: [StoredTrip]
+    @Query private var participantAssignments: [StoredTripParticipant]
     @Binding private var scope: TripLibraryScope
     private let showsScopePicker: Bool
     private let creationRequestID: UUID?
@@ -23,6 +24,7 @@ struct TripLibraryHomeView: View {
     @State private var pendingDeletionID: UUID?
     @State private var errorMessage: String?
     @State private var handledCreationRequestID: UUID?
+    @State private var isDashboardExpanded = false
     @AppStorage("planning.baseCurrencyCode") private var baseCurrencyCode = SupportedCurrency.jpy.rawValue
 
     init(
@@ -41,6 +43,23 @@ struct TripLibraryHomeView: View {
 
     var body: some View {
         List {
+            #if os(iOS)
+            Section {
+                DisclosureGroup(
+                    "Library summary",
+                    isExpanded: $isDashboardExpanded
+                ) {
+                    LibraryDashboardContent(
+                        summary: dashboardSummary,
+                        showsNextReservationAction: true,
+                        onOpenTrip: onOpenTrip
+                    )
+                    .padding(.vertical, 8)
+                }
+                .accessibilityIdentifier("library-dashboard-disclosure")
+            }
+            #endif
+
             if showsScopePicker {
                 Section {
                     Picker("表示", selection: $scope) {
@@ -163,6 +182,16 @@ struct TripLibraryHomeView: View {
         })
     }
 
+    private var dashboardSummary: LibraryDashboardSummary {
+        LibraryDashboardProjection.summary(
+            for: storedTrips.compactMap(\.snapshot),
+            assignedParticipantIDs: participantAssignments.compactMap {
+                guard $0.trip != nil else { return nil }
+                return $0.participant?.id
+            }
+        )
+    }
+
     private var groupedTripIDs: [TripTimelineGroup: [UUID]] {
         let groups = TripTimeline.grouped(entries: Array(entriesByID.values))
         return groups.mapValues { $0.map(\.id) }
@@ -270,6 +299,197 @@ struct TripLibraryHomeView: View {
             modelContext.rollback()
             pendingDeletionID = nil
             errorMessage = error.localizedDescription
+        }
+    }
+}
+
+struct LibraryDashboardView: View {
+    @Query(sort: [
+        SortDescriptor(\StoredTrip.startDateCode),
+        SortDescriptor(\StoredTrip.endDateCode),
+        SortDescriptor(\StoredTrip.title)
+    ]) private var storedTrips: [StoredTrip]
+    @Query private var participantAssignments: [StoredTripParticipant]
+    let onOpenTrip: (Trip.ID) -> Void
+
+    private var summary: LibraryDashboardSummary {
+        LibraryDashboardProjection.summary(
+            for: storedTrips.compactMap(\.snapshot),
+            assignedParticipantIDs: participantAssignments.compactMap {
+                guard $0.trip != nil else { return nil }
+                return $0.participant?.id
+            }
+        )
+    }
+
+    var body: some View {
+        ScrollView {
+            LibraryDashboardContent(
+                summary: summary,
+                showsNextReservationAction: true,
+                onOpenTrip: onOpenTrip
+            )
+            .padding()
+        }
+        .navigationTitle("Dashboard")
+        .accessibilityIdentifier("library-dashboard")
+    }
+}
+
+private struct LibraryDashboardContent: View {
+    let summary: LibraryDashboardSummary
+    let showsNextReservationAction: Bool
+    let onOpenTrip: (Trip.ID) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            LazyVGrid(
+                columns: [
+                    GridItem(.adaptive(minimum: 140), spacing: 12)
+                ],
+                alignment: .leading,
+                spacing: 12
+            ) {
+                metric(
+                    title: "Trips",
+                    value: summary.readableTripCount,
+                    systemImage: "suitcase.rolling"
+                )
+                metric(
+                    title: "Participants",
+                    value: summary.assignedParticipantCount,
+                    systemImage: "person.2"
+                )
+                metric(
+                    title: "Activities",
+                    value: summary.activityAnalysis.totalActivityCount,
+                    systemImage: "list.bullet.rectangle"
+                )
+                metric(
+                    title: "Reservations",
+                    value: summary.reservationCount,
+                    systemImage: "checkmark.seal"
+                )
+            }
+
+            GroupBox("Activity distribution") {
+                VStack(alignment: .leading, spacing: 10) {
+                    if summary.activityAnalysis.totalActivityCount == 0 {
+                        Text("集計できるActivityはまだありません。")
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(summary.activityAnalysis.categories) { item in
+                            distributionRow(
+                                label: item.category.displayName,
+                                count: item.count,
+                                fraction: item.fraction
+                            )
+                        }
+                        if summary.activityAnalysis.unclassifiedCount > 0 {
+                            distributionRow(
+                                label: "未分類",
+                                count: summary.activityAnalysis.unclassifiedCount,
+                                fraction: summary.activityAnalysis.unclassifiedFraction
+                            )
+                        }
+                        if let leading = summary.leadingActivityCategory {
+                            Divider()
+                            Label(
+                                "最多: \(leading.displayName) \(leading.count)件（\(leading.fraction, format: .percent.precision(.fractionLength(0)))）",
+                                systemImage: leading.systemImage
+                            )
+                            .font(.callout.weight(.medium))
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.top, 4)
+            }
+
+            GroupBox("Reservations") {
+                VStack(alignment: .leading, spacing: 10) {
+                    if summary.reservationKinds.isEmpty {
+                        Text("予約参照はまだありません。")
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(summary.reservationKinds) { item in
+                            LabeledContent(item.kind.displayName) {
+                                Text("\(item.count)件")
+                                    .monospacedDigit()
+                            }
+                        }
+                        if summary.unscheduledReservationCount > 0 {
+                            LabeledContent("時刻未設定") {
+                                Text("\(summary.unscheduledReservationCount)件")
+                                    .monospacedDigit()
+                            }
+                        }
+                    }
+
+                    if let next = summary.nextReservation {
+                        Divider()
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("直近の予約")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Text(next.reservation.reservationTitle)
+                                .font(.headline)
+                            Text("\(next.tripTitle) · Day \(next.reservation.daySequence) · \(next.reservation.startTime, format: .dateTime.month().day().hour().minute())")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            if showsNextReservationAction {
+                                Button("Tripを開く", systemImage: "arrow.up.forward.app") {
+                                    onOpenTrip(next.tripID)
+                                }
+                                .buttonStyle(.bordered)
+                                .accessibilityIdentifier("dashboard-open-next-reservation-trip")
+                            }
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.top, 4)
+            }
+
+            GroupBox("Visited countries") {
+                Label(
+                    "country codeの永続化後に利用できます。",
+                    systemImage: "clock.badge.exclamationmark"
+                )
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.top, 4)
+            }
+        }
+    }
+
+    private func metric(
+        title: String,
+        value: Int,
+        systemImage: String
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Label(title, systemImage: systemImage)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Text(value, format: .number)
+                .font(.title2.bold())
+                .monospacedDigit()
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.quaternary.opacity(0.55), in: RoundedRectangle(cornerRadius: 12))
+        .accessibilityElement(children: .combine)
+    }
+
+    private func distributionRow(
+        label: String,
+        count: Int,
+        fraction: Double
+    ) -> some View {
+        LabeledContent(label) {
+            Text("\(count)件 · \(fraction, format: .percent.precision(.fractionLength(0)))")
+                .monospacedDigit()
         }
     }
 }

@@ -398,7 +398,12 @@ struct ActivityAnalysisSummary: Hashable, Sendable {
 
 enum ActivityAnalysisProjection {
     static func summary(for trip: Trip) -> ActivityAnalysisSummary {
-        let activities = trip.orderedDays
+        summary(for: [trip])
+    }
+
+    static func summary(for trips: [Trip]) -> ActivityAnalysisSummary {
+        let activities = trips
+            .flatMap(\.orderedDays)
             .flatMap(\.orderedActivities)
             .filter { $0.progress != .skipped }
         let total = activities.count
@@ -441,6 +446,122 @@ enum ActivityAnalysisProjection {
     private static func fraction(_ count: Int, of total: Int) -> Double {
         guard total > 0 else { return 0 }
         return Double(count) / Double(total)
+    }
+}
+
+struct LibraryUpcomingReservationSummary: Identifiable, Hashable, Sendable {
+    let tripID: Trip.ID
+    let tripTitle: String
+    let reservation: UpcomingReservationSummary
+
+    var id: ReservationReference.ID { reservation.id }
+}
+
+struct LibraryDashboardSummary: Hashable, Sendable {
+    let readableTripCount: Int
+    let assignedParticipantCount: Int
+    let activityAnalysis: ActivityAnalysisSummary
+    let reservationCount: Int
+    let reservationKinds: [ReservationKindSummary]
+    let unscheduledReservationCount: Int
+    let nextReservation: LibraryUpcomingReservationSummary?
+
+    var leadingActivityCategory: LibraryActivityCategoryLeader? {
+        let categorized = activityAnalysis.categories.first.map {
+            LibraryActivityCategoryLeader(
+                category: $0.category,
+                count: $0.count,
+                fraction: $0.fraction
+            )
+        }
+        let unclassified = activityAnalysis.unclassifiedCount > 0
+            ? LibraryActivityCategoryLeader(
+                category: nil,
+                count: activityAnalysis.unclassifiedCount,
+                fraction: activityAnalysis.unclassifiedFraction
+            )
+            : nil
+        guard let unclassified else { return categorized }
+        guard let categorized else { return unclassified }
+        return categorized.count >= unclassified.count
+            ? categorized
+            : unclassified
+    }
+}
+
+struct LibraryActivityCategoryLeader: Hashable, Sendable {
+    let category: ActivityCategory?
+    let count: Int
+    let fraction: Double
+
+    var displayName: String { category?.displayName ?? "未分類" }
+    var systemImage: String { category?.systemImage ?? "questionmark.circle" }
+}
+
+enum LibraryDashboardProjection {
+    static func summary(
+        for trips: [Trip],
+        assignedParticipantIDs: [UUID],
+        now: Date = Date()
+    ) -> LibraryDashboardSummary {
+        let reservationSummaries = trips.map {
+            (
+                trip: $0,
+                summary: ReservationSummaryProjection.summary(
+                    for: $0,
+                    now: now
+                )
+            )
+        }
+        let kindCounts = reservationSummaries
+            .flatMap(\.summary.kinds)
+            .reduce(into: [ReservationKind: Int]()) { counts, item in
+                counts[item.kind, default: 0] += item.count
+            }
+        let nextReservation = reservationSummaries
+            .compactMap { item -> LibraryUpcomingReservationSummary? in
+                item.summary.nextReservation.map {
+                    LibraryUpcomingReservationSummary(
+                        tripID: item.trip.id,
+                        tripTitle: item.trip.title,
+                        reservation: $0
+                    )
+                }
+            }
+            .sorted(by: nextReservationOrder)
+            .first
+
+        return LibraryDashboardSummary(
+            readableTripCount: trips.count,
+            assignedParticipantCount: Set(assignedParticipantIDs).count,
+            activityAnalysis: ActivityAnalysisProjection.summary(for: trips),
+            reservationCount: reservationSummaries.reduce(0) {
+                $0 + $1.summary.totalCount
+            },
+            reservationKinds: ReservationKind.allCases.compactMap { kind in
+                kindCounts[kind].map {
+                    ReservationKindSummary(kind: kind, count: $0)
+                }
+            },
+            unscheduledReservationCount: reservationSummaries.reduce(0) {
+                $0 + $1.summary.unscheduledCount
+            },
+            nextReservation: nextReservation
+        )
+    }
+
+    private static func nextReservationOrder(
+        _ lhs: LibraryUpcomingReservationSummary,
+        _ rhs: LibraryUpcomingReservationSummary
+    ) -> Bool {
+        if lhs.reservation.startTime != rhs.reservation.startTime {
+            return lhs.reservation.startTime < rhs.reservation.startTime
+        }
+        if lhs.tripTitle != rhs.tripTitle {
+            return lhs.tripTitle.localizedStandardCompare(rhs.tripTitle)
+                == .orderedAscending
+        }
+        return lhs.id.uuidString < rhs.id.uuidString
     }
 }
 
