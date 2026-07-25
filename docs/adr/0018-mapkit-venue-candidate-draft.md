@@ -32,6 +32,8 @@ available. Selecting a result:
 
 - clears saved-Activity selection;
 - focuses the map on the candidate;
+- shows a visually distinct unsaved-candidate pin and an explicit close
+  action that returns to no selection without writing;
 - displays a separate candidate panel with name, MapKit category when known,
   address, automatic image preview, `予定に追加`, and `Mapsで開く`;
 - does not create an Activity.

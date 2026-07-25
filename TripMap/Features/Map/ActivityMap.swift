@@ -39,6 +39,7 @@ struct ActivityMap: View {
     let imageBudgetSummary: String?
     let venueCandidate: VenueCandidate?
     let onSearchVenue: (() -> Void)?
+    let onDismissVenueCandidate: (() -> Void)?
     let onAddVenueCandidate: ((VenueCandidate) -> Void)?
     @State private var cameraPosition: MapCameraPosition
 
@@ -55,6 +56,7 @@ struct ActivityMap: View {
         imageBudgetSummary: String? = nil,
         venueCandidate: VenueCandidate? = nil,
         onSearchVenue: (() -> Void)? = nil,
+        onDismissVenueCandidate: (() -> Void)? = nil,
         onAddVenueCandidate: ((VenueCandidate) -> Void)? = nil
     ) {
         self.day = day
@@ -69,6 +71,7 @@ struct ActivityMap: View {
         self.imageBudgetSummary = imageBudgetSummary
         self.venueCandidate = venueCandidate
         self.onSearchVenue = onSearchVenue
+        self.onDismissVenueCandidate = onDismissVenueCandidate
         self.onAddVenueCandidate = onAddVenueCandidate
         _cameraPosition = State(initialValue: Self.region(for: day).map(MapCameraPosition.region) ?? .automatic)
     }
@@ -125,6 +128,21 @@ struct ActivityMap: View {
                                 }
                             }
                         }
+                        if let venueCandidate {
+                            Annotation(
+                                venueCandidate.place.name,
+                                coordinate: venueCandidate.place.coordinate,
+                                anchor: .bottom
+                            ) {
+                                Image(systemName: "mappin.circle.fill")
+                                    .font(.title)
+                                    .foregroundStyle(.orange)
+                                    .background(.regularMaterial, in: Circle())
+                                    .accessibilityLabel(
+                                        "未保存の場所候補、\(venueCandidate.place.name)"
+                                    )
+                            }
+                        }
                     }
                     .mapStyle(.standard(elevation: .realistic))
                     .mapControls {
@@ -147,6 +165,7 @@ struct ActivityMap: View {
                     if let venueCandidate, let onAddVenueCandidate {
                         VenueCandidateOverlay(
                             candidate: venueCandidate,
+                            onDismiss: onDismissVenueCandidate,
                             onAdd: { onAddVenueCandidate(venueCandidate) }
                         )
                         .padding()
@@ -297,12 +316,28 @@ struct ActivityMap: View {
 
 private struct VenueCandidateOverlay: View {
     let candidate: VenueCandidate
+    let onDismiss: (() -> Void)?
     let onAdd: () -> Void
     @StateObject private var imageResolution = VenueImageResolutionModel()
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Label("未保存の場所候補", systemImage: "mappin.and.ellipse")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                if let onDismiss {
+                    Button("候補を閉じる", systemImage: "xmark") {
+                        onDismiss()
+                    }
+                    .labelStyle(.iconOnly)
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("venue-candidate-dismiss-button")
+                }
+            }
+
             HStack(alignment: .top, spacing: 12) {
                 PlaceIllustration(
                     data: candidate.place.imageData,

@@ -541,6 +541,7 @@ struct PlanView: View {
                 imageBudgetSummary: imageBudgetSummary,
                 venueCandidate: venueCandidate,
                 onSearchVenue: { isVenueSearchPresented = true },
+                onDismissVenueCandidate: { venueCandidate = nil },
                 onAddVenueCandidate: presentActivityDraft
             )
         .ignoresSafeArea(edges: [.top, .bottom])
