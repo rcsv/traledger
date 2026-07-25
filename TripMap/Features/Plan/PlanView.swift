@@ -30,6 +30,8 @@ struct PlanView: View {
     @State private var operation: DayOperation?
     @State private var coverPickerItem: PhotosPickerItem?
     @State private var activityCreationTarget: ActivityInsertionTarget?
+    @State private var venueCandidate: VenueCandidate?
+    @State private var isVenueSearchPresented = false
     @State private var activityEditor: ActivityEditorTarget?
     @State private var travelLegEditTarget: TravelLegID?
     @State private var pendingActivityDeletion: ActivityEditorTarget?
@@ -116,6 +118,11 @@ struct PlanView: View {
                 .help(isMapVisible ? "地図を隠す" : "地図を表示")
 
                 if let selectedDay {
+                    Button("場所から追加", systemImage: "mappin.and.ellipse") {
+                        isVenueSearchPresented = true
+                    }
+                    .help("場所を選び、内容を確認して予定へ追加")
+
                     Button("予定を追加", systemImage: "plus") {
                         presentActivityCreationAtEnd(of: selectedDay)
                     }
@@ -221,20 +228,25 @@ struct PlanView: View {
             )
         }
         .sheet(item: $activityCreationTarget) { target in
-            if let day = trip.days.first(where: { $0.id == target.dayID }) {
-                ActivityCreationSheet(
-                    day: day,
-                    timeZoneIdentifier: trip.timeZoneIdentifier
-                ) { title, startTime, category, durationMinutes in
+            ActivityCreationSheet(
+                days: trip.orderedDays,
+                target: target,
+                timeZoneIdentifier: trip.timeZoneIdentifier
+            ) { dayID, anchor, title, startTime, category, durationMinutes, place in
                     addActivity(
-                        to: day.id,
-                        anchor: target.anchor,
+                        to: dayID,
+                        anchor: anchor,
                         title: title,
                         startTime: startTime,
                         category: category,
-                        durationMinutes: durationMinutes
+                        durationMinutes: durationMinutes,
+                        place: place
                     )
-                }
+            }
+        }
+        .sheet(isPresented: $isVenueSearchPresented) {
+            VenueSearchSheet { candidate in
+                selectVenueCandidate(candidate)
             }
         }
         .sheet(item: $activityEditor) { target in
@@ -526,17 +538,43 @@ struct PlanView: View {
                 onUpdatePlaceImage: updatePlaceImage,
                 onUpdateExternalPlaceImage: updateExternalPlaceImage,
                 allowsPlaceImageEditing: true,
-                imageBudgetSummary: imageBudgetSummary
+                imageBudgetSummary: imageBudgetSummary,
+                venueCandidate: venueCandidate,
+                onSearchVenue: { isVenueSearchPresented = true },
+                onAddVenueCandidate: presentActivityDraft
             )
         .ignoresSafeArea(edges: [.top, .bottom])
     }
 
     private func selectActivityFromList(_ activityID: Activity.ID) {
+        venueCandidate = nil
         interaction.selectActivity(activityID, source: .list, in: trip)
     }
 
     private func selectActivityFromMap(_ activityID: Activity.ID) {
+        venueCandidate = nil
         interaction.selectActivity(activityID, source: .map, in: trip)
+    }
+
+    private func selectVenueCandidate(_ candidate: VenueCandidate) {
+        venueCandidate = candidate
+        isMapVisible = true
+        interaction.selectActivity(nil, source: .map, in: trip)
+    }
+
+    private func presentActivityDraft(for candidate: VenueCandidate) {
+        guard let day = selectedDay ?? trip.orderedDays.first else { return }
+        let seed = VenueActivityDraftSeed(place: candidate.place)
+        activityCreationTarget = ActivityInsertionTarget(
+            dayID: day.id,
+            anchor: ActivityInsertionAnchor(
+                previousActivityID: day.orderedActivities.last?.id,
+                nextActivityID: nil
+            ),
+            initialTitle: seed.title,
+            initialPlace: seed.place,
+            allowsPlacementSelection: true
+        )
     }
 
     private func legAndActivities(
@@ -955,7 +993,8 @@ struct PlanView: View {
         title: String,
         startTime: Date?,
         category: ActivityCategory?,
-        durationMinutes: Int?
+        durationMinutes: Int?,
+        place: PlaceSnapshot? = nil
     ) {
         do {
             let activityID = UUID()
@@ -967,7 +1006,8 @@ struct PlanView: View {
                     title: title,
                     startTime: startTime,
                     category: category,
-                    durationMinutes: durationMinutes
+                    durationMinutes: durationMinutes,
+                    place: place
                 )
             )
             let updated = try mutation.applying(to: trip)
@@ -1001,6 +1041,7 @@ struct PlanView: View {
                 )
             }
             interaction.selectActivity(activityID, source: .list, in: updated)
+            venueCandidate = nil
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -1348,7 +1389,24 @@ private struct ActivityEditorTarget: Identifiable {
 private struct ActivityInsertionTarget: Identifiable {
     let dayID: Day.ID
     let anchor: ActivityInsertionAnchor
+    let initialTitle: String
+    let initialPlace: PlaceSnapshot?
+    let allowsPlacementSelection: Bool
     let id = UUID()
+
+    init(
+        dayID: Day.ID,
+        anchor: ActivityInsertionAnchor,
+        initialTitle: String = "",
+        initialPlace: PlaceSnapshot? = nil,
+        allowsPlacementSelection: Bool = false
+    ) {
+        self.dayID = dayID
+        self.anchor = anchor
+        self.initialTitle = initialTitle
+        self.initialPlace = initialPlace
+        self.allowsPlacementSelection = allowsPlacementSelection
+    }
 }
 
 private struct ActivityEditorSheet: View {
@@ -1470,8 +1528,8 @@ private struct ActivityEditorSheet: View {
         }
         .frame(minWidth: 420, minHeight: 360)
         .sheet(isPresented: $isVenueSearchPresented) {
-            VenueSearchSheet { place in
-                self.place = place
+            VenueSearchSheet { candidate in
+                self.place = candidate.place
             }
         }
     }
@@ -1523,12 +1581,90 @@ private struct ActivityCategoryDurationFields: View {
     }
 }
 
+private struct ActivityInsertionOption: Hashable, Identifiable {
+    let dayID: Day.ID
+    let daySequence: Int
+    let anchor: ActivityInsertionAnchor
+    let positionLabel: String
+
+    var id: Self { self }
+    var label: String { "Day \(daySequence)・\(positionLabel)" }
+
+    static func options(for days: [Day]) -> [Self] {
+        days.flatMap { day in
+            let activities = day.orderedActivities
+            guard let first = activities.first else {
+                return [
+                    Self(
+                        dayID: day.id,
+                        daySequence: day.sequence,
+                        anchor: ActivityInsertionAnchor(
+                            previousActivityID: nil,
+                            nextActivityID: nil
+                        ),
+                        positionLabel: "最初の予定"
+                    )
+                ]
+            }
+
+            var values = [
+                Self(
+                    dayID: day.id,
+                    daySequence: day.sequence,
+                    anchor: ActivityInsertionAnchor(
+                        previousActivityID: nil,
+                        nextActivityID: first.id
+                    ),
+                    positionLabel: "先頭（\(first.title)の前）"
+                )
+            ]
+            for pair in zip(activities, activities.dropFirst()) {
+                values.append(
+                    Self(
+                        dayID: day.id,
+                        daySequence: day.sequence,
+                        anchor: ActivityInsertionAnchor(
+                            previousActivityID: pair.0.id,
+                            nextActivityID: pair.1.id
+                        ),
+                        positionLabel: "\(pair.0.title) と \(pair.1.title) の間"
+                    )
+                )
+            }
+            if let last = activities.last {
+                values.append(
+                    Self(
+                        dayID: day.id,
+                        daySequence: day.sequence,
+                        anchor: ActivityInsertionAnchor(
+                            previousActivityID: last.id,
+                            nextActivityID: nil
+                        ),
+                        positionLabel: "末尾（\(last.title)の後）"
+                    )
+                )
+            }
+            return values
+        }
+    }
+}
+
 private struct ActivityCreationSheet: View {
-    let day: Day
+    let days: [Day]
+    let target: ActivityInsertionTarget
     let timeZoneIdentifier: String
-    let onCreate: (String, Date?, ActivityCategory?, Int?) -> Void
+    let onCreate: (
+        Day.ID,
+        ActivityInsertionAnchor,
+        String,
+        Date?,
+        ActivityCategory?,
+        Int?,
+        PlaceSnapshot?
+    ) -> Void
     @Environment(\.dismiss) private var dismiss
-    @State private var title = ""
+    @State private var selection: ActivityInsertionOption
+    @State private var title: String
     @State private var hasStartTime = false
     @State private var startTime: Date
     @State private var category: ActivityCategory?
@@ -1536,15 +1672,32 @@ private struct ActivityCreationSheet: View {
     @State private var durationMinutes = 60
 
     init(
-        day: Day,
+        days: [Day],
+        target: ActivityInsertionTarget,
         timeZoneIdentifier: String,
-        onCreate: @escaping (String, Date?, ActivityCategory?, Int?) -> Void
+        onCreate: @escaping (
+            Day.ID,
+            ActivityInsertionAnchor,
+            String,
+            Date?,
+            ActivityCategory?,
+            Int?,
+            PlaceSnapshot?
+        ) -> Void
     ) {
-        self.day = day
+        self.days = days
+        self.target = target
         self.timeZoneIdentifier = timeZoneIdentifier
         self.onCreate = onCreate
+        let options = ActivityInsertionOption.options(for: days)
+        let initialSelection = options.first {
+            $0.dayID == target.dayID && $0.anchor == target.anchor
+        } ?? options[0]
+        _selection = State(initialValue: initialSelection)
+        _title = State(initialValue: target.initialTitle)
         let tripTimeZone = TimeZone(identifier: timeZoneIdentifier) ?? .current
         let currentLocalTime = LocalTime(date: Date(), timeZone: .current)
+        let day = days.first(where: { $0.id == initialSelection.dayID }) ?? days[0]
         let selectedDay = LocalDate(date: day.date, timeZone: tripTimeZone)
         _startTime = State(
             initialValue: currentLocalTime.date(on: selectedDay, in: tripTimeZone) ?? day.date
@@ -1557,6 +1710,9 @@ private struct ActivityCreationSheet: View {
 
     private var selectedDayStartTime: Date? {
         guard hasStartTime else { return nil }
+        guard let day = days.first(where: { $0.id == selection.dayID }) else {
+            return nil
+        }
         let selectedDay = LocalDate(date: day.date, timeZone: tripTimeZone)
         let selectedTime = LocalTime(date: startTime, timeZone: tripTimeZone)
         return selectedTime.date(on: selectedDay, in: tripTimeZone)
@@ -1565,6 +1721,21 @@ private struct ActivityCreationSheet: View {
     var body: some View {
         NavigationStack {
             Form {
+                if target.allowsPlacementSelection {
+                    Section("追加先") {
+                        Picker("日と挿入位置", selection: $selection) {
+                            ForEach(ActivityInsertionOption.options(for: days)) { option in
+                                Text(option.label).tag(option)
+                            }
+                        }
+                        .accessibilityIdentifier("activity-insertion-position")
+                    }
+                } else {
+                    Section("追加先") {
+                        LabeledContent("位置", value: selection.label)
+                    }
+                }
+
                 Section("予定") {
                     TextField("予定の名前", text: $title)
                     Toggle("時刻を設定", isOn: $hasStartTime)
@@ -1581,8 +1752,21 @@ private struct ActivityCreationSheet: View {
                         durationMinutes: $durationMinutes
                     )
                 }
+
+                if let place = target.initialPlace {
+                    Section("場所") {
+                        LabeledContent("Venue") {
+                            VStack(alignment: .trailing, spacing: 2) {
+                                Text(place.name)
+                                Text(place.address)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
             }
-            .navigationTitle("Day \(day.sequence)に追加")
+            .navigationTitle(target.initialPlace == nil ? "予定を追加" : "場所から予定を作成")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("キャンセル") { dismiss() }
@@ -1590,10 +1774,13 @@ private struct ActivityCreationSheet: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("追加") {
                         onCreate(
+                            selection.dayID,
+                            selection.anchor,
                             title,
                             selectedDayStartTime,
                             category,
-                            hasDuration ? durationMinutes : nil
+                            hasDuration ? durationMinutes : nil,
+                            target.initialPlace
                         )
                         dismiss()
                     }

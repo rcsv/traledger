@@ -1251,8 +1251,8 @@ private struct GuideQuickEditSheet: View {
         .accessibilityIdentifier("guide-quick-editor")
         .presentationDetents([.medium, .large])
         .sheet(isPresented: $isVenueSearchPresented) {
-            VenueSearchSheet { selectedPlace in
-                place = selectedPlace
+            VenueSearchSheet { candidate in
+                place = candidate.place
             }
         }
     }

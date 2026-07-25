@@ -112,9 +112,19 @@ struct AppendActivityMutation: Equatable, Sendable {
     let durationMinutes: Int?
 }
 
-struct ActivityInsertionAnchor: Equatable, Sendable {
+struct ActivityInsertionAnchor: Hashable, Sendable {
     let previousActivityID: Activity.ID?
     let nextActivityID: Activity.ID?
+}
+
+struct VenueActivityDraftSeed: Equatable, Sendable {
+    let title: String
+    let place: PlaceSnapshot
+
+    init(place: PlaceSnapshot) {
+        title = "\(place.name)で過ごす"
+        self.place = place
+    }
 }
 
 struct InsertActivityMutation: Equatable, Sendable {
@@ -125,6 +135,27 @@ struct InsertActivityMutation: Equatable, Sendable {
     let startTime: Date?
     let category: ActivityCategory?
     let durationMinutes: Int?
+    let place: PlaceSnapshot?
+
+    init(
+        dayID: Day.ID,
+        anchor: ActivityInsertionAnchor,
+        activityID: Activity.ID,
+        title: String,
+        startTime: Date?,
+        category: ActivityCategory?,
+        durationMinutes: Int?,
+        place: PlaceSnapshot? = nil
+    ) {
+        self.dayID = dayID
+        self.anchor = anchor
+        self.activityID = activityID
+        self.title = title
+        self.startTime = startTime
+        self.category = category
+        self.durationMinutes = durationMinutes
+        self.place = place
+    }
 }
 
 struct DeleteActivityMutation: Equatable, Sendable {
@@ -675,7 +706,7 @@ enum TripPlanEditor {
                 category: mutation.category,
                 durationMinutes: mutation.durationMinutes,
                 note: nil,
-                place: nil
+                place: mutation.place
             ),
             at: insertionIndex
         )

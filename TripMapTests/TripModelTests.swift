@@ -1264,6 +1264,52 @@ final class TripModelTests: XCTestCase {
         )
     }
 
+    func testVenueDraftDoesNotChangeTripUntilConfirmedInsertion() throws {
+        let trip = OkinawaSample.trip
+        let day = trip.orderedDays[0]
+        let last = try XCTUnwrap(day.orderedActivities.last)
+        let place = PlaceSnapshot(
+            id: UUID(),
+            name: "首里城",
+            address: "沖縄県那覇市首里金城町1-2",
+            latitude: 26.217,
+            longitude: 127.719,
+            mapKitIdentifier: "mapkit-shurijo"
+        )
+
+        let draft = VenueActivityDraftSeed(place: place)
+
+        XCTAssertEqual(trip, OkinawaSample.trip)
+        XCTAssertEqual(draft.title, "首里城で過ごす")
+        XCTAssertEqual(draft.place, place)
+
+        let insertedID = UUID()
+        let confirmed = try TripMutation.insertActivity(
+            InsertActivityMutation(
+                dayID: day.id,
+                anchor: ActivityInsertionAnchor(
+                    previousActivityID: last.id,
+                    nextActivityID: nil
+                ),
+                activityID: insertedID,
+                title: draft.title,
+                startTime: nil,
+                category: nil,
+                durationMinutes: nil,
+                place: draft.place
+            )
+        ).applying(to: trip)
+
+        let added = try XCTUnwrap(
+            confirmed.orderedDays[0].orderedActivities.first {
+                $0.id == insertedID
+            }
+        )
+        XCTAssertEqual(added.title, draft.title)
+        XCTAssertEqual(added.place, place)
+        XCTAssertNil(added.category)
+    }
+
     func testInsertingActivityRejectsAChangedGap() throws {
         let trip = OkinawaSample.trip
         let day = trip.orderedDays[0]
@@ -2973,6 +3019,14 @@ final class TripModelTests: XCTestCase {
         let second = try XCTUnwrap(day.orderedActivities.dropFirst().first)
         let concurrentID = UUID()
         let insertedID = UUID()
+        let insertedPlace = PlaceSnapshot(
+            id: UUID(),
+            name: "確認済みVenue",
+            address: "沖縄県",
+            latitude: 26.2,
+            longitude: 127.7,
+            mapKitIdentifier: nil
+        )
         let stored = try StoredTrip(validatingSnapshot: OkinawaSample.trip)
         context.insert(stored)
         try context.save()
@@ -2999,7 +3053,8 @@ final class TripModelTests: XCTestCase {
                     title: "区間へ追加",
                     startTime: nil,
                     category: .sightseeing,
-                    durationMinutes: 45
+                    durationMinutes: 45,
+                    place: insertedPlace
                 )
             ),
             in: context
@@ -3014,6 +3069,10 @@ final class TripModelTests: XCTestCase {
             [first.id, insertedID, second.id]
         )
         XCTAssertEqual(activities.last?.id, concurrentID)
+        XCTAssertEqual(
+            activities.first(where: { $0.id == insertedID })?.place,
+            insertedPlace
+        )
         XCTAssertEqual(
             activities.map(\.sequence),
             Array(1...activities.count)

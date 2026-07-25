@@ -37,6 +37,9 @@ struct ActivityMap: View {
     let showsPlaceDetailOverlay: Bool
     let pinLabels: [Activity.ID: ActivityMapPinLabel]
     let imageBudgetSummary: String?
+    let venueCandidate: VenueCandidate?
+    let onSearchVenue: (() -> Void)?
+    let onAddVenueCandidate: ((VenueCandidate) -> Void)?
     @State private var cameraPosition: MapCameraPosition
 
     init(
@@ -49,7 +52,10 @@ struct ActivityMap: View {
         allowsPlaceImageEditing: Bool = false,
         showsPlaceDetailOverlay: Bool = true,
         pinLabels: [Activity.ID: ActivityMapPinLabel] = [:],
-        imageBudgetSummary: String? = nil
+        imageBudgetSummary: String? = nil,
+        venueCandidate: VenueCandidate? = nil,
+        onSearchVenue: (() -> Void)? = nil,
+        onAddVenueCandidate: ((VenueCandidate) -> Void)? = nil
     ) {
         self.day = day
         self.selectedActivityID = selectedActivityID
@@ -61,6 +67,9 @@ struct ActivityMap: View {
         self.showsPlaceDetailOverlay = showsPlaceDetailOverlay
         self.pinLabels = pinLabels
         self.imageBudgetSummary = imageBudgetSummary
+        self.venueCandidate = venueCandidate
+        self.onSearchVenue = onSearchVenue
+        self.onAddVenueCandidate = onAddVenueCandidate
         _cameraPosition = State(initialValue: Self.region(for: day).map(MapCameraPosition.region) ?? .automatic)
     }
 
@@ -87,7 +96,7 @@ struct ActivityMap: View {
 
     var body: some View {
         Group {
-            if placedActivities.isEmpty {
+            if placedActivities.isEmpty, onSearchVenue == nil {
                 ContentUnavailableView(
                     "地図に表示できる場所がありません",
                     systemImage: "mappin.slash",
@@ -125,7 +134,28 @@ struct ActivityMap: View {
                     }
                     .accessibilityIdentifier("activity-map")
 
-                    if let selectedActivity, selectedActivity.place == nil {
+                    if let onSearchVenue {
+                        Button("場所を探す", systemImage: "magnifyingglass") {
+                            onSearchVenue()
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .padding()
+                        .frame(maxWidth: .infinity, alignment: .topTrailing)
+                        .accessibilityIdentifier("map-venue-search-button")
+                    }
+
+                    if let venueCandidate, let onAddVenueCandidate {
+                        VenueCandidateOverlay(
+                            candidate: venueCandidate,
+                            onAdd: { onAddVenueCandidate(venueCandidate) }
+                        )
+                        .padding()
+                        .frame(
+                            maxWidth: .infinity,
+                            maxHeight: .infinity,
+                            alignment: .bottomLeading
+                        )
+                    } else if let selectedActivity, selectedActivity.place == nil {
                         Label("このActivityには場所が設定されていません", systemImage: "mappin.slash")
                             .font(.callout.weight(.medium))
                             .padding(.horizontal, 14)
@@ -157,6 +187,20 @@ struct ActivityMap: View {
         }
         .onChange(of: day.id) { _, _ in
             showWholeDay()
+        }
+        .onChange(of: venueCandidate?.id) { _, _ in
+            guard let place = venueCandidate?.place else { return }
+            withAnimation(.easeInOut) {
+                cameraPosition = .region(
+                    MKCoordinateRegion(
+                        center: place.coordinate,
+                        span: MKCoordinateSpan(
+                            latitudeDelta: 0.02,
+                            longitudeDelta: 0.02
+                        )
+                    )
+                )
+            }
         }
     }
 
@@ -248,6 +292,103 @@ struct ActivityMap: View {
         if value > 180 { value -= 360 }
         if value < -180 { value += 360 }
         return value
+    }
+}
+
+private struct VenueCandidateOverlay: View {
+    let candidate: VenueCandidate
+    let onAdd: () -> Void
+    @StateObject private var imageResolution = VenueImageResolutionModel()
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 12) {
+                PlaceIllustration(
+                    data: candidate.place.imageData,
+                    externalImage: imageResolution.externalImage,
+                    scene: imageResolution.lookAroundScene,
+                    source: imageResolution.source
+                )
+                .frame(width: 112, height: 76)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(imageAccessibilityLabel)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(candidate.place.name)
+                        .font(.headline)
+                        .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
+                    if let category = candidate.categoryLabel {
+                        Label(category, systemImage: "tag")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Text(candidate.place.address)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
+            if imageResolution.source == .wikimedia,
+               let image = imageResolution.externalImage {
+                Link(destination: image.sourcePageURL) {
+                    Text("Wikimedia Commons · \(image.authorName) · \(image.licenseName)")
+                        .font(.caption2)
+                        .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
+                }
+            }
+
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 8) {
+                    addButton
+                    mapsButton
+                }
+                VStack(alignment: .leading, spacing: 8) {
+                    addButton
+                    mapsButton
+                }
+            }
+            .buttonStyle(.bordered)
+        }
+        .padding(12)
+        .frame(maxWidth: 460, alignment: .leading)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18))
+        .shadow(radius: 12, y: 4)
+        .task(id: candidate.id) {
+            imageResolution.load(candidate.place) { _ in }
+        }
+        .onDisappear {
+            imageResolution.cancel()
+        }
+        .accessibilityIdentifier("venue-candidate-panel")
+    }
+
+    private var addButton: some View {
+        Button("予定に追加", systemImage: "plus") {
+            onAdd()
+        }
+        .buttonStyle(.borderedProminent)
+        .accessibilityIdentifier("venue-candidate-add-button")
+    }
+
+    private var mapsButton: some View {
+        ResolvedMapsButton(
+            place: candidate.place,
+            resolvedMapItem: candidate.mapItem
+        )
+    }
+
+    private var imageAccessibilityLabel: String {
+        switch imageResolution.source {
+        case .loading: "場所の画像を読み込み中"
+        case .lookAround: "Look Aroundの場所画像"
+        case .wikimedia: "Wikimedia Commonsの場所画像"
+        case .user: "ユーザーが設定した場所画像"
+        case .placeholder: "場所画像なし"
+        }
     }
 }
 

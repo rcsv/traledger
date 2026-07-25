@@ -29,6 +29,55 @@ struct VenueSearchResult: Identifiable {
         }
         return nil
     }
+
+    var candidate: VenueCandidate {
+        VenueCandidate(place: snapshot, mapItem: mapItem)
+    }
+}
+
+/// A MapKit result that is still outside the Trip domain. It only becomes
+/// persisted after the user confirms an Activity draft.
+struct VenueCandidate: Identifiable {
+    let place: PlaceSnapshot
+    let mapItem: MKMapItem
+
+    var id: PlaceSnapshot.ID { place.id }
+
+    var categoryLabel: String? {
+        guard let category = mapItem.pointOfInterestCategory else { return nil }
+        return switch category {
+        case .airport: "空港"
+        case .amusementPark: "テーマパーク"
+        case .aquarium: "水族館"
+        case .bakery: "ベーカリー"
+        case .beach: "ビーチ"
+        case .brewery: "醸造所"
+        case .cafe: "カフェ"
+        case .campground: "キャンプ場"
+        case .carRental: "レンタカー"
+        case .evCharger: "EV充電"
+        case .gasStation: "ガソリンスタンド"
+        case .hotel: "ホテル"
+        case .library: "図書館"
+        case .marina: "マリーナ"
+        case .movieTheater: "映画館"
+        case .museum: "博物館・美術館"
+        case .nationalPark: "国立公園"
+        case .nightlife: "ナイトライフ"
+        case .park: "公園"
+        case .parking: "駐車場"
+        case .pharmacy: "薬局"
+        case .publicTransport: "公共交通"
+        case .restaurant: "レストラン"
+        case .restroom: "トイレ"
+        case .store: "ショップ"
+        case .theater: "劇場"
+        case .university: "大学"
+        case .winery: "ワイナリー"
+        case .zoo: "動物園"
+        default: nil
+        }
+    }
 }
 
 @MainActor
@@ -107,7 +156,7 @@ final class VenueSearchModel: NSObject, ObservableObject, @preconcurrency MKLoca
 }
 
 struct VenueSearchSheet: View {
-    let onSelect: (PlaceSnapshot) -> Void
+    let onSelect: (VenueCandidate) -> Void
     @Environment(\.dismiss) private var dismiss
     @StateObject private var search = VenueSearchModel()
     @State private var query = ""
@@ -145,7 +194,7 @@ struct VenueSearchSheet: View {
                     }
                     ToolbarItem(placement: .confirmationAction) {
                         Button("この場所を設定") {
-                            if let selectedResult { onSelect(selectedResult.snapshot) }
+                            if let selectedResult { onSelect(selectedResult.candidate) }
                             dismiss()
                         }
                         .disabled(selectedResult == nil)
