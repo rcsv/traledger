@@ -177,6 +177,9 @@ private enum DebugFixtureSeeder {
                 note: "入館時に確認番号を提示する。"
             )
         }
+        if ProcessInfo.processInfo.arguments.contains("-tripmap-reminder-permission-qa") {
+            fixture.days[0].activities[0].reminderLeadTime = .fifteenMinutes
+        }
         if ProcessInfo.processInfo.arguments.contains("-tripmap-travel-leg-preference-qa"),
            let legID = TravelLegProjection.activeLegs(for: fixture).first?.id {
             fixture.travelLegPreferences = [

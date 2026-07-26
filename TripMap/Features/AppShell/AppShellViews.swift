@@ -132,6 +132,19 @@ private struct TripGuideWorkspaceView: View {
                 }
             )
                 .id(trip.id)
+                #if TRIPMAP_QA
+                .task {
+                    guard ProcessInfo.processInfo.arguments.contains(
+                        "-tripmap-reminder-permission-qa"
+                    ) else {
+                        return
+                    }
+                    try? await GuideReminderScheduler.sync(
+                        trip: trip,
+                        requestingAuthorization: true
+                    )
+                }
+                #endif
         } else {
             ContentUnavailableView(
                 "旅行データを読み込めません",

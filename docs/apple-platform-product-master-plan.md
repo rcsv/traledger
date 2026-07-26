@@ -953,6 +953,12 @@ Reservation は未実装ではない。次の拡張は新しい booking model �
 未設定、時刻なし、完了、スキップ、過去の Activity は通知予定を生成しない。保存成功後に Trip 単位で
 pending request を同期し、新規に有効化した操作だけが通知許可を要求する。通知内容を一般タイトルと
 Activity 名に限定する境界は [`ADR 0009`](adr/0009-explicit-activity-reminders.md) を正とする。
+2026-07-27 に `-tripmap-reminder-permission-qa` で将来の planned Activity に明示 reminder を
+設定する Debug-QA fixture を追加した。fresh install の iPhone 17 Pro / iOS 27 Simulator で
+TripMap のネイティブ通知許可ダイアログが表示されることを確認済みである。この QA 導線だけが
+起動時に許可を要求し、本番は引き続きユーザーが reminder を新規有効化して保存した時だけ要求する。
+今回の headless Simulator には操作用 GUI がないため、Allow 選択後の pending request と実配信は
+実機または操作可能な Simulator の環境 gate として残す。
 
 ## 13. Apple フレームワーク採用方針
 
@@ -1645,7 +1651,7 @@ Widget extension は main app の private SwiftData store を直接読めると�
    contract を定義し、Spotlight / Handoff を同じ projection へ接続する。
 
 環境が利用可能になり次第、上記と並行して Trip image soft budget、Memory PhotosPicker、
-local reminder の保留中の実機／Simulator gate を再開する。
+local reminder の Allow 選択後の pending request / 実配信 gate を再開する。
 検証待ちを未実装と書き換えない。Now / Next、Reservation detail、Offline review、
 Memory viewport、Travel Leg route detail は 2026-07-27 に iPhone / iPad の iOS 27 Simulator
 で完了した。
@@ -1654,7 +1660,7 @@ Travel Leg calculation states、iPadOS adaptive workspace、Activity progress / 
 第二段階、Travel Leg preference editor / explicit retry、Guide Now / Next pure projection、P7 Memory
 minimum slice は 2026-07-24 に実装済み。2026-07-27 に Now / Next、Reservation、Offline review、
 Memory、Travel Leg route detail の iPhone / iPad 実画面 gate も完了した。未完了の環境 gate は
-Trip image soft budget、Memory PhotosPicker、local reminder である。
+Trip image soft budget、Memory PhotosPicker、local reminder の許可後動作である。
 
 新しい外部画像 provider、評価データ、独自サーバー、AI、CloudKit は、それぞれの Research Gate
 なしに開始しない。
