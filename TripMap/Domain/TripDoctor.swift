@@ -275,7 +275,7 @@ enum TripDoctor {
                 code: .highTravelTime,
                 severity: .warning,
                 target: .day(day.id),
-                message: "Day \(day.sequence)の車移動見込みは\(formattedDuration(total))です。",
+                message: "Day \(day.sequence)の移動見込みは\(formattedDuration(total))です。",
                 suggestion: "移動順や滞在時間を見直して、余裕を確保してください。"
             )
         )

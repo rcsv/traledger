@@ -895,8 +895,26 @@ final class TripModelTests: XCTestCase {
         let now = Date()
         let idleLegs = TravelLegProjection.activeLegs(for: trip, now: now)
         let dayLegs = idleLegs.filter { $0.dayID == day.id }
+        let preferences = Dictionary(
+            uniqueKeysWithValues: dayLegs.enumerated().map { index, leg in
+                (
+                    leg.id,
+                    TravelLegPreference(
+                        legID: leg.id,
+                        transportType: index.isMultiple(of: 2) ? .walking : .transit,
+                        manualDurationMinutes: nil,
+                        note: nil
+                    )
+                )
+            }
+        )
+        let mixedTransportLegs = TravelLegProjection.activeLegs(
+            for: trip,
+            preferences: preferences,
+            now: now
+        ).filter { $0.dayID == day.id }
         let calculations = Dictionary(
-            uniqueKeysWithValues: zip(dayLegs, [100, 85]).map { leg, minutes in
+            uniqueKeysWithValues: zip(mixedTransportLegs, [100, 85]).map { leg, minutes in
                 (
                     leg.routingFingerprint,
                     TravelLegCalculationState.loaded(
@@ -907,6 +925,7 @@ final class TripModelTests: XCTestCase {
         )
         let loadedLegs = TravelLegProjection.activeLegs(
             for: trip,
+            preferences: preferences,
             calculations: calculations,
             now: now
         )
@@ -916,14 +935,18 @@ final class TripModelTests: XCTestCase {
             participantNames: ["John"],
             travelLegs: loadedLegs
         )
-        XCTAssertTrue(report.issues.contains(where: {
+        let highTravelIssue = report.issues.first(where: {
             $0.code == .highTravelTime && $0.target == .day(day.id)
-        }))
+        })
+        XCTAssertEqual(
+            highTravelIssue?.message,
+            "Day \(day.sequence)の移動見込みは3時間5分です。"
+        )
 
         report = TripDoctor.inspect(
             trip,
             participantNames: ["John"],
-            travelLegs: loadedLegs.filter { $0.id != dayLegs.last?.id }
+            travelLegs: loadedLegs.filter { $0.id != mixedTransportLegs.last?.id }
         )
         XCTAssertFalse(report.issues.contains(where: { $0.code == .highTravelTime }))
     }
