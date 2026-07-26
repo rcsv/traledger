@@ -208,10 +208,11 @@ private struct ActivityInsertionButton: View {
     let onInsert: (ActivityInsertionAnchor) -> Void
     @State private var isHovered = false
     @FocusState private var isFocused: Bool
+    @AccessibilityFocusState private var isAccessibilityFocused: Bool
 
     var body: some View {
         #if os(macOS)
-        let isActive = isHovered || isFocused
+        let isActive = isHovered || isFocused || isAccessibilityFocused
         #else
         let isActive = true
         #endif
@@ -263,6 +264,7 @@ private struct ActivityInsertionButton: View {
         }
         .buttonStyle(.plain)
         .focused($isFocused)
+        .accessibilityFocused($isAccessibilityFocused)
         .onHover { isHovered = $0 }
         .animation(reduceMotion ? nil : .snappy(duration: 0.18), value: isActive)
         .accessibilityLabel("予定を追加")
