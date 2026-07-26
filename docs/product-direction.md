@@ -167,8 +167,9 @@ Activity / Venue Domain を変更せず、macOS 専用の明示的な header、�
 確認した。2026-07-27 には MapKit 非依存の多状態 fixture と Planner の`場所から予定を追加`入口も
 UI test で確認し、Dark Appearance でも同じ階層とコントラストをシート単体画像で確認した。
 constrained window でもシート最小寸法、操作可能な検索欄・候補・Cancel、固定 footer を確認した。
-Guide Quick Edit、Increase Contrast、VoiceOver の拡張 matrix は、Domain 変更を伴わない
-検証 follow-up として継続する。
+iOS 27 の iPhone / iPad では Guide Quick Edit から共有 Venue 検索を開き、標準幅の縦配置と
+modal 配置を実画面確認した。Increase Contrast、VoiceOver、Accessibility XXL の拡張 matrix は、
+Domain 変更を伴わない検証 follow-up として継続する。
 
 ## 将来の生成 AI
 

@@ -487,7 +487,7 @@ iOS 27 Simulator の縦レイアウトも実画面確認済みである。
 
 #### 8.4.1 macOS Venue 検索 Sheet 修正計画
 
-状態: **Layout repair implemented／Guide・assistive matrix pending**
+状態: **Layout repair implemented／assistive matrix pending**
 
 2026-07-26 の実画面では、検索欄が Sheet 上部と左ペイン内の二箇所として表示・Accessibility tree
 へ公開され、上部 Navigation / Toolbar 領域が過大な空白を確保していた。左の初期案内も下へ押し出され、
@@ -579,11 +579,15 @@ iOS 27 Simulator の縦レイアウトも実画面確認済みである。
 - 同じ QA setup の constrained window で、Sheet が `minWidth 760 / minHeight 520` を維持し、
   検索欄、検索結果、Cancel が操作可能、Confirm が未選択時に無効、footer が欠落しないことを
   UI test とシート単体画像で確認した。
+- iOS 27 の Debug-QA を iPhone 17 Pro と iPad Pro 11-inch Simulator で起動し、Guide の
+  選択中 Activity から Quick Edit、その内側から共有 Venue 検索 Sheet を開く入口を実画面確認した。
+  iPhone は検索結果と preview の縦配置、iPad は Quick Edit の編集文脈を背後に保つ modal 配置で、
+  検索欄、result-list、Cancel、disabled Confirm が欠落しない。
 
 残る検証:
 
-- Guide Quick Edit 入口、Increase Contrast、VoiceOver の拡張 matrix
-- iPhone / iPad の標準幅と Accessibility XXL の回帰再確認
+- Increase Contrast、VoiceOver の拡張 matrix
+- iPhone / iPad の Accessibility XXL 回帰再確認
 
 これらは layout 実装の差し戻し条件ではなく P7.5 の検証 follow-up とする。失敗が見つかった場合も
 Venue / Activity Domain や MapKit 検索順位へ問題を広げず、presentation と fixture の範囲で修正する。
@@ -1606,9 +1610,9 @@ Widget extension は main app の private SwiftData store を直接読めると�
    iOS 17 / macOS 14 を扱える安定版 toolchain で証明する。証明前に本番 V2 を追加しない。
 2. §8.4.1 のmacOS Venue検索Sheet修正は 2026-07-26 に実装済み。検索欄を一つにし、
    明示的なheader / split content / footer、初期focus、Escape、nested-sheet UI testを追加した。
-   2026-07-27 にMapKit非依存の多状態fixture、Planner entry test、Dark Appearanceと
-   constrained windowのシート単体画像確認も完了した。Guide / assistive matrix は同節の
-   follow-upとして継続する。
+   2026-07-27 にMapKit非依存の多状態fixture、Planner entry test、Dark Appearance、
+   constrained window、Guide Quick EditからのiPhone / iPad標準幅の実画面確認も完了した。
+   assistive matrix は同節のfollow-upとして継続する。
 3. V1 freeze 完了後に、Venue country code とActivity EstimateのADR、migration、
    Domain invariantを定義する。Library Dashboardは国別データを推測せず、利用可能な
    Trip、Participant、Activity、Reservation 集計から段階的に有効化する。
