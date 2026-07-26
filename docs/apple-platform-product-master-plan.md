@@ -839,6 +839,11 @@ iPhone 17 Pro で、公共交通・手動42分の保存状態と、取得不能�
 route detail は同じ sheet の先頭へ段階表示し、Activity / Venue 名、所要時間、情報源を確認して
 から、車・徒歩・公共交通だけを明示操作で Apple Maps の経路へ渡す。常時 polyline や経路形状の
 永続化を行わない境界は [`ADR 0008`](adr/0008-travel-leg-route-detail.md) を正とする。
+2026-07-27 に `-tripmap-travel-leg-qa` の loaded / unavailable fixture を使い、iPhone 17 Pro と
+iPad Pro 11-inch の iOS 27 Simulator で route detail の実画面 gate を完了した。Activity / Venue、
+25分の MapKit 推定と情報源、取得不能時の説明、明示的な Apple Maps handoff、後続の移動手段 editor
+が同一 sheet で読めることを確認した。取得不能でも handoff と編集を隠さず、TripMap 内へ route
+polyline を常時表示・保存しない方針を維持する。
 
 ### 10.3 MapKit 境界
 
@@ -1640,15 +1645,16 @@ Widget extension は main app の private SwiftData store を直接読めると�
    contract を定義し、Spotlight / Handoff を同じ projection へ接続する。
 
 環境が利用可能になり次第、上記と並行して Trip image soft budget、Memory PhotosPicker、
-local reminder、Travel Leg route detail の保留中の実機／Simulator gate を再開する。
+local reminder の保留中の実機／Simulator gate を再開する。
 検証待ちを未実装と書き換えない。Now / Next、Reservation detail、Offline review、
-Memory viewport は 2026-07-27 に iPhone / iPad の iOS 27 Simulator で完了した。
+Memory viewport、Travel Leg route detail は 2026-07-27 に iPhone / iPad の iOS 27 Simulator
+で完了した。
 
 Travel Leg calculation states、iPadOS adaptive workspace、Activity progress / iPhone Quick Edit
 第二段階、Travel Leg preference editor / explicit retry、Guide Now / Next pure projection、P7 Memory
 minimum slice は 2026-07-24 に実装済み。2026-07-27 に Now / Next、Reservation、Offline review、
-Memory の iPhone / iPad 実画面 gate も完了した。未完了の環境 gate は Trip image soft budget、
-Memory PhotosPicker、local reminder、Travel Leg route detail である。
+Memory、Travel Leg route detail の iPhone / iPad 実画面 gate も完了した。未完了の環境 gate は
+Trip image soft budget、Memory PhotosPicker、local reminder である。
 
 新しい外部画像 provider、評価データ、独自サーバー、AI、CloudKit は、それぞれの Research Gate
 なしに開始しない。
