@@ -583,11 +583,16 @@ iOS 27 Simulator の縦レイアウトも実画面確認済みである。
   選択中 Activity から Quick Edit、その内側から共有 Venue 検索 Sheet を開く入口を実画面確認した。
   iPhone は検索結果と preview の縦配置、iPad は Quick Edit の編集文脈を背後に保つ modal 配置で、
   検索欄、result-list、Cancel、disabled Confirm が欠落しない。
+- Accessibility XXL の初回確認では、iPhone の未選択 preview 説明が下部検索バーへ重なる回帰を
+  検出した。iOS の `.searchable` を検索結果 child から Navigation content 全体へ移し、preview を
+  scrollable にし、Accessibility サイズの未選択案内を一文へ縮約した。修正後は iPhone / iPad の
+  Accessibility XXL で案内全文と主要操作が欠落せず、標準文字サイズ + Increase Contrast の実
+  Simulator 設定でも検索結果、Cancel、disabled Confirm を識別できることを画像確認した。
 
 残る検証:
 
-- Increase Contrast、VoiceOver の拡張 matrix
-- iPhone / iPad の Accessibility XXL 回帰再確認
+- macOS の Increase Contrast
+- VoiceOver の実読み上げ・移動順
 
 これらは layout 実装の差し戻し条件ではなく P7.5 の検証 follow-up とする。失敗が見つかった場合も
 Venue / Activity Domain や MapKit 検索順位へ問題を広げず、presentation と fixture の範囲で修正する。
@@ -1611,8 +1616,9 @@ Widget extension は main app の private SwiftData store を直接読めると�
 2. §8.4.1 のmacOS Venue検索Sheet修正は 2026-07-26 に実装済み。検索欄を一つにし、
    明示的なheader / split content / footer、初期focus、Escape、nested-sheet UI testを追加した。
    2026-07-27 にMapKit非依存の多状態fixture、Planner entry test、Dark Appearance、
-   constrained window、Guide Quick EditからのiPhone / iPad標準幅の実画面確認も完了した。
-   assistive matrix は同節のfollow-upとして継続する。
+   constrained window、Guide Quick EditからのiPhone / iPad標準幅・Accessibility XXL・
+   Increase Contrastの実画面確認も完了した。macOS Increase ContrastとVoiceOverは同節の
+   follow-upとして継続する。
 3. V1 freeze 完了後に、Venue country code とActivity EstimateのADR、migration、
    Domain invariantを定義する。Library Dashboardは国別データを推測せず、利用可能な
    Trip、Participant、Activity、Reservation 集計から段階的に有効化する。

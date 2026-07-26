@@ -277,6 +277,7 @@ struct VenueSearchSheet: View {
     @State private var selectedResult: VenueSearchResult?
     @State private var keyboardSelection: VenueSearchKeyboardSelection?
     @FocusState private var isSearchFocused: Bool
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         sheetContent
@@ -447,6 +448,7 @@ struct VenueSearchSheet: View {
     private var navigationContent: some View {
         NavigationStack {
             adaptiveContent
+                .searchable(text: $query, prompt: "施設名または住所")
                 .navigationTitle("場所を検索")
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
@@ -474,9 +476,11 @@ struct VenueSearchSheet: View {
         #else
         VStack(spacing: 0) {
             searchResults
-                .searchable(text: $query, prompt: "施設名または住所")
             Divider()
-            venuePreview
+            ScrollView {
+                venuePreview
+                    .frame(maxWidth: .infinity)
+            }
                 .frame(minHeight: 220)
         }
         #endif
@@ -669,6 +673,16 @@ struct VenueSearchSheet: View {
                 }
                 .padding()
             }
+        } else if dynamicTypeSize.isAccessibilitySize {
+            Label(
+                "候補を選択すると、場所を地図で確認できます。",
+                systemImage: "mappin.and.ellipse"
+            )
+            .font(.body)
+            .foregroundStyle(.secondary)
+            .multilineTextAlignment(.center)
+            .padding()
+            .frame(maxWidth: .infinity, minHeight: 220)
         } else {
             ContentUnavailableView(
                 "候補を選択してください",

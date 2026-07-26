@@ -168,8 +168,10 @@ Activity / Venue Domain を変更せず、macOS 専用の明示的な header、�
 UI test で確認し、Dark Appearance でも同じ階層とコントラストをシート単体画像で確認した。
 constrained window でもシート最小寸法、操作可能な検索欄・候補・Cancel、固定 footer を確認した。
 iOS 27 の iPhone / iPad では Guide Quick Edit から共有 Venue 検索を開き、標準幅の縦配置と
-modal 配置を実画面確認した。Increase Contrast、VoiceOver、Accessibility XXL の拡張 matrix は、
-Domain 変更を伴わない検証 follow-up として継続する。
+modal 配置を実画面確認した。Accessibility XXL で見つかった preview 説明と下部検索バーの重なりは、
+検索 modifier の所有範囲、scrollable preview、短い支援案内で修正し、iPhone / iPad の XXL と
+Increase Contrast で再確認した。macOS Increase Contrast と VoiceOver の実確認は、Domain 変更を
+伴わない検証 follow-up として継続する。
 
 ## 将来の生成 AI
 
