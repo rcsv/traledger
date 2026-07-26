@@ -428,7 +428,9 @@ Activity 所有の一枚の memory photo と500文字以内の短い感想、Tri
 pipeline だけを再利用する境界は [`ADR 0010`](adr/0010-memory-minimum-domain.md) を正とする。
 同日、Guide と Plan から開ける共通 Memory 画面、明示的な visited 遷移を伴う写真・感想 editor、
 過去 Trip Card の訪問数・記録数表示まで実装した。複数写真、写真 metadata による候補提案、共有は
-後続 slice とし、実機／安定した Simulator での PhotosPicker と viewport 確認は環境 gate として残す。
+後続 slice とする。2026-07-27 に、完了済み Activity、一枚の保存済み写真、短い感想、未記録候補を
+含む決定論 fixture で、iPhone 17 Pro / iPad Pro 11-inch の iOS 27 Simulator viewport を確認した。
+PhotosPicker のシステム選択フローだけは、実機または安定した Simulator での環境 gate として残す。
 
 ## 8. Activity と Venue の境界
 
@@ -1489,11 +1491,20 @@ platform expansion 記録として分離する。
 
 ### P6 — Guide Readiness
 
-- Now / Next — pure Domain projection、Today 初期選択、Summary / Card 表示を実装済み。実画面 gate は保留
+- Now / Next — pure Domain projection、Today 初期選択、Summary / Card 表示を実装済み。
+  iPhone 17 Pro / iPad Pro 11-inch の iOS 27 Simulator で Now と Next が同時に成立する実画面 gate も完了
 - completed / skipped — Domain、SwiftData 永続化、Guide Quick Edit / Card 表示を実装済み
 - reservation reference — Activity Domain、SwiftData、Quick Edit、Card 表示を実装済み
 - local notification — explicit Activity reminder Domain / SwiftData / UserNotifications sync を実装済み
-- offline review — local inventory / online edge projection と Guide sheet を実装済み
+- offline review — local inventory / online edge projection と Guide sheet を実装済み。
+  iPhone / iPad の iOS 27 Simulator で保存済み情報と通信依存の分類表示を確認済み
+
+2026-07-27 の Guide 実画面 gate では、Debug-QA の `-tripmap-guide-review-qa` と
+`-tripmap-open-guide-reservation` / `-tripmap-open-guide-offline-review` /
+`-tripmap-open-guide-memory` を使い、予約確認番号・Webリンク・メモ、オフライン inventory、
+Memory の完了済み記録を同一 fixture から再現できるようにした。Reservation detail は iPhone の
+medium detent と iPad の中央 sheet の双方で、機密情報を一覧へ露出せず、詳細をスクロールして
+参照できることを確認した。これらの launch argument は Debug-QA 専用の回帰導線として維持する。
 
 完了条件:
 
@@ -1629,13 +1640,15 @@ Widget extension は main app の private SwiftData store を直接読めると�
    contract を定義し、Spotlight / Handoff を同じ projection へ接続する。
 
 環境が利用可能になり次第、上記と並行して Trip image soft budget、Memory PhotosPicker、
-local reminder、Now / Next、Reservation detail、Offline review、Travel Leg route detail の
-保留中の実機／Simulator gate を再開する。検証待ちを未実装と書き換えない。
+local reminder、Travel Leg route detail の保留中の実機／Simulator gate を再開する。
+検証待ちを未実装と書き換えない。Now / Next、Reservation detail、Offline review、
+Memory viewport は 2026-07-27 に iPhone / iPad の iOS 27 Simulator で完了した。
 
 Travel Leg calculation states、iPadOS adaptive workspace、Activity progress / iPhone Quick Edit
 第二段階、Travel Leg preference editor / explicit retry、Guide Now / Next pure projection、P7 Memory
-minimum slice は 2026-07-24 に実装済み。Travel Leg までは代表 viewport 確認済みで、Now / Next、
-Reservation、Offline review、Memory の実画面 gate は環境制約により保留している。
+minimum slice は 2026-07-24 に実装済み。2026-07-27 に Now / Next、Reservation、Offline review、
+Memory の iPhone / iPad 実画面 gate も完了した。未完了の環境 gate は Trip image soft budget、
+Memory PhotosPicker、local reminder、Travel Leg route detail である。
 
 新しい外部画像 provider、評価データ、独自サーバー、AI、CloudKit は、それぞれの Research Gate
 なしに開始しない。

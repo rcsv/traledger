@@ -221,6 +221,22 @@ struct GuideView: View {
             if arguments.contains("-tripmap-open-guide-list") {
                 mode = .list
             }
+            if arguments.contains("-tripmap-open-guide-offline-review") {
+                isOfflineReviewPresented = true
+                return
+            }
+            if arguments.contains("-tripmap-open-guide-memory") {
+                isMemoryPresented = true
+                return
+            }
+            if arguments.contains("-tripmap-open-guide-reservation"),
+               let selectedActivityID = interaction.selectedActivityID,
+               activityAndDay(for: selectedActivityID)?.0.reservation != nil {
+                reservationTarget = GuideReservationTarget(
+                    activityID: selectedActivityID
+                )
+                return
+            }
             guard !didOpenQuickEditFromLaunchArgument,
                   arguments.contains("-tripmap-open-guide-quick-edit"),
                   let selectedActivityID = interaction.selectedActivityID else {

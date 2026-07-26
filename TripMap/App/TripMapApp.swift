@@ -158,6 +158,25 @@ private enum DebugFixtureSeeder {
             fixture.days[0].activities[1].progress = .skipped
             fixture.days[0].activities[1].progressUpdatedAt = Date(timeIntervalSince1970: 1_800_000_060)
         }
+        if ProcessInfo.processInfo.arguments.contains("-tripmap-guide-review-qa") {
+            fixture.days[0].activities[0].progress = .completed
+            fixture.days[0].activities[0].progressUpdatedAt =
+                Date(timeIntervalSince1970: 1_800_000_000)
+            fixture.days[0].activities[0].memoryPhotoData =
+                VenueImageQAFixture.preseededUserImageData
+            fixture.days[0].activities[0].reflection =
+                "朝の交差点は歩行者の流れが印象的だった。"
+            fixture.days[0].activities[2].place?.imageData =
+                VenueImageQAFixture.preseededUserImageData
+            fixture.days[0].activities[2].reservation = ReservationReference(
+                id: UUID(uuidString: "A11E0000-0000-4000-8000-000000000031")!,
+                kind: .admission,
+                title: "沖縄美ら海水族館 入館予約",
+                confirmationCode: "QA-655098",
+                url: URL(string: "https://example.com/reservations/QA-655098"),
+                note: "入館時に確認番号を提示する。"
+            )
+        }
         if ProcessInfo.processInfo.arguments.contains("-tripmap-travel-leg-preference-qa"),
            let legID = TravelLegProjection.activeLegs(for: fixture).first?.id {
             fixture.travelLegPreferences = [
