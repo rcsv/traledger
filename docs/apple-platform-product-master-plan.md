@@ -1,6 +1,6 @@
 # TripMap Apple Platform Product Master Plan
 
-Date: 2026-07-24
+Date: 2026-07-26
 
 Status: Active implementation directive
 
@@ -146,6 +146,13 @@ macOS は Planner の基準実装とする。
 - Command メニュー、キーボードショートカット、Undo / Redo、コンテキストメニューを提供する。
 - Drag and Drop による Activity 並べ替えを最終的な標準操作にする。
 
+Command メニューは Toolbar の複製ではなく、どのウィンドウからでも主要機能へ到達する
+macOS の標準経路とする。最低限、Library Window を表示、Trip 作成、選択 Trip への Activity
+作成、Participant 登録、Settings 表示を提供する。Activity 作成は Trip と Day の文脈がない場合に
+無効化し、黙って任意の Trip へ追加しない。外観テーマは独立した即時 Command にせず Settings へ
+開く。Command は View 固有の一時状態を直接書き換えず、同じ command routing と Domain mutation を
+Toolbar、Context Menu、keyboard shortcut と共有する。
+
 ### 5.2 iPhone
 
 iPhone は Guide を主目的とするが、閲覧専用にはしない。
@@ -236,6 +243,37 @@ NavigationStack で遷移する。
 - macOS では行のクリックで選択、ダブルクリックまたは Return で開く動作もサポートする。
 - iPhone / iPad では行全体を NavigationLink 相当の操作領域にする。
 
+#### Library Dashboard
+
+Library には Trip 一覧を置き換えない二次領域として Dashboard を追加する。起動直後の primary
+action は引き続き Trip を見つけて開くことであり、集計の読み込みや欠損によって一覧を遅らせない。
+macOS では Library Sidebar の `Dashboard`、iPhone / iPad では Trips 画面上部の折りたたみ可能な
+summary または同階層の destination とし、狭い画面で chart を一覧より先に強制表示しない。
+
+初期指標:
+
+- 読み取り可能な登録 Trip の総数
+- 少なくとも一つの Trip に割り当てられた重複なし Participant 数
+- 訪問国の種類数と国別訪問回数
+- Activity 総数とカテゴリ別件数・割合
+- 最多 Activity カテゴリの名称、件数、全 Activity に対する割合
+- Reservation の総数、種類別件数、開始時刻を持つ直近の予約
+
+訪問国は、`completed` Activity の Venue に保存された ISO 3166-1 alpha-2 country code から導く。
+一つの Trip 内で同じ国の completed Activity が複数あっても、一回の訪問として数える。異なる Trip
+で同じ国を訪れた場合は訪問回数を加算する。住所文字列や座標範囲からの推測を履歴集計の source of
+truth にしない。現行の日本だけを推測する `venueCountryNames` は移行中の表示補助に限定し、
+country code の永続化と migration が完了するまで国別 Dashboard を `データ準備中` とする。
+
+Travel Ledger との Domain 整合は Close 済みとし、Trip の代表国には同じ optional
+`mainDestinationCountryCode`契約（ISO 3166-1 alpha-2、uppercase、strict write validation）を採用する。
+これは計画・検索用の代表国であり、複数国旅行を制限しない。訪問履歴にはTripMap固有の
+`PlaceSnapshot.countryCode`を使い、代表国をすべてのVenueへ複製しない。
+
+Activity 分布は `skipped` を除く全 Trip の Activity を対象とし、カテゴリ未設定を `未分類` として
+分母に含める。割合の丸めで合計が100%に見えない場合があるため、必ず実数件数も併記する。
+Dashboard の集計は派生 projection とし、集計値そのものを SwiftData へ保存しない。
+
 #### Trip Card / Row
 
 Planner フェーズ:
@@ -274,10 +312,21 @@ Overview は「Trip の状態を一目で把握し、次の作業を選ぶ」画
 3. 最重要の Doctor issue
 4. Day ごとの概要
 5. Checklist 進捗
-6. 旅行中は Today / Next
-7. 旅行後は写真と訪問記録
+6. Activity Analysis
+7. Reservation Summary
+8. 旅行中は Today / Next
+9. 旅行後は写真と訪問記録
 
 Doctor issue を全件平坦に並べない。warning を優先し、種類と Day でまとめ、初期表示は最大数件にする。
+
+Activity Analysis は Activity 総数、カテゴリ別件数、全 Activity に対する割合、未分類件数を
+派生表示する。最多カテゴリだけでなく分布全体を読み取れるようにし、初期表示は件数上位5カテゴリと
+`すべて表示`を基本とする。chart は色だけに依存せず、カテゴリ名、件数、割合を文字でも示す。
+Planner では計画の偏りを確認する情報として表示し、Guide では Today / Next より下へ弱める。
+
+Reservation Summary は予約の総数、種類別件数、時刻順の次の予約を表示する。summary には
+confirmation code、予約メモ、完全な URL を表示しない。予約のない Trip では「予約なし」を正常な
+空状態として扱い、予約登録可能な Activity への導線を一つだけ出す。
 
 ### 7.3 Planner Workspace
 
@@ -390,6 +439,7 @@ pipeline だけを再利用する境界は [`ADR 0010`](adr/0010-memory-minimum-
 - 開始時刻
 - 所要時間
 - Activity category
+- ユーザー入力の見積費用
 - メモ
 - 完了 / 訪問状態
 - 予約参照
@@ -419,8 +469,10 @@ Activity Editor は一つの編集フローとして次を扱う。
 2. 日付に結び付いた開始時刻
 3. カテゴリ
 4. 所要時間
-5. メモ
-6. Venue
+5. 見積費用
+6. メモ
+7. Reservation
+8. Venue
 
 Venue 検索は Editor 内の独立セクションに置く。検索結果選択後に、Activity タイトルを Venue 名へ
 合わせるかを提案してもよいが、自動変更しない。
@@ -433,10 +485,85 @@ Venue を選択するまで確定操作は無効にし、検索画面を開い�
 検索 Sheet を両 target の共有ソースへ移した。iOS target のコンパイルと iPhone 17 Pro /
 iOS 27 Simulator の縦レイアウトも実画面確認済みである。
 
+#### 8.4.1 macOS Venue 検索 Sheet 修正計画
+
+状態: **Layout Gate reopened（2026-07-26 appshot）**
+
+2026-07-26 の実画面では、検索欄が Sheet 上部と左ペイン内の二箇所として表示・Accessibility tree
+へ公開され、上部 Navigation / Toolbar 領域が過大な空白を確保していた。左の初期案内も下へ押し出され、
+右の空 preview と合わせて、検索開始位置と情報階層が読み取れない。
+
+根本原因:
+
+- macOS と iOS が同じ `NavigationStack` presentation を共有している。
+- `HSplitView` 内の `List` に付けた `.searchable` が、macOS で Navigation toolbar へ自動昇格しつつ
+  List の検索表現も残る。
+- `.navigationTitle`、cancellation / confirmation toolbar、`.searchable` の配置をすべて system の
+  automatic placement に委ね、Sheet 内の header と footer の所有者が一つに定まっていない。
+- 左右ペインが `minWidth` だけを持ち、初期 `ContentUnavailableView` が scrollable List 内で
+  センタリングされるため、実コンテンツより空白が強く見える。
+
+修正方針:
+
+1. 検索モデル、MapKit completion / resolve、`VenueCandidate`、result row、preview は共有したまま、
+   presentation composition だけを macOS と iOS で分ける。
+2. macOS では Sheet 内の `NavigationStack` と `.searchable` を使わない。上から
+   `header / split content / footer` の三領域を明示する。
+3. header は `場所を検索`のタイトルと補足だけを持つ。検索入力は左ペイン最上部に、magnifying glass
+   と clear action を持つ一つの `TextField` として固定する。
+4. split content は左を検索状態・候補・結果の List、右を Map と Venue preview とする。
+   左は320pt前後、右は400pt以上を基準にし、divider を操作しても片方を実用不能な幅まで縮めない。
+5. footer は `キャンセル`と`この場所を設定`を右寄せで持つ。Venue 未選択では確定を無効化し、
+   キャンセルや Sheet 表示だけでは Activity / Venue を変更しない。
+6. Sheet は `minWidth 760 / idealWidth 840 / minHeight 520 / idealHeight 600` を初期基準とする。
+   固定 height でテキストを切らず、親 Window の利用可能領域が狭い場合は候補 List と preview を
+   scroll 可能にして action を残す。
+7. Sheet 表示時は検索欄へ keyboard focus を置く。Escape はキャンセル、候補と結果は矢印キーと
+   Return、確定は標準 confirmation shortcut から操作できるようにする。
+8. iPhone / iPad は現行の `NavigationStack + searchable` と縦配置を維持し、macOS修正による
+   回帰を入れない。
+
+受け入れ条件:
+
+- 画面上と Accessibility tree の検索欄がそれぞれ正確に一つである。
+- Sheet を開いた直後に検索欄、初期案内、preview 空状態、Cancel、disabled Confirm が欠落しない。
+- Navigation chrome に用途不明の大きな空白がなく、split content がheader直下から利用可能である。
+- query empty、completion loading、completion list、result resolving、result list、no result、
+  failure の全状態で左右ペインとactionの位置が跳ねない。
+- 結果選択で右 preview が更新され、確定時だけ同じ `VenueCandidate` が呼び出し元へ渡る。
+- Activity Editor、Planner の`場所から追加`、Guide Quick Edit の全入口で同じ結果になる。
+- Full Keyboard Access、VoiceOver、Increase Contrast、Reduce Motion、Light / Dark で主要操作を
+  完了できる。
+
+検証:
+
+- macOS UI test で search field count = 1、初期状態、Cancel、Confirm disabled/enabled、
+  selected result の読み上げ順を確認する。
+- MapKit サービス状態に依存しない completion / result fixture を注入し、empty、loading、result、
+  no-result、failure の決定的テストを行う。
+- Planner standard window、最小 1000×620、広幅、Activity Editor からの nested sheet で
+  viewport screenshot を残す。
+- iPhone 標準幅と Accessibility XXL で検索Sheetの回帰確認を行う。
+
+非目標:
+
+- MapKit の検索順位や候補アルゴリズムの変更
+- Venue / Activity 永続モデルの変更
+- Wikipedia、評価、旅行会社など外部 provider の追加
+- 検索結果選択時の自動保存
+
 標準所要時間はカテゴリ別の提案として出し、未設定時だけワンタップで採用できるようにする。
 2026-07-24 時点の初期値は、移動30分、食事60分、宿泊30分、観光90分、体験120分、買い物60分
 とする。`その他`には一律の根拠がないため提案しない。提案は自動適用せず、既存の所要時間を
 カテゴリ変更やEditor表示だけで上書きしない。
+
+見積費用は「予約サイトから取得した価格」ではなく、ユーザーが計画のために入力する情報とする。
+Travel LedgerとのDomain整合はClose済みであり、単一の`estimatedCost`を新設せず、Activityが
+0件以上の`Estimate`を所有する契約を採用する。各Estimateはstable ID、任意title、非負のminor unit
+整数、ISO 4217 currency code、任意note、sort orderを持ち、`Double`や表示文字列を保存しない。
+Tripのdefault currencyは新規入力の初期値であり、既存Estimateの通貨を一括変更しない。
+Activity CardとOverviewは同じ通貨だけを合計し、複数通貨を自動換算・合算しない。実績額、割り勘、
+外部予約価格は別Gateとする。TripMapへの追加前にSwiftData migrationと入力上限をADRで確定する。
 
 ### 8.5 Activity の操作
 
@@ -448,6 +575,23 @@ macOS / iPadOS:
 - Delete は確認または Undo 可能な削除
 - Context Menu に編集、複製、別 Day へ移動、削除
 - Drag and Drop で並べ替え
+
+Activity Card のダブルクリックは編集であり、追加へ割り当て直さない。カード上の単クリックは選択、
+ダブルクリックは編集という既存の Finder 的な操作体系を維持する。
+
+追加と挿入は、Activity 時間軸の先頭、隣接 Activity 間、末尾に置く明示的な `予定を追加` affordance
+から行う。通常時は timeline spine 上の小さな plus として視覚負荷を抑え、hover、keyboard focus、
+VoiceOver focus では完全なラベルと挿入位置を示す。タッチ環境では hover を前提にせず、44pt 以上の
+操作領域または同等の Menu action を用意する。空の Day では従来どおり一つの primary action を出す。
+
+挿入は Day ID、前後 Activity ID、事前生成 Activity ID を持つ scoped mutation とし、保存時に
+sequence を正規化する。競合で前後 anchor が変わった場合は任意位置へ黙って追加せず失敗を説明する。
+挿入、並べ替え、削除は Undo / Redo に参加する。
+
+Activity Weaver の視覚言語として、Activity の順序を縦につなぐ semantic timeline spine を採用する。
+標準テーマでは crimson 系を初期値とするが、固定の赤だけで順序や状態を伝えない。線、sequence marker、
+Travel Leg row、挿入 plus を一つの縦軸へ揃え、線を実際の地図経路と誤認させない。Reduce Motion、
+Increase Contrast、Differentiate Without Color、テーマ変更でも意味が保たれることを受け入れ条件とする。
 
 2026-07-24 時点で、Activity Card 右端の明示的なハンドルから同じ Day 内の別カードへ
 Drag and Drop し、移動方向に応じて対象カードの前後へ挿入する。カード全面は選択、ダブルクリック、
@@ -466,6 +610,32 @@ iPhone:
 - タップで詳細または選択
 - Swipe action は完了、編集など安全な操作を優先
 - 削除は誤操作しにくい位置へ置く
+
+### 8.6 Activity の情報表示
+
+Activity Card は一目で順序と予定を読むための summary とし、すべての情報を常時展開しない。
+
+Compact summary:
+
+- sequence、タイトル
+- 開始時刻、所要時間
+- カテゴリ
+- Venue 名
+- Reservation の種類と予約名
+- 見積費用
+- progress と局所 Doctor issue
+
+Regular width または選択時の progressive detail:
+
+- Venue の小さな画像 preview
+- メモ
+- 前後の Travel Leg
+- Reservation detail への明示 action
+
+大きな Venue 画像、住所、帰属、外部情報は Activity Card へ複製せず、Map の Venue Card または
+Inspector に置く。写真を主役にする card は Memory フェーズだけとする。Compact、regular、
+Accessibility Dynamic Type で同じ情報を無理に一行へ押し込まず、情報を失う場合は Inspector へ
+段階表示する。
 
 ## 9. Venue Card
 
@@ -539,6 +709,39 @@ Action:
 Pexels は地域イメージを得るためだけに API キー保護サーバーを必要とし、Venue 一致も保証できない。
 この問題のためにアプリサーバーやリバースプロキシを借りない。
 
+### 9.7 Map からの Venue 選択と Activity 作成
+
+Planner の Map は保存済み Activity の位置関係を見るだけでなく、場所を選んで旅程へ取り込む入口にも
+する。ただし TripMap の中心単位が Activity である原則は変えない。
+
+Map 上の状態は明確に分ける。
+
+1. 保存済み Activity の pin を選択中
+2. MapKit の未保存 Venue 候補を選択中
+3. 何も選択していない
+
+未保存 Venue 候補の panel には Venue 名、カテゴリ、所在地、取得可能な画像、`予定に追加`、
+`Mapsで開く`を表示する。Map の空白座標をクリックしただけでは不完全な Venue を生成しない。
+MapKit の selectable feature から `MKMapItem` を解決できない場合は、検索または長押しから名称を
+確認する別フローへ送る。地図を操作できないユーザーにも Venue 検索から同じ候補 panel と追加操作を
+提供し、Map だけの機能にしない。
+
+`予定に追加`は即時保存ではなく Activity draft を開く。初期タイトルは
+`<Venue名>で過ごす`、Venue は選択候補、カテゴリは未設定または信頼できる mapping の提案とする。
+ユーザーは Day、先頭／Activity 間／末尾の挿入位置、タイトル、時刻、所要時間、カテゴリを確認して
+保存する。提案タイトルやカテゴリを自動確定せず、キャンセル時は Trip を変更しない。保存は通常の
+Activity insertion mutation、Validation、Undo 経路を通す。
+
+保存済み Activity を選んだ Map inspector は、Venue Card と分離した Activity context section に、
+計画判断に必要な時刻、所要時間、前後 Travel Leg と、編集・Maps・Reservation への action を
+progressive に示してよい。同じ情報を常設の Activity Card と重複させず、inspector が有益な情報
+または action を持たない場合は表示しない。Venue Card 自体へ Activity 所有情報を混ぜない。
+
+Wikipedia の短い概要、営業時間、評価、旅行会社や予約サービスの在庫・価格を追加する場合は、
+provider ごとに独立 Research Gate を先に行う。最低限、利用規約、帰属、地域と言語の coverage、
+鮮度、キャッシュ、費用、API key 保護、削除要求、取得不能時の UI を比較する。予約 API の結果を
+ユーザーの `ReservationReference` と同一視せず、ユーザー確認なしに予約済みとして保存しない。
+
 ## 10. Travel Leg と MapKit
 
 ### 10.1 Travel Leg の位置付け
@@ -581,8 +784,9 @@ cross-Day / orphan / 不正時間の拒否を実装し、ディスク保存を�
 macOS 実画面 UI test で `車 25分` と `経路を利用できません` を確認し、iPhone 17 Pro の標準
 Dynamic Type と Accessibility XXL でも leg row を実画面確認済みである。
 
-Guide では leg row から transport、手動所要時間、メモを編集できる。取得不能／失敗時も編集を
-妨げず、明示的な再試行を同じ sheet に置く。再試行前に未保存の transport を永続化し、その
+Guide では leg row から transport、手動所要時間、メモを編集できる。Planner の Activity 時間軸でも
+同じ leg row と editor を提供し、計画中に車、徒歩、公共交通、その他を変更できるようにする。
+取得不能／失敗時も編集を妨げず、明示的な再試行を同じ sheet に置く。再試行前に未保存の transport を永続化し、その
 fingerprint で MapKit を再要求する。手動時間は再計算で上書きしない。標準 Dynamic Type の
 iPhone 17 Pro で、公共交通・手動42分の保存状態と、取得不能状態の再試行導線を実画面確認済み。
 route detail は同じ sheet の先頭へ段階表示し、Activity / Venue 名、所要時間、情報源を確認して
@@ -679,6 +883,19 @@ Activity Quick Edit から保存し、Card に予約名を表示する。選択 
 confirmation code、URL、メモを開示し、コピーと外部 Web 遷移を明示操作に限定する。空白正規化、安全でない URL の拒否、
 SwiftData round-trip、cascade ownership の境界は
 [`ADR 0007`](adr/0007-reservation-offline-boundary.md) を正とする。
+
+Reservation は未実装ではない。次の拡張は新しい booking model を先に増やすのではなく、既存の
+`ReservationReference` を安全に集約して見つけやすくする。
+
+- Trip Overview は総数、種類別件数、開始時刻を持つ次の予約を表示する。
+- Library Dashboard は全 Trip の総数、種類別件数、直近の予約を表示する。
+- Guide は Today / Next に関係する予約を優先する。
+- Summary から対象 Trip / Day / Activity へ移動し、詳細は既存の reservation sheet で開く。
+- confirmation code、メモ、完全な URL は summary、通知、Widget に表示しない。
+- Activity に開始時刻がない予約は `時刻未設定`として残し、推測で並べ替えない。
+
+一つの Activity に複数予約が必要という実データが確認されるまでは、一件所有の invariant を維持する。
+メール解析、Wallet、外部予約同期は別 Research Gate とし、集約表示の前提にしない。
 
 2026-07-24 時点で、開始時刻を持つ Activity に一件だけ明示設定できる local reminder を実装した。
 未設定、時刻なし、完了、スキップ、過去の Activity は通知予定を生成しない。保存成功後に Trip 単位で
@@ -887,10 +1104,25 @@ Guide の「オフライン確認」は、上記ローカル件数を表示し�
 - ショートカット候補:
   - Command-N: 新しい Trip
   - Command-Shift-N: 新しい Activity
+  - Command-Option-L: Library Window を表示
+  - Command-Option-P: Participant を登録
   - Command-E: Activity 編集
   - Command-Delete: 確認付き削除
   - Command-Z / Shift-Command-Z: Undo / Redo
   - Command-F: 現在の一覧を検索
+
+macOS の Menu 構成:
+
+- `File`: 新しい Trip、新しい Activity、Window を閉じる
+- `Trip`: Activity 追加、選択区間へ挿入、日程変更、Participant 割り当て
+- `View`: Library を表示、Overview / Day / Checklist / People、Sidebar、テーマ設定を開く
+- `Window`: system 標準の Window 一覧と切替を維持
+- app menu: Settings
+
+Participant のグローバル登録は Library / People を開いて editor を表示し、Trip の
+`Participant 割り当て`とは別 command とする。「Itinerary を作成」という曖昧な command 名は使わず、
+製品用語に合わせて `新しい Trip`、`Activity を追加`、`日程を変更`へ分ける。選択や権限が不足する
+command は disabled にし、実行後に失敗させない。
 
 ### 18.4 視覚設定
 
@@ -951,6 +1183,11 @@ Guide の「オフライン確認」は、上記ローカル件数を表示し�
 - image source priority
 - Place resolver ranking
 - travel estimate aggregation
+- Activity Analysis の総数、割合、未分類、skipped 境界
+- Reservation Summary の時刻順、時刻未設定、privacy-safe summary
+- Library Dashboard の Participant 重複排除と `(Trip, country code)` 訪問集計
+- anchor-based Activity insertion の先頭、区間、末尾、競合拒否、Undo
+- Map Venue candidate の draft 生成と confirmation 前の非変更
 
 ### 22.2 Persistence Test
 
@@ -979,12 +1216,17 @@ Guide の「オフライン確認」は、上記ローカル件数を表示し�
 - Trip 作成
 - Library から Trip を開く
 - Activity 追加・編集・削除
+- Activity の先頭・区間・末尾への挿入
 - Venue 設定
+- Map の未保存 Venue 候補から Activity draft を開き、キャンセル時に追加されない
 - Map / List の相互選択
 - Day 切替
 - Venue Card 表示
 - user image 選択
 - Doctor issue から編集へ移動
+- Planner で Travel Leg の移動手段を変更
+- Activity Analysis と Reservation Summary から対象 Activity へ移動
+- macOS Menu から Library、Trip 作成、Activity 作成、Participant、Settings を開く
 
 テスト用データ投入は Debug / UI Test configuration に閉じ、製品 RootView にレビュー用分岐を残さない。
 
@@ -1223,6 +1465,39 @@ platform expansion 記録として分離する。
 
 - 一つの Trip を計画から旅行後の記録へ移行できる。
 
+### P7.5 — Usability Review Integration
+
+状態: **Core slices implemented; macOS Venue Search layout repair pending**
+
+実装状況:
+
+- macOS Command routing / Menu — implemented
+- Planner Travel Leg editor — implemented
+- anchor-based Activity insertion / timeline affordance / Activity Weaver spine — implemented
+- Trip Overview Activity Analysis / Reservation Summary — implemented
+- Library Dashboard の Trip、Participant、Activity、Reservation 集計 — implemented
+- Map Venue candidate selection / confirmable Activity draft — implemented
+- macOS Venue Search Sheet の明示 layout — pending; §8.4.1を正とする
+- Country 集計 — country code migration 後に有効化
+- Activity Estimate — Travel Ledger の複数Estimate契約を採用済み。TripMapのmigration、
+  Editor、summaryがpending
+- Wikipedia 概要または予約 provider — Research Gate pending
+
+既存仕様として実装済み:
+
+- macOS Overview の日程変更
+- Guide の Travel Leg transport editor
+- Activity の category、所要時間、Venue、Reservation summary 表示
+- Activity 一件の ReservationReference と詳細 sheet
+- Activity Card のダブルクリック編集
+
+完了条件:
+
+- 既存機能と新規機能を区別したまま、Library から Trip 作成、Activity 挿入、Venue 選択、
+  移動手段設定、Overview 集計、予約確認まで説明なしで到達できる。
+- chart、timeline、Map の操作に keyboard、VoiceOver、色に依存しない代替表現がある。
+- 外部 provider がなくてもローカルの Trip、Activity、Venue、Reservation だけで体験が成立する。
+
 ### P8 — Sync Research Gate
 
 - versioned schema — local V1 baseline、migration plan、legacy store 無損失 open test を実装済み
@@ -1291,13 +1566,19 @@ Widget extension は main app の private SwiftData store を直接読めると�
 
 1. 本番 V1 の version-specific model freeze と既存 store checksum / entity identity 互換性を、
    iOS 17 / macOS 14 を扱える安定版 toolchain で証明する。証明前に本番 V2 を追加しない。
-2. Trip image soft budget の非破壊 UX は接続済み。実機で Cover・Venue・Memory の
-   予測量、確認、キャンセル、容量縮小時の非表示を確認する。
-3. Memory の PhotosPicker、保存、再表示、削除と Trip Card 集計を、安定した Simulator または実機で確認する。
-4. local reminder の permission / delivery / timezone change gate を、安定した Simulator または実機で確認する。
-5. Now / Next、Reservation、Offline review、Travel Leg route detail の実画面 viewport gate を、安定した Simulator が利用可能になった時点で再開する。
-6. P9 の読み取り専用 App Intent を安定 OS の Siri / Shortcuts で確認後、versioned deep link
+2. schema 変更を伴わない次のUI sliceとして、§8.4.1のmacOS Venue検索Sheet修正を実装する。
+   検索欄を一つにし、明示的なheader / split content / footerと決定的UI testを完成させる。
+3. V1 freeze 完了後に、Venue country code とActivity EstimateのADR、migration、
+   Domain invariantを定義する。Library Dashboardは国別データを推測せず、利用可能な
+   Trip、Participant、Activity、Reservation 集計から段階的に有効化する。
+4. Wikipedia概要または旅行・予約providerは独立Research Gateを作り、規約、帰属、coverage、
+   費用、key 保護、失敗時の価値を比較する。Gate 前に製品 UI へ組み込まない。
+5. P9の読み取り専用App Intentを安定OSのSiri / Shortcutsで確認後、versioned deep link
    contract を定義し、Spotlight / Handoff を同じ projection へ接続する。
+
+環境が利用可能になり次第、上記と並行して Trip image soft budget、Memory PhotosPicker、
+local reminder、Now / Next、Reservation detail、Offline review、Travel Leg route detail の
+保留中の実機／Simulator gate を再開する。検証待ちを未実装と書き換えない。
 
 Travel Leg calculation states、iPadOS adaptive workspace、Activity progress / iPhone Quick Edit
 第二段階、Travel Leg preference editor / explicit retry、Guide Now / Next pure projection、P7 Memory
@@ -1320,7 +1601,7 @@ Reservation、Offline review、Memory の実画面 gate は環境制約により
 
 - Activity と Venue の責務を再び混ぜない。
 - Venue Card を施設ディレクトリにしない。
-- 電話、Web、営業時間、レビューをカードへ足さない。
+- Research Gate と本書の情報設計変更なしに、電話、Web、営業時間、レビューをカードへ足さない。
 - ユーザー画像を自動画像で置換しない。
 - Wikimedia の曖昧画像を exact Venue として表示しない。
 - 外部画像取得のためだけにサーバーを建てない。

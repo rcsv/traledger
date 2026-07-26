@@ -1,6 +1,6 @@
 # Product direction: 旅の時間軸に合わせて UI が育つ
 
-Last updated: 2026-07-24
+Last updated: 2026-07-26
 
 全プラットフォームの機能配置、技術採否、品質 Gate、実装ロードマップの詳細は
 [Apple Platform Product Master Plan](apple-platform-product-master-plan.md) を実装指示の基準とする。
@@ -54,8 +54,10 @@ Research Gate 0 は限定採用で完了した。地図上のカードは Activi
 画像、Venue 名、カテゴリ、所在地を示す **Venue Card** とする。電話、Web、営業時間などの
 詳細はカードへ追加せず、`Mapsで開く` から Apple Maps に委譲する。
 
-現在は機能を広げる前の **使い勝手の統合フェーズ**。次は Activity 入力 UX を整え、
-Venue Card と Activity 編集の役割分担を一連の操作として完成させる。
+現在は **使い勝手の統合フェーズ**。Activity 入力、Travel Leg、日程変更、Reservation の
+基礎は実装済みである。次は、実装済み機能を macOS のメニューと Planner から一貫して呼び出せる
+ようにし、Activity の挿入、Overview の分析、Reservation 集約、地図からの場所選択を、既存の
+Activity / Venue 境界を壊さず一連の操作として完成させる。
 
 ## 作業順序
 
@@ -131,6 +133,34 @@ Apple Maps の情報を TripMap の文脈に自然に足せるか、小さな試
 - Planner / Guide / Memory の手動切替と日付による提案を実装する。
 - 一つの Trip で、各フェーズの Overview と Activity Card の優先順位を比較する。
 - 旅行後の Trip Card を写真主役にし、タイトル、日付、訪問数を付帯情報として置く。
+
+## 2026-07-25 ユーザビリティ検証の採否
+
+検証意見は、現行仕様との関係を次のように判断する。
+
+| 意見 | 判断 | 製品方針 |
+| --- | --- | --- |
+| Library のダッシュボード | 機能拡充 | Trip 一覧を置き換えず、旅行履歴を要約する二次領域として追加する。国別集計は country code の永続化後に行う。 |
+| macOS メニューバー | 既定方針の未完 | Library、Trip 作成、Activity 作成、Participant、Settings を標準 Command として公開する。 |
+| 旅行日程の変更 | 既定仕様・macOS 実装済み | scoped mutation と「予定がある Day は黙って削除しない」境界を維持し、iPhone / iPad からも到達可能にする。 |
+| Activity 間の移動手段 | 既定仕様・Guide 実装済み | 車、徒歩、公共交通、その他を Planner からも編集可能にする。 |
+| ダブルクリックで追加／挿入 | 一部不採用、代替拡充 | カードのダブルクリックは編集を維持する。先頭、Activity 間、末尾に明示的な挿入 affordance を置く。 |
+| 地図の Venue を Activity に追加 | 機能拡充 | Venue 選択から Activity の下書きを作り、Day と挿入位置を確認してから保存する。 |
+| 地図クリックで Venue 情報を表示 | 機能拡充 | 保存済み Activity 選択と未保存 Venue 候補を別状態として扱い、地図以外にも同じ操作経路を用意する。 |
+| Activity 情報の拡充 | 一部は実装済み、段階的拡充 | 時刻、カテゴリ、所要時間、Venue、Reservation は既存情報を整理する。写真や詳細は Inspector へ段階表示し、費用は Domain 定義後に追加する。 |
+| Activity Analysis | 機能拡充 | Trip Overview にカテゴリ件数、割合、未分類を派生集計として表示する。 |
+| Activity Weaver の縦線 | デザイン方針追加 | Activity の順序を示す semantic timeline spine を採用し、Travel Leg や挿入操作と視覚的に統合する。 |
+| Venue overlay の外部情報 | 課題は採用、解決策は Research Gate | 予定判断に役立つ情報と操作を優先する。Wikipedia 本文、旅行会社、予約 API は規約、帰属、費用、地域差を検証してから採否を決める。 |
+| Reservation Summary | 基礎は実装済み、集約を拡充 | confirmation code を一覧へ露出せず、Trip Overview と Library Dashboard に件数・種類・次の予約を表示する。 |
+
+集計やカードの情報量は、計画中、旅行中、旅行後で同じ強さにしない。長期集計は Library と
+Planner / Memory の Overview で強くし、Guide では Today、Next、移動、直近の予約を優先する。
+
+2026-07-26 の macOS 実画面確認で、Venue 検索 Sheet に検索欄が二重表示され、Navigation / Toolbar
+領域が過大な空白を取る回帰を確認した。検索機能や MapKit resolver の問題ではなく、macOS Sheet に
+`NavigationStack`、`HSplitView`、`List.searchable` の自動配置を重ねた presentation 問題である。
+Activity / Venue Domain を変更せず、macOS 専用の明示的な header、検索欄、split content、footer
+へ組み替える修正を、次の schema 非依存 UI slice とする。
 
 ## 将来の生成 AI
 
