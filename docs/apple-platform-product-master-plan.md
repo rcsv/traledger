@@ -576,10 +576,13 @@ iOS 27 Simulator の縦レイアウトも実画面確認済みである。
   Window を主画面へ配置する UI test setup を追加した。Dark の result-list 状態をシート単体で
   画像確認し、header、検索欄、結果、preview 空状態、固定 footer、disabled confirm の階層と
   コントラストが維持されることを確認した。
+- 同じ QA setup の constrained window で、Sheet が `minWidth 760 / minHeight 520` を維持し、
+  検索欄、検索結果、Cancel が操作可能、Confirm が未選択時に無効、footer が欠落しないことを
+  UI test とシート単体画像で確認した。
 
 残る検証:
 
-- Guide Quick Edit 入口、最小 window、Increase Contrast、VoiceOver の拡張 matrix
+- Guide Quick Edit 入口、Increase Contrast、VoiceOver の拡張 matrix
 - iPhone / iPad の標準幅と Accessibility XXL の回帰再確認
 
 これらは layout 実装の差し戻し条件ではなく P7.5 の検証 follow-up とする。失敗が見つかった場合も
@@ -1603,8 +1606,9 @@ Widget extension は main app の private SwiftData store を直接読めると�
    iOS 17 / macOS 14 を扱える安定版 toolchain で証明する。証明前に本番 V2 を追加しない。
 2. §8.4.1 のmacOS Venue検索Sheet修正は 2026-07-26 に実装済み。検索欄を一つにし、
    明示的なheader / split content / footer、初期focus、Escape、nested-sheet UI testを追加した。
-   2026-07-27 にMapKit非依存の多状態fixture、Planner entry test、Dark Appearanceの
-   シート単体画像確認も完了した。Guide / assistive matrix は同節のfollow-upとして継続する。
+   2026-07-27 にMapKit非依存の多状態fixture、Planner entry test、Dark Appearanceと
+   constrained windowのシート単体画像確認も完了した。Guide / assistive matrix は同節の
+   follow-upとして継続する。
 3. V1 freeze 完了後に、Venue country code とActivity EstimateのADR、migration、
    Domain invariantを定義する。Library Dashboardは国別データを推測せず、利用可能な
    Trip、Participant、Activity、Reservation 集計から段階的に有効化する。

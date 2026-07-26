@@ -427,6 +427,7 @@ struct VenueSearchSheet: View {
                 dismiss()
             }
             .keyboardShortcut(.cancelAction)
+            .accessibilityIdentifier("venue-search-cancel")
 
             Button("この場所を設定") {
                 confirmSelection()

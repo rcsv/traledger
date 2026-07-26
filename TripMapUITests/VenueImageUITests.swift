@@ -508,6 +508,56 @@ final class VenueImageUITests: XCTestCase {
     }
 
     @MainActor
+    func testVenueSearchMinimumWindowKeepsActionsOperable() {
+        let app = launchUserImageFixture(
+            additionalArguments: [
+                "-tripmap-venue-image-qa-narrow",
+                "-tripmap-venue-search-qa-state", "result-list"
+            ]
+        )
+        let sheet = openVenueSearchFromActivityEditor(in: app)
+
+        assertVenueSearchChrome(in: app, state: "minimum-window-result-list")
+        let searchField = app.descendants(matching: .any)[
+            "venue-search-field"
+        ].firstMatch
+        let result = app.buttons["venue-search-result-0"].firstMatch
+        let cancel = app.buttons["venue-search-cancel"].firstMatch
+        let confirm = app.buttons["venue-search-confirm"].firstMatch
+
+        for (element, name) in [
+            (searchField, "検索欄"),
+            (result, "検索結果"),
+            (cancel, "キャンセル")
+        ] {
+            XCTAssertTrue(element.isHittable, "\(name)は最小 Window でも操作可能である必要があります。")
+        }
+        XCTAssertTrue(confirm.exists)
+        XCTAssertFalse(confirm.isEnabled)
+        XCTAssertGreaterThanOrEqual(
+            sheet.frame.width,
+            758,
+            "Venue 検索 Sheet は仕様上の最小幅 760pt を維持する必要があります。"
+        )
+        XCTAssertGreaterThanOrEqual(
+            sheet.frame.height,
+            518,
+            "Venue 検索 Sheet は仕様上の最小高 520pt を維持する必要があります。"
+        )
+
+        let screenshot = XCTAttachment(
+            screenshot: sheet.screenshot(),
+            quality: .original
+        )
+        screenshot.name = "Venue search minimum window"
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
+
+        cancel.click()
+        XCTAssertTrue(sheet.waitForNonExistence(timeout: 5))
+    }
+
+    @MainActor
     func testDoctorActivityIssueOpensTargetEditor() {
         let app = launchUserImageFixture()
         let overview = app.descendants(matching: .any)
