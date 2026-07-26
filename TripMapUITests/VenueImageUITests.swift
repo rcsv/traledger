@@ -304,12 +304,90 @@ final class VenueImageUITests: XCTestCase {
         XCTAssertTrue(venueSearchButton.waitForExistence(timeout: 10))
         venueSearchButton.click()
 
+        let sheet = app.descendants(matching: .any)
+            .matching(identifier: "venue-search-sheet")
+            .firstMatch
+        let header = app.descendants(matching: .any)
+            .matching(identifier: "venue-search-header")
+            .firstMatch
+        let searchFields = app.descendants(matching: .any)
+            .matching(identifier: "venue-search-field")
+        let searchField = searchFields.firstMatch
+        let results = app.descendants(matching: .any)
+            .matching(identifier: "venue-search-results")
+            .firstMatch
+        let preview = app.descendants(matching: .any)
+            .matching(identifier: "venue-search-preview")
+            .firstMatch
+        let footer = app.descendants(matching: .any)
+            .matching(identifier: "venue-search-footer")
+            .firstMatch
+        let confirm = app.buttons["venue-search-confirm"].firstMatch
+
+        XCTAssertTrue(sheet.waitForExistence(timeout: 10))
+        XCTAssertTrue(header.exists)
+        XCTAssertTrue(searchField.exists)
+        XCTAssertEqual(searchFields.count, 1, "検索欄は一つだけ表示される必要があります。")
+        XCTAssertTrue(searchField.isHittable)
         XCTAssertTrue(
-            app.searchFields["施設名または住所"].firstMatch
-                .waitForExistence(timeout: 10)
+            app.descendants(matching: .any)
+                .matching(
+                    NSPredicate(
+                        format: "identifier == %@ AND hasKeyboardFocus == true",
+                        "venue-search-field"
+                    )
+                )
+                .firstMatch.exists,
+            "Sheet を開いた直後は検索欄にキーボードフォーカスが必要です。"
         )
+        XCTAssertTrue(results.exists)
+        XCTAssertTrue(preview.exists)
+        XCTAssertTrue(footer.exists)
         XCTAssertTrue(app.staticTexts["場所を検索"].firstMatch.exists)
-        XCTAssertFalse(app.buttons["この場所を設定"].firstMatch.isEnabled)
+        XCTAssertFalse(confirm.isEnabled)
+
+        XCTAssertGreaterThanOrEqual(
+            results.frame.minY,
+            header.frame.maxY - 2,
+            "検索結果ペインは明示ヘッダーより下に配置される必要があります。"
+        )
+        XCTAssertGreaterThanOrEqual(
+            preview.frame.minY,
+            header.frame.maxY - 2,
+            "プレビューペインは明示ヘッダーより下に配置される必要があります。"
+        )
+        XCTAssertLessThanOrEqual(
+            searchField.frame.minY,
+            header.frame.maxY + 64,
+            "検索欄は検索ペインの先頭に配置される必要があります。"
+        )
+        XCTAssertLessThan(
+            searchField.frame.midX,
+            preview.frame.minX,
+            "検索欄は左側の検索ペイン内に配置される必要があります。"
+        )
+        XCTAssertGreaterThanOrEqual(
+            footer.frame.minY,
+            min(results.frame.maxY, preview.frame.maxY) - 2,
+            "操作ボタンは分割ペインの下に固定される必要があります。"
+        )
+
+        let screenshot = XCTAttachment(
+            screenshot: XCUIScreen.main.screenshot(),
+            quality: .original
+        )
+        screenshot.name = "Venue search explicit macOS layout"
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
+
+        app.typeKey(.escape, modifierFlags: [])
+        XCTAssertTrue(sheet.waitForNonExistence(timeout: 5))
+        XCTAssertTrue(
+            app.descendants(matching: .any)
+                .matching(identifier: "activity-editor")
+                .firstMatch.exists,
+            "Escape で Venue 検索だけを閉じ、Activity 編集へ戻る必要があります。"
+        )
     }
 
     @MainActor

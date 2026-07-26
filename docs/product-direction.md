@@ -160,7 +160,12 @@ Planner / Memory の Overview で強くし、Guide では Today、Next、移動�
 領域が過大な空白を取る回帰を確認した。検索機能や MapKit resolver の問題ではなく、macOS Sheet に
 `NavigationStack`、`HSplitView`、`List.searchable` の自動配置を重ねた presentation 問題である。
 Activity / Venue Domain を変更せず、macOS 専用の明示的な header、検索欄、split content、footer
-へ組み替える修正を、次の schema 非依存 UI slice とする。
+へ組み替える修正を、次の schema 非依存 UI slice とした。
+
+同日の修正で明示レイアウトへ移行し、検索欄一つ、header 直下の左右ペイン、固定 footer、
+初期 keyboard focus、Escape cancel を Activity Editor からの nested-sheet UI test と実画面で
+確認した。MapKit 非依存の多状態 fixture、全入口、テーマと支援機能の拡張 matrix は、
+Domain 変更を伴わない検証 follow-up として継続する。
 
 ## 将来の生成 AI
 

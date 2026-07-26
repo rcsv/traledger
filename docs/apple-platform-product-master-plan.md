@@ -487,7 +487,7 @@ iOS 27 Simulator の縦レイアウトも実画面確認済みである。
 
 #### 8.4.1 macOS Venue 検索 Sheet 修正計画
 
-状態: **Layout Gate reopened（2026-07-26 appshot）**
+状態: **Layout repair implemented（2026-07-26）／extended matrix pending**
 
 2026-07-26 の実画面では、検索欄が Sheet 上部と左ペイン内の二箇所として表示・Accessibility tree
 へ公開され、上部 Navigation / Toolbar 領域が過大な空白を確保していた。左の初期案内も下へ押し出され、
@@ -551,6 +551,30 @@ iOS 27 Simulator の縦レイアウトも実画面確認済みである。
 - Venue / Activity 永続モデルの変更
 - Wikipedia、評価、旅行会社など外部 provider の追加
 - 検索結果選択時の自動保存
+
+2026-07-26 実装結果:
+
+- macOS だけを明示的な `header / HSplitView / footer` 構成へ変更し、Sheet 内の
+  `NavigationStack` と `.searchable` を除去した。iOS / iPadOS の縦配置は変更していない。
+- 左ペイン先頭の検索欄を唯一の入力にし、初期 focus、clear、上下矢印、Return を実装した。
+  Escape は内側の Venue 検索 Sheet だけを閉じ、default action は Venue 選択まで無効である。
+- header、検索結果、preview、footer を独立した Accessibility container とし、表示階層と
+  読み上げ階層を一致させた。
+- Activity Editor から開く nested sheet の macOS UI test で、検索欄が一つ、header 直下への配置、
+  左右 split、固定 footer、初期 focus、disabled confirm、Escape cancel を確認した。
+- Xcode 27 beta の macOS build、全 `TripMapTests`、対象 `VenueImageUITests` は成功した。
+  保存 screenshot でも、2026-07-26 appshot にあった二重検索欄と過大な Navigation 空白が
+  解消されている。
+
+残る検証:
+
+- MapKit に依存しない completion / resolving / result / no-result / failure fixture
+- Planner の`場所から追加`と Guide Quick Edit を含む全入口、最小 window、Dark、
+  Increase Contrast、VoiceOver の拡張 matrix
+- iPhone / iPad の標準幅と Accessibility XXL の回帰再確認
+
+これらは layout 実装の差し戻し条件ではなく P7.5 の検証 follow-up とする。失敗が見つかった場合も
+Venue / Activity Domain や MapKit 検索順位へ問題を広げず、presentation と fixture の範囲で修正する。
 
 標準所要時間はカテゴリ別の提案として出し、未設定時だけワンタップで採用できるようにする。
 2026-07-24 時点の初期値は、移動30分、食事60分、宿泊30分、観光90分、体験120分、買い物60分
@@ -1467,7 +1491,7 @@ platform expansion 記録として分離する。
 
 ### P7.5 — Usability Review Integration
 
-状態: **Core slices implemented; macOS Venue Search layout repair pending**
+状態: **Core slices implemented; usability validation follow-ups pending**
 
 実装状況:
 
@@ -1477,7 +1501,8 @@ platform expansion 記録として分離する。
 - Trip Overview Activity Analysis / Reservation Summary — implemented
 - Library Dashboard の Trip、Participant、Activity、Reservation 集計 — implemented
 - Map Venue candidate selection / confirmable Activity draft — implemented
-- macOS Venue Search Sheet の明示 layout — pending; §8.4.1を正とする
+- macOS Venue Search Sheet の明示 layout — implemented and nested-sheet UI-tested;
+  extended state / entry-point matrix は §8.4.1 の follow-up とする
 - Country 集計 — country code migration 後に有効化
 - Activity Estimate — Travel Ledger の複数Estimate契約を採用済み。TripMapのmigration、
   Editor、summaryがpending
@@ -1566,8 +1591,9 @@ Widget extension は main app の private SwiftData store を直接読めると�
 
 1. 本番 V1 の version-specific model freeze と既存 store checksum / entity identity 互換性を、
    iOS 17 / macOS 14 を扱える安定版 toolchain で証明する。証明前に本番 V2 を追加しない。
-2. schema 変更を伴わない次のUI sliceとして、§8.4.1のmacOS Venue検索Sheet修正を実装する。
-   検索欄を一つにし、明示的なheader / split content / footerと決定的UI testを完成させる。
+2. §8.4.1 のmacOS Venue検索Sheet修正は 2026-07-26 に実装済み。検索欄を一つにし、
+   明示的なheader / split content / footer、初期focus、Escape、nested-sheet UI testを追加した。
+   extended state / entry-point matrix は同節のfollow-upとして継続する。
 3. V1 freeze 完了後に、Venue country code とActivity EstimateのADR、migration、
    Domain invariantを定義する。Library Dashboardは国別データを推測せず、利用可能な
    Trip、Participant、Activity、Reservation 集計から段階的に有効化する。

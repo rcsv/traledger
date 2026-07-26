@@ -3,6 +3,11 @@ import Foundation
 import MapKit
 import SwiftUI
 
+private enum VenueSearchKeyboardSelection: Equatable {
+    case completion(Int)
+    case result(Int)
+}
+
 /// MapKit の補完候補を解決して、アプリで保持できる会場情報へ変換する検索モデルです。
 struct VenueSearchResult: Identifiable {
     let id = UUID()
@@ -161,9 +166,16 @@ struct VenueSearchSheet: View {
     @StateObject private var search = VenueSearchModel()
     @State private var query = ""
     @State private var selectedResult: VenueSearchResult?
+    @State private var keyboardSelection: VenueSearchKeyboardSelection?
+    @FocusState private var isSearchFocused: Bool
 
     var body: some View {
         sheetContent
+            .onChange(of: query) { _, value in
+                selectedResult = nil
+                keyboardSelection = nil
+                search.update(query: value)
+            }
             .alert("場所を検索できませんでした", isPresented: Binding(
                 get: { search.errorMessage != nil },
                 set: { if !$0 { search.report(error: nil) } }
@@ -177,12 +189,139 @@ struct VenueSearchSheet: View {
     @ViewBuilder
     private var sheetContent: some View {
         #if os(macOS)
-        navigationContent
-            .frame(minWidth: 740, minHeight: 500)
+        macOSContent
         #else
         navigationContent
         #endif
     }
+
+    #if os(macOS)
+    private var macOSContent: some View {
+        VStack(spacing: 0) {
+            macOSHeader
+            Divider()
+            HSplitView {
+                macOSSearchPane
+                    .frame(minWidth: 320, idealWidth: 340)
+                venuePreview
+                    .frame(minWidth: 400, idealWidth: 500)
+                    .frame(maxHeight: .infinity)
+                    .accessibilityElement(children: .contain)
+                    .accessibilityIdentifier("venue-search-preview")
+            }
+            .frame(maxHeight: .infinity)
+            Divider()
+            macOSFooter
+        }
+        .frame(
+            minWidth: 760,
+            idealWidth: 840,
+            minHeight: 520,
+            idealHeight: 600
+        )
+        .background(Color(nsColor: .windowBackgroundColor))
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("venue-search-sheet")
+        .onAppear {
+            isSearchFocused = true
+        }
+    }
+
+    private var macOSHeader: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("場所を検索")
+                .font(.title2.bold())
+            Text("施設名または住所から、予定に設定する場所を選択します。")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 16)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("venue-search-header")
+    }
+
+    private var macOSSearchPane: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 8) {
+                Image(systemName: "magnifyingglass")
+                    .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
+
+                TextField("施設名または住所", text: $query)
+                    .textFieldStyle(.plain)
+                    .focused($isSearchFocused)
+                    .accessibilityLabel("施設名または住所")
+                    .accessibilityIdentifier("venue-search-field")
+                    .onKeyPress(.downArrow) {
+                        moveKeyboardSelection(by: 1)
+                        return .handled
+                    }
+                    .onKeyPress(.upArrow) {
+                        moveKeyboardSelection(by: -1)
+                        return .handled
+                    }
+                    .onSubmit {
+                        activateKeyboardSelection()
+                    }
+
+                if !query.isEmpty {
+                    Button("検索文字列を消去", systemImage: "xmark.circle.fill") {
+                        query = ""
+                    }
+                    .labelStyle(.iconOnly)
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                    .accessibilityIdentifier("venue-search-clear")
+                }
+            }
+            .padding(.horizontal, 10)
+            .frame(minHeight: 32)
+            .background(
+                Color(nsColor: .controlBackgroundColor),
+                in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(
+                        isSearchFocused ? Color.accentColor : Color.secondary.opacity(0.35),
+                        lineWidth: isSearchFocused ? 2 : 1
+                    )
+            }
+            .padding(12)
+
+            Divider()
+
+            searchResults
+                .accessibilityElement(children: .contain)
+                .accessibilityIdentifier("venue-search-results")
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+    }
+
+    private var macOSFooter: some View {
+        HStack(spacing: 10) {
+            Spacer()
+            Button("キャンセル") {
+                dismiss()
+            }
+            .keyboardShortcut(.cancelAction)
+
+            Button("この場所を設定") {
+                confirmSelection()
+            }
+            .keyboardShortcut(.defaultAction)
+            .disabled(selectedResult == nil)
+            .accessibilityIdentifier("venue-search-confirm")
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(.bar)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("venue-search-footer")
+    }
+    #endif
 
     private var navigationContent: some View {
         NavigationStack {
@@ -194,8 +333,7 @@ struct VenueSearchSheet: View {
                     }
                     ToolbarItem(placement: .confirmationAction) {
                         Button("この場所を設定") {
-                            if let selectedResult { onSelect(selectedResult.candidate) }
-                            dismiss()
+                            confirmSelection()
                         }
                         .disabled(selectedResult == nil)
                     }
@@ -215,6 +353,7 @@ struct VenueSearchSheet: View {
         #else
         VStack(spacing: 0) {
             searchResults
+                .searchable(text: $query, prompt: "施設名または住所")
             Divider()
             venuePreview
                 .frame(minHeight: 220)
@@ -222,61 +361,57 @@ struct VenueSearchSheet: View {
         #endif
     }
 
+    @ViewBuilder
     private var searchResults: some View {
-        List {
-            if search.isResolving {
+        if search.isResolving {
+            centeredState {
                 ProgressView("場所を確認中…")
-                    .frame(maxWidth: .infinity, alignment: .center)
-            } else if !search.results.isEmpty {
-                Section("検索結果") {
-                    ForEach(search.results) { result in
-                        resultButton(result)
-                    }
-                }
-            } else if search.didResolveSearch {
-                ContentUnavailableView(
-                    "場所が見つかりません",
-                    systemImage: "mappin.slash",
-                    description: Text("別の施設名や住所で検索してください。")
-                )
-            } else if !search.completions.isEmpty {
-                Section("候補") {
-                    ForEach(search.completions, id: \.self) { completion in
-                        Button {
-                            search.resolve(completion)
-                        } label: {
-                            completionLabel(completion)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-            } else if search.isCompleting {
-                ProgressView("候補を検索中…")
-                    .frame(maxWidth: .infinity, alignment: .center)
-            } else if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                ContentUnavailableView(
-                    "場所を検索",
-                    systemImage: "magnifyingglass",
-                    description: Text("施設名または住所を入力してください。")
-                )
-            } else {
-                ContentUnavailableView(
-                    "候補がありません",
-                    systemImage: "magnifyingglass",
-                    description: Text("入力を変えてもう一度検索してください。")
-                )
             }
-        }
-        .searchable(text: $query, prompt: "施設名または住所")
-        .onChange(of: query) { _, value in
-            selectedResult = nil
-            search.update(query: value)
+        } else if !search.results.isEmpty {
+            List {
+                Section("検索結果") {
+                    ForEach(Array(search.results.enumerated()), id: \.element.id) { index, result in
+                        resultButton(result, index: index)
+                    }
+                }
+            }
+        } else if search.didResolveSearch {
+            ContentUnavailableView(
+                "場所が見つかりません",
+                systemImage: "mappin.slash",
+                description: Text("別の施設名や住所で検索してください。")
+            )
+        } else if !search.completions.isEmpty {
+            List {
+                Section("候補") {
+                    ForEach(Array(search.completions.enumerated()), id: \.element) { index, completion in
+                        completionButton(completion, index: index)
+                    }
+                }
+            }
+        } else if search.isCompleting {
+            centeredState {
+                ProgressView("候補を検索中…")
+            }
+        } else if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            ContentUnavailableView(
+                "場所を検索",
+                systemImage: "magnifyingglass",
+                description: Text("施設名または住所を入力してください。")
+            )
+        } else {
+            ContentUnavailableView(
+                "候補がありません",
+                systemImage: "magnifyingglass",
+                description: Text("入力を変えてもう一度検索してください。")
+            )
         }
     }
 
-    private func resultButton(_ result: VenueSearchResult) -> some View {
+    private func resultButton(_ result: VenueSearchResult, index: Int) -> some View {
         Button {
             selectedResult = result
+            keyboardSelection = .result(index)
         } label: {
             VStack(alignment: .leading, spacing: 3) {
                 Text(result.name)
@@ -287,8 +422,32 @@ struct VenueSearchSheet: View {
             }
         }
         .buttonStyle(.plain)
-        .listRowBackground(selectedResult?.id == result.id ? Color.accentColor.opacity(0.16) : Color.clear)
+        .listRowBackground(
+            selectedResult?.id == result.id || keyboardSelection == .result(index)
+                ? Color.accentColor.opacity(0.16)
+                : Color.clear
+        )
         .accessibilityAddTraits(selectedResult?.id == result.id ? .isSelected : [])
+        .accessibilityIdentifier("venue-search-result-\(index)")
+    }
+
+    private func completionButton(
+        _ completion: MKLocalSearchCompletion,
+        index: Int
+    ) -> some View {
+        Button {
+            keyboardSelection = .completion(index)
+            search.resolve(completion)
+        } label: {
+            completionLabel(completion)
+        }
+        .buttonStyle(.plain)
+        .listRowBackground(
+            keyboardSelection == .completion(index)
+                ? Color.accentColor.opacity(0.16)
+                : Color.clear
+        )
+        .accessibilityIdentifier("venue-search-completion-\(index)")
     }
 
     private func completionLabel(_ completion: MKLocalSearchCompletion) -> some View {
@@ -298,6 +457,70 @@ struct VenueSearchSheet: View {
             Text(title)
             if !subtitle.isEmpty {
                 Text(subtitle).foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private func centeredState<Content: View>(
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        content()
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+    }
+
+    private func confirmSelection() {
+        guard let selectedResult else { return }
+        onSelect(selectedResult.candidate)
+        dismiss()
+    }
+
+    private func moveKeyboardSelection(by offset: Int) {
+        let count: Int
+        let currentIndex: Int?
+        let makesSelection: (Int) -> VenueSearchKeyboardSelection
+
+        if !search.results.isEmpty {
+            count = search.results.count
+            if case .result(let index) = keyboardSelection {
+                currentIndex = index
+            } else {
+                currentIndex = nil
+            }
+            makesSelection = VenueSearchKeyboardSelection.result
+        } else if !search.completions.isEmpty {
+            count = search.completions.count
+            if case .completion(let index) = keyboardSelection {
+                currentIndex = index
+            } else {
+                currentIndex = nil
+            }
+            makesSelection = VenueSearchKeyboardSelection.completion
+        } else {
+            return
+        }
+
+        let nextIndex: Int
+        if let currentIndex {
+            nextIndex = min(max(currentIndex + offset, 0), count - 1)
+        } else {
+            nextIndex = offset < 0 ? count - 1 : 0
+        }
+        keyboardSelection = makesSelection(nextIndex)
+    }
+
+    private func activateKeyboardSelection() {
+        switch keyboardSelection {
+        case .completion(let index) where search.completions.indices.contains(index):
+            search.resolve(search.completions[index])
+        case .result(let index) where search.results.indices.contains(index):
+            selectedResult = search.results[index]
+        default:
+            if search.results.count == 1 {
+                selectedResult = search.results[0]
+                keyboardSelection = .result(0)
+            } else if search.completions.count == 1 {
+                keyboardSelection = .completion(0)
+                search.resolve(search.completions[0])
             }
         }
     }
