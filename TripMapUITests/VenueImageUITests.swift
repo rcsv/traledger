@@ -73,6 +73,20 @@ final class VenueImageUITests: XCTestCase {
             "Map actions must start below the window toolbar."
         )
 
+        for (identifier, label) in [
+            ("plan-memory-button", "思い出を開く"),
+            ("plan-map-visibility-button", "地図を隠す"),
+            ("plan-add-from-place-button", "場所から予定を追加"),
+            ("plan-add-activity-button", "選択中の日に予定を追加"),
+            ("plan-day-actions-menu", "選択中の日の操作"),
+            ("plan-edit-activity-button", "選択中の予定を編集"),
+            ("plan-activity-actions-menu", "選択中の予定のその他の操作")
+        ] {
+            let control = app.descendants(matching: .any)[identifier].firstMatch
+            XCTAssertTrue(control.exists, "\(identifier) must remain available.")
+            XCTAssertEqual(control.label, label)
+        }
+
         for identifier in [
             "activity-insert-start",
             "activity-insert-between-1",

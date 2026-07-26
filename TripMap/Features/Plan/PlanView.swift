@@ -114,6 +114,7 @@ struct PlanView: View {
                 Button("思い出", systemImage: "photo.on.rectangle.angled") {
                     isMemoryPresented = true
                 }
+                .accessibilityLabel("思い出を開く")
                 .accessibilityIdentifier("plan-memory-button")
 
                 Button {
@@ -122,16 +123,22 @@ struct PlanView: View {
                     Label(isMapVisible ? "地図を隠す" : "地図を表示", systemImage: isMapVisible ? "map.fill" : "map")
                 }
                 .help(isMapVisible ? "地図を隠す" : "地図を表示")
+                .accessibilityLabel(isMapVisible ? "地図を隠す" : "地図を表示")
+                .accessibilityIdentifier("plan-map-visibility-button")
 
                 if let selectedDay {
                     Button("場所から追加", systemImage: "mappin.and.ellipse") {
                         isVenueSearchPresented = true
                     }
                     .help("場所を選び、内容を確認して予定へ追加")
+                    .accessibilityLabel("場所から予定を追加")
+                    .accessibilityIdentifier("plan-add-from-place-button")
 
                     Button("予定を追加", systemImage: "plus") {
                         presentActivityCreationAtEnd(of: selectedDay)
                     }
+                    .accessibilityLabel("選択中の日に予定を追加")
+                    .accessibilityIdentifier("plan-add-activity-button")
 
                     Menu("Day", systemImage: "calendar.badge.gearshape") {
                         Button("この日の予定をコピー…", systemImage: "document.on.document") {
@@ -141,6 +148,8 @@ struct PlanView: View {
                             operation = .swap(selectedDay.id)
                         }
                     }
+                    .accessibilityLabel("選択中の日の操作")
+                    .accessibilityIdentifier("plan-day-actions-menu")
 
                     if let selectedActivity {
                         Button("予定を編集", systemImage: "pencil") {
@@ -148,11 +157,15 @@ struct PlanView: View {
                         }
                         .keyboardShortcut(.return, modifiers: [])
                         .help("選択中の予定を編集 (Return)")
+                        .accessibilityLabel("選択中の予定を編集")
+                        .accessibilityIdentifier("plan-edit-activity-button")
                         Menu("予定", systemImage: "ellipsis.circle") {
                             Button("予定を削除", systemImage: "trash", role: .destructive) {
                                 pendingActivityDeletion = ActivityEditorTarget(activityID: selectedActivity.id)
                             }
                         }
+                        .accessibilityLabel("選択中の予定のその他の操作")
+                        .accessibilityIdentifier("plan-activity-actions-menu")
                     }
                 }
             }
