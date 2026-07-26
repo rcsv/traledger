@@ -3,6 +3,7 @@ import SwiftUI
 
 struct ActivityList: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorSchemeContrast) private var colorSchemeContrast
 
     let day: Day
     let selectedActivityID: Activity.ID?
@@ -150,7 +151,11 @@ struct ActivityList: View {
                     }
                     .background(alignment: .leading) {
                         Rectangle()
-                            .fill(Color.accentColor.opacity(0.32))
+                            .fill(
+                                Color.accentColor.opacity(
+                                    colorSchemeContrast == .increased ? 0.56 : 0.32
+                                )
+                            )
                             .frame(width: 2)
                             .padding(.leading, 24)
                             .accessibilityHidden(true)
@@ -201,6 +206,7 @@ struct ActivityList: View {
 
 private struct ActivityInsertionButton: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorSchemeContrast) private var colorSchemeContrast
 
     let positionLabel: String
     let accessibilitySuffix: String
@@ -225,7 +231,9 @@ private struct ActivityInsertionButton: View {
                         .fill(
                             isActive
                                 ? Color.accentColor
-                                : Color.accentColor.opacity(0.34)
+                                : Color.accentColor.opacity(
+                                    colorSchemeContrast == .increased ? 0.68 : 0.34
+                                )
                         )
                         .frame(
                             width: isActive ? 22 : 8,
@@ -356,6 +364,8 @@ private struct TravelLegRow: View {
 }
 
 private struct ActivityCard: View {
+    @Environment(\.colorSchemeContrast) private var colorSchemeContrast
+
     let activity: Activity
     let isSelected: Bool
     let temporalRole: GuideActivityTemporalRole?
@@ -465,12 +475,21 @@ private struct ActivityCard: View {
             .padding(.trailing, onDropActivity == nil ? 0 : 28)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
-                isSelected ? Color.accentColor.opacity(0.12) : Color.secondary.opacity(0.07),
+                isSelected
+                    ? Color.accentColor.opacity(colorSchemeContrast == .increased ? 0.18 : 0.12)
+                    : Color.secondary.opacity(colorSchemeContrast == .increased ? 0.12 : 0.07),
                 in: RoundedRectangle(cornerRadius: 14)
             )
             .overlay {
                 RoundedRectangle(cornerRadius: 14)
-                    .stroke(isSelected ? Color.accentColor : .clear, lineWidth: 1.5)
+                    .stroke(
+                        isSelected
+                            ? Color.accentColor
+                            : Color.secondary.opacity(
+                                colorSchemeContrast == .increased ? 0.30 : 0
+                            ),
+                        lineWidth: colorSchemeContrast == .increased ? 2 : 1.5
+                    )
             }
         }
         .buttonStyle(.plain)

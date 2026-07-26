@@ -1953,6 +1953,7 @@ private struct DoctorIssueLabel: View {
 
 private struct TripOverviewView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Query(sort: \StoredParticipant.displayName) private var participants: [StoredParticipant]
     @Query private var storedTrips: [StoredTrip]
     @Query private var participantAssignments: [StoredTripParticipant]
@@ -2115,7 +2116,7 @@ private struct TripOverviewView: View {
                                             ? "chevron.up"
                                             : "chevron.down"
                                     ) {
-                                        withAnimation {
+                                        withAnimation(reduceMotion ? nil : .default) {
                                             showsAllActivityCategories.toggle()
                                         }
                                     }
