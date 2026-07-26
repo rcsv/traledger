@@ -33,10 +33,31 @@ struct VenueSearchCompletion: Identifiable {
 struct VenueSearchResult: Identifiable {
     let id = UUID()
     let mapItem: MKMapItem
+    private let addressOverride: String?
 
     var name: String { mapItem.name ?? "名称未設定の場所" }
-    var address: String { mapItem.placemark.title ?? "住所情報がありません" }
+    var address: String {
+        addressOverride ?? mapItem.placemark.title ?? "住所情報がありません"
+    }
     var coordinate: CLLocationCoordinate2D { mapItem.placemark.coordinate }
+
+    init(mapItem: MKMapItem) {
+        self.mapItem = mapItem
+        addressOverride = nil
+    }
+
+    #if TRIPMAP_QA
+    init(
+        qaName: String,
+        address: String,
+        coordinate: CLLocationCoordinate2D
+    ) {
+        let mapItem = MKMapItem(placemark: MKPlacemark(coordinate: coordinate))
+        mapItem.name = qaName
+        self.mapItem = mapItem
+        addressOverride = address
+    }
+    #endif
 
     var snapshot: PlaceSnapshot {
         PlaceSnapshot(
@@ -236,12 +257,14 @@ final class VenueSearchModel: NSObject, ObservableObject, @preconcurrency MKLoca
     }
 
     private static var qaResult: VenueSearchResult {
-        let mapItem = MKMapItem(placemark: MKPlacemark(coordinate: CLLocationCoordinate2D(
-            latitude: 26.6943,
-            longitude: 127.8779
-        )))
-        mapItem.name = "沖縄美ら海水族館"
-        return VenueSearchResult(mapItem: mapItem)
+        VenueSearchResult(
+            qaName: "沖縄美ら海水族館",
+            address: "沖縄県国頭郡本部町",
+            coordinate: CLLocationCoordinate2D(
+                latitude: 26.6943,
+                longitude: 127.8779
+            )
+        )
     }
     #endif
 }
@@ -257,6 +280,7 @@ struct VenueSearchSheet: View {
 
     var body: some View {
         sheetContent
+            .preferredColorScheme(qaPreferredColorScheme)
             .onChange(of: query) { _, value in
                 selectedResult = nil
                 keyboardSelection = nil
@@ -270,6 +294,16 @@ struct VenueSearchSheet: View {
             } message: {
                 Text(search.errorMessage ?? "不明なエラー")
             }
+    }
+
+    private var qaPreferredColorScheme: ColorScheme? {
+        #if TRIPMAP_QA
+        ProcessInfo.processInfo.arguments.contains("-tripmap-qa-dark-appearance")
+            ? .dark
+            : nil
+        #else
+        nil
+        #endif
     }
 
     @ViewBuilder

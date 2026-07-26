@@ -414,6 +414,15 @@ struct MacTripWorkspaceView: View {
             } else if ProcessInfo.processInfo.arguments.contains("-tripmap-venue-image-qa-regular") {
                 window.setContentSize(NSSize(width: 1180, height: 720))
             }
+            if let primaryScreen = NSScreen.screens.first {
+                let visibleFrame = primaryScreen.visibleFrame
+                window.setFrameOrigin(
+                    NSPoint(
+                        x: visibleFrame.midX - (window.frame.width / 2),
+                        y: visibleFrame.midY - (window.frame.height / 2)
+                    )
+                )
+            }
             window.level = .floating
             window.makeKeyAndOrderFront(nil)
         }

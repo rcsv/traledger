@@ -165,8 +165,9 @@ Activity / Venue Domain を変更せず、macOS 専用の明示的な header、�
 同日の修正で明示レイアウトへ移行し、検索欄一つ、header 直下の左右ペイン、固定 footer、
 初期 keyboard focus、Escape cancel を Activity Editor からの nested-sheet UI test と実画面で
 確認した。2026-07-27 には MapKit 非依存の多状態 fixture と Planner の`場所から予定を追加`入口も
-UI test で確認した。Guide Quick Edit、テーマと支援機能の拡張 matrix は、Domain 変更を伴わない
-検証 follow-up として継続する。
+UI test で確認し、Dark Appearance でも同じ階層とコントラストをシート単体画像で確認した。
+Guide Quick Edit、Increase Contrast、VoiceOver の拡張 matrix は、Domain 変更を伴わない検証
+follow-up として継続する。
 
 ## 将来の生成 AI
 

@@ -362,7 +362,7 @@ final class VenueImageUITests: XCTestCase {
         )
 
         let screenshot = XCTAttachment(
-            screenshot: XCUIScreen.main.screenshot(),
+            screenshot: sheet.screenshot(),
             quality: .original
         )
         screenshot.name = "Venue search explicit macOS layout"
@@ -476,6 +476,35 @@ final class VenueImageUITests: XCTestCase {
         app.typeKey(.escape, modifierFlags: [])
         XCTAssertTrue(sheet.waitForNonExistence(timeout: 5))
         XCTAssertTrue(addFromPlace.exists)
+    }
+
+    @MainActor
+    func testVenueSearchDarkAppearanceKeepsExplicitHierarchy() {
+        let app = launchUserImageFixture(
+            additionalArguments: [
+                "-tripmap-venue-search-qa-state", "result-list",
+                "-tripmap-qa-dark-appearance"
+            ]
+        )
+        let sheet = openVenueSearchFromActivityEditor(in: app)
+
+        assertVenueSearchChrome(in: app, state: "dark-result-list")
+        XCTAssertTrue(
+            app.buttons["venue-search-result-0"].firstMatch
+                .waitForExistence(timeout: 5)
+        )
+        XCTAssertFalse(app.buttons["venue-search-confirm"].firstMatch.isEnabled)
+
+        let screenshot = XCTAttachment(
+            screenshot: sheet.screenshot(),
+            quality: .original
+        )
+        screenshot.name = "Venue search dark appearance"
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
+
+        app.typeKey(.escape, modifierFlags: [])
+        XCTAssertTrue(sheet.waitForNonExistence(timeout: 5))
     }
 
     @MainActor
