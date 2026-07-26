@@ -295,18 +295,7 @@ final class VenueImageUITests: XCTestCase {
     @MainActor
     func testActivityEditorOpensVenueSearchWithClearInitialState() {
         let app = launchUserImageFixture()
-        let activityCard = app.buttons["activity-3"].firstMatch
-
-        XCTAssertTrue(activityCard.waitForExistence(timeout: 15))
-        activityCard.doubleClick()
-
-        let venueSearchButton = app.buttons["venue-search-button"].firstMatch
-        XCTAssertTrue(venueSearchButton.waitForExistence(timeout: 10))
-        venueSearchButton.click()
-
-        let sheet = app.descendants(matching: .any)
-            .matching(identifier: "venue-search-sheet")
-            .firstMatch
+        let sheet = openVenueSearchFromActivityEditor(in: app)
         let header = app.descendants(matching: .any)
             .matching(identifier: "venue-search-header")
             .firstMatch
@@ -388,6 +377,105 @@ final class VenueImageUITests: XCTestCase {
                 .firstMatch.exists,
             "Escape で Venue 検索だけを閉じ、Activity 編集へ戻る必要があります。"
         )
+    }
+
+    @MainActor
+    func testVenueSearchFixturesCoverStablePresentationStates() {
+        for state in [
+            "completion-loading",
+            "completion-list",
+            "result-resolving",
+            "result-list",
+            "no-result"
+        ] {
+            let app = launchUserImageFixture(additionalArguments: [
+                "-tripmap-venue-search-qa-state", state
+            ])
+            let sheet = openVenueSearchFromActivityEditor(in: app)
+            assertVenueSearchChrome(in: app, state: state)
+
+            switch state {
+            case "completion-loading":
+                XCTAssertTrue(
+                    app.descendants(matching: .any)[
+                        "venue-search-completion-loading"
+                    ].firstMatch.exists
+                )
+            case "completion-list":
+                XCTAssertTrue(
+                    app.buttons["venue-search-completion-0"].firstMatch
+                        .waitForExistence(timeout: 5)
+                )
+                XCTAssertTrue(app.buttons["venue-search-completion-1"].firstMatch.exists)
+            case "result-resolving":
+                XCTAssertTrue(
+                    app.descendants(matching: .any)[
+                        "venue-search-result-resolving"
+                    ].firstMatch.exists
+                )
+            case "result-list":
+                XCTAssertTrue(
+                    app.buttons["venue-search-result-0"].firstMatch
+                        .waitForExistence(timeout: 5)
+                )
+                XCTAssertFalse(app.buttons["venue-search-confirm"].firstMatch.isEnabled)
+            case "no-result":
+                XCTAssertTrue(
+                    app.descendants(matching: .any)[
+                        "venue-search-no-result"
+                    ].firstMatch.exists
+                )
+            default:
+                XCTFail("未対応の Venue 検索 QA state: \(state)")
+            }
+
+            app.typeKey(.escape, modifierFlags: [])
+            XCTAssertTrue(sheet.waitForNonExistence(timeout: 5))
+            app.terminate()
+        }
+    }
+
+    @MainActor
+    func testVenueSearchFailureFixtureKeepsSheetRecoverable() {
+        let app = launchUserImageFixture(additionalArguments: [
+            "-tripmap-venue-search-qa-state", "failure"
+        ])
+        let sheet = openVenueSearchFromActivityEditor(in: app)
+        let alertTitle = app.staticTexts["場所を検索できませんでした"].firstMatch
+
+        XCTAssertTrue(alertTitle.waitForExistence(timeout: 5))
+        XCTAssertTrue(
+            app.staticTexts["QA fixture: 場所を検索できません。"].firstMatch.exists
+        )
+        app.typeKey(.return, modifierFlags: [])
+        XCTAssertTrue(alertTitle.waitForNonExistence(timeout: 5))
+
+        XCTAssertTrue(sheet.exists)
+        assertVenueSearchChrome(in: app, state: "failure")
+        XCTAssertFalse(app.buttons["venue-search-confirm"].firstMatch.isEnabled)
+    }
+
+    @MainActor
+    func testPlannerPlaceInsertionUsesSharedVenueSearchLayout() {
+        let app = launchUserImageFixture()
+        let addFromPlace = app.buttons["plan-add-from-place-button"].firstMatch
+
+        XCTAssertTrue(addFromPlace.waitForExistence(timeout: 15))
+        addFromPlace.click()
+
+        let sheet = app.descendants(matching: .any)
+            .matching(identifier: "venue-search-sheet")
+            .firstMatch
+        XCTAssertTrue(sheet.waitForExistence(timeout: 10))
+        assertVenueSearchChrome(in: app, state: "planner-place-insertion")
+        XCTAssertTrue(
+            app.descendants(matching: .any)["venue-search-idle"].firstMatch.exists
+        )
+        XCTAssertFalse(app.buttons["venue-search-confirm"].firstMatch.isEnabled)
+
+        app.typeKey(.escape, modifierFlags: [])
+        XCTAssertTrue(sheet.waitForNonExistence(timeout: 5))
+        XCTAssertTrue(addFromPlace.exists)
     }
 
     @MainActor
@@ -558,6 +646,63 @@ final class VenueImageUITests: XCTestCase {
         if fixtureTrip.waitForExistence(timeout: 5) {
             app.activate()
             fixtureTrip.click()
+            return
         }
+
+        app.activate()
+        app.typeKey("l", modifierFlags: [.command, .option])
+        if userImageActivity.waitForExistence(timeout: 10) {
+            return
+        }
+        if fixtureTrip.waitForExistence(timeout: 5) {
+            fixtureTrip.click()
+        }
+    }
+
+    @MainActor
+    private func openVenueSearchFromActivityEditor(
+        in app: XCUIApplication
+    ) -> XCUIElement {
+        let activityCard = app.buttons["activity-3"].firstMatch
+        XCTAssertTrue(activityCard.waitForExistence(timeout: 15))
+        activityCard.doubleClick()
+
+        let venueSearchButton = app.buttons["venue-search-button"].firstMatch
+        XCTAssertTrue(venueSearchButton.waitForExistence(timeout: 10))
+        venueSearchButton.click()
+
+        let sheet = app.descendants(matching: .any)
+            .matching(identifier: "venue-search-sheet")
+            .firstMatch
+        XCTAssertTrue(sheet.waitForExistence(timeout: 10))
+        return sheet
+    }
+
+    @MainActor
+    private func assertVenueSearchChrome(
+        in app: XCUIApplication,
+        state: String
+    ) {
+        for identifier in [
+            "venue-search-header",
+            "venue-search-field",
+            "venue-search-results",
+            "venue-search-preview",
+            "venue-search-footer"
+        ] {
+            XCTAssertTrue(
+                app.descendants(matching: .any)
+                    .matching(identifier: identifier)
+                    .firstMatch.exists,
+                "\(identifier) must remain visible in the \(state) state."
+            )
+        }
+        XCTAssertEqual(
+            app.descendants(matching: .any)
+                .matching(identifier: "venue-search-field")
+                .count,
+            1,
+            "検索欄は \(state) state でも一つだけ表示される必要があります。"
+        )
     }
 }

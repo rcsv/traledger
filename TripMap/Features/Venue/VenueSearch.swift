@@ -8,6 +8,27 @@ private enum VenueSearchKeyboardSelection: Equatable {
     case result(Int)
 }
 
+struct VenueSearchCompletion: Identifiable {
+    let id = UUID()
+    let title: String
+    let subtitle: String
+    fileprivate let mapKitCompletion: MKLocalSearchCompletion?
+
+    init(_ completion: MKLocalSearchCompletion) {
+        title = completion.title
+        subtitle = completion.subtitle
+        mapKitCompletion = completion
+    }
+
+    #if TRIPMAP_QA
+    init(qaTitle: String, subtitle: String) {
+        title = qaTitle
+        self.subtitle = subtitle
+        mapKitCompletion = nil
+    }
+    #endif
+}
+
 /// MapKit の補完候補を解決して、アプリで保持できる会場情報へ変換する検索モデルです。
 struct VenueSearchResult: Identifiable {
     let id = UUID()
@@ -87,7 +108,7 @@ struct VenueCandidate: Identifiable {
 
 @MainActor
 final class VenueSearchModel: NSObject, ObservableObject, @preconcurrency MKLocalSearchCompleterDelegate {
-    @Published private(set) var completions: [MKLocalSearchCompletion] = []
+    @Published private(set) var completions: [VenueSearchCompletion] = []
     @Published private(set) var results: [VenueSearchResult] = []
     @Published private(set) var errorMessage: String?
     @Published private(set) var isCompleting = false
@@ -102,6 +123,9 @@ final class VenueSearchModel: NSObject, ObservableObject, @preconcurrency MKLoca
         super.init()
         completer.delegate = self
         completer.resultTypes = [.address, .pointOfInterest]
+        #if TRIPMAP_QA
+        seedQAFixtureIfRequested()
+        #endif
     }
 
     func update(query: String) {
@@ -124,7 +148,7 @@ final class VenueSearchModel: NSObject, ObservableObject, @preconcurrency MKLoca
 
     func completerDidUpdateResults(_ completer: MKLocalSearchCompleter) {
         isCompleting = false
-        completions = completer.results
+        completions = completer.results.map(VenueSearchCompletion.init)
     }
 
     func completer(_ completer: MKLocalSearchCompleter, didFailWithError error: Error) {
@@ -132,7 +156,7 @@ final class VenueSearchModel: NSObject, ObservableObject, @preconcurrency MKLoca
         errorMessage = error.localizedDescription
     }
 
-    func resolve(_ completion: MKLocalSearchCompletion) {
+    func resolve(_ completion: VenueSearchCompletion) {
         searchGeneration += 1
         let generation = searchGeneration
         errorMessage = nil
@@ -143,7 +167,17 @@ final class VenueSearchModel: NSObject, ObservableObject, @preconcurrency MKLoca
         didResolveSearch = false
         activeSearch?.cancel()
 
-        let search = MKLocalSearch(request: MKLocalSearch.Request(completion: completion))
+        guard let mapKitCompletion = completion.mapKitCompletion else {
+            #if TRIPMAP_QA
+            seedResolvedQAFixture()
+            #else
+            isResolving = false
+            errorMessage = "検索候補を解決できませんでした。"
+            #endif
+            return
+        }
+
+        let search = MKLocalSearch(request: MKLocalSearch.Request(completion: mapKitCompletion))
         activeSearch = search
         search.start { [weak self] response, error in
             guard let self, self.searchGeneration == generation else { return }
@@ -158,6 +192,58 @@ final class VenueSearchModel: NSObject, ObservableObject, @preconcurrency MKLoca
     func report(error: String?) {
         errorMessage = error
     }
+
+    #if TRIPMAP_QA
+    private func seedQAFixtureIfRequested() {
+        let arguments = ProcessInfo.processInfo.arguments
+        guard let flagIndex = arguments.firstIndex(of: "-tripmap-venue-search-qa-state"),
+              arguments.indices.contains(flagIndex + 1) else {
+            return
+        }
+
+        switch arguments[flagIndex + 1] {
+        case "completion-list":
+            completions = [
+                VenueSearchCompletion(
+                    qaTitle: "沖縄美ら海水族館",
+                    subtitle: "沖縄県国頭郡本部町"
+                ),
+                VenueSearchCompletion(
+                    qaTitle: "首里城公園",
+                    subtitle: "沖縄県那覇市"
+                )
+            ]
+        case "completion-loading":
+            isCompleting = true
+        case "result-resolving":
+            isResolving = true
+        case "result-list":
+            results = [Self.qaResult]
+            didResolveSearch = true
+        case "no-result":
+            didResolveSearch = true
+        case "failure":
+            errorMessage = "QA fixture: 場所を検索できません。"
+        default:
+            break
+        }
+    }
+
+    private func seedResolvedQAFixture() {
+        results = [Self.qaResult]
+        isResolving = false
+        didResolveSearch = true
+    }
+
+    private static var qaResult: VenueSearchResult {
+        let mapItem = MKMapItem(placemark: MKPlacemark(coordinate: CLLocationCoordinate2D(
+            latitude: 26.6943,
+            longitude: 127.8779
+        )))
+        mapItem.name = "沖縄美ら海水族館"
+        return VenueSearchResult(mapItem: mapItem)
+    }
+    #endif
 }
 
 struct VenueSearchSheet: View {
@@ -366,6 +452,7 @@ struct VenueSearchSheet: View {
         if search.isResolving {
             centeredState {
                 ProgressView("場所を確認中…")
+                    .accessibilityIdentifier("venue-search-result-resolving")
             }
         } else if !search.results.isEmpty {
             List {
@@ -381,10 +468,11 @@ struct VenueSearchSheet: View {
                 systemImage: "mappin.slash",
                 description: Text("別の施設名や住所で検索してください。")
             )
+            .accessibilityIdentifier("venue-search-no-result")
         } else if !search.completions.isEmpty {
             List {
                 Section("候補") {
-                    ForEach(Array(search.completions.enumerated()), id: \.element) { index, completion in
+                    ForEach(Array(search.completions.enumerated()), id: \.element.id) { index, completion in
                         completionButton(completion, index: index)
                     }
                 }
@@ -392,6 +480,7 @@ struct VenueSearchSheet: View {
         } else if search.isCompleting {
             centeredState {
                 ProgressView("候補を検索中…")
+                    .accessibilityIdentifier("venue-search-completion-loading")
             }
         } else if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             ContentUnavailableView(
@@ -399,12 +488,14 @@ struct VenueSearchSheet: View {
                 systemImage: "magnifyingglass",
                 description: Text("施設名または住所を入力してください。")
             )
+            .accessibilityIdentifier("venue-search-idle")
         } else {
             ContentUnavailableView(
                 "候補がありません",
                 systemImage: "magnifyingglass",
                 description: Text("入力を変えてもう一度検索してください。")
             )
+            .accessibilityIdentifier("venue-search-no-completion")
         }
     }
 
@@ -432,7 +523,7 @@ struct VenueSearchSheet: View {
     }
 
     private func completionButton(
-        _ completion: MKLocalSearchCompletion,
+        _ completion: VenueSearchCompletion,
         index: Int
     ) -> some View {
         Button {
@@ -450,7 +541,7 @@ struct VenueSearchSheet: View {
         .accessibilityIdentifier("venue-search-completion-\(index)")
     }
 
-    private func completionLabel(_ completion: MKLocalSearchCompletion) -> some View {
+    private func completionLabel(_ completion: VenueSearchCompletion) -> some View {
         let title = completion.title
         let subtitle = completion.subtitle
         return VStack(alignment: .leading, spacing: 2) {

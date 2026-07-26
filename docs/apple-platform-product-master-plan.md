@@ -1,6 +1,6 @@
 # TripMap Apple Platform Product Master Plan
 
-Date: 2026-07-26
+Date: 2026-07-27
 
 Status: Active implementation directive
 
@@ -487,7 +487,7 @@ iOS 27 Simulator の縦レイアウトも実画面確認済みである。
 
 #### 8.4.1 macOS Venue 検索 Sheet 修正計画
 
-状態: **Layout repair implemented（2026-07-26）／extended matrix pending**
+状態: **Layout repair implemented／Guide・accessibility matrix pending**
 
 2026-07-26 の実画面では、検索欄が Sheet 上部と左ペイン内の二箇所として表示・Accessibility tree
 へ公開され、上部 Navigation / Toolbar 領域が過大な空白を確保していた。左の初期案内も下へ押し出され、
@@ -565,12 +565,17 @@ iOS 27 Simulator の縦レイアウトも実画面確認済みである。
 - Xcode 27 beta の macOS build、全 `TripMapTests`、対象 `VenueImageUITests` は成功した。
   保存 screenshot でも、2026-07-26 appshot にあった二重検索欄と過大な Navigation 空白が
   解消されている。
+- 2026-07-27 に MapKit の応答へ依存しない QA fixture を追加した。completion loading、
+  completion list、result resolving、result list、no-result、failure を同じ presentation 経路へ
+  注入し、header、検索欄一つ、左右ペイン、footer が全状態で維持されることを UI test で確認した。
+- Activity Editor の nested sheet に加え、Planner の`場所から予定を追加`入口も同じレイアウト、
+  初期空状態、disabled confirm、Escape cancel を使うことを UI test で確認した。
+- 共有検索ソースの iOS Simulator build、macOS 全 `TripMapTests`、上記 Venue 検索 UI tests は
+  Xcode 27 beta で成功した。
 
 残る検証:
 
-- MapKit に依存しない completion / resolving / result / no-result / failure fixture
-- Planner の`場所から追加`と Guide Quick Edit を含む全入口、最小 window、Dark、
-  Increase Contrast、VoiceOver の拡張 matrix
+- Guide Quick Edit 入口、最小 window、Dark、Increase Contrast、VoiceOver の拡張 matrix
 - iPhone / iPad の標準幅と Accessibility XXL の回帰再確認
 
 これらは layout 実装の差し戻し条件ではなく P7.5 の検証 follow-up とする。失敗が見つかった場合も
@@ -1502,7 +1507,8 @@ platform expansion 記録として分離する。
 - Library Dashboard の Trip、Participant、Activity、Reservation 集計 — implemented
 - Map Venue candidate selection / confirmable Activity draft — implemented
 - macOS Venue Search Sheet の明示 layout — implemented and nested-sheet UI-tested;
-  extended state / entry-point matrix は §8.4.1 の follow-up とする
+  MapKit-independent state fixture と Planner entry は tested、Guide / accessibility matrix は
+  §8.4.1 の follow-up とする
 - Country 集計 — country code migration 後に有効化
 - Activity Estimate — Travel Ledger の複数Estimate契約を採用済み。TripMapのmigration、
   Editor、summaryがpending
@@ -1593,12 +1599,14 @@ Widget extension は main app の private SwiftData store を直接読めると�
    iOS 17 / macOS 14 を扱える安定版 toolchain で証明する。証明前に本番 V2 を追加しない。
 2. §8.4.1 のmacOS Venue検索Sheet修正は 2026-07-26 に実装済み。検索欄を一つにし、
    明示的なheader / split content / footer、初期focus、Escape、nested-sheet UI testを追加した。
-   extended state / entry-point matrix は同節のfollow-upとして継続する。
+   2026-07-27 にMapKit非依存の多状態fixtureとPlanner entry testも完了した。Guide /
+   accessibility matrix は同節のfollow-upとして継続する。
 3. V1 freeze 完了後に、Venue country code とActivity EstimateのADR、migration、
    Domain invariantを定義する。Library Dashboardは国別データを推測せず、利用可能な
    Trip、Participant、Activity、Reservation 集計から段階的に有効化する。
-4. Wikipedia概要または旅行・予約providerは独立Research Gateを作り、規約、帰属、coverage、
-   費用、key 保護、失敗時の価値を比較する。Gate 前に製品 UI へ組み込まない。
+4. Wikipedia概要または旅行・予約providerのResearch GateはADR 0020で現サイクルClose済み。
+   MapKitをVenue authorityとして維持し、外部summary、rating、booking inventoryを製品UIへ
+   組み込まない。Wikipediaのin-memory spikeを再開する場合だけ、同ADRの再開条件を先に満たす。
 5. P9の読み取り専用App Intentを安定OSのSiri / Shortcutsで確認後、versioned deep link
    contract を定義し、Spotlight / Handoff を同じ projection へ接続する。
 
