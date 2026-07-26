@@ -2,6 +2,8 @@ import MapKit
 import SwiftUI
 
 struct ActivityList: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     let day: Day
     let selectedActivityID: Activity.ID?
     let doctorIssues: [TripDoctorIssue]
@@ -158,7 +160,7 @@ struct ActivityList: View {
                 }
                 .onChange(of: selectedActivityID) { _, activityID in
                     guard let activityID else { return }
-                    withAnimation(.snappy) {
+                    withAnimation(reduceMotion ? nil : .snappy) {
                         proxy.scrollTo(activityID, anchor: .center)
                     }
                 }
@@ -168,7 +170,7 @@ struct ActivityList: View {
     }
 
     private func select(_ activityID: Activity.ID) {
-        withAnimation(.snappy) {
+        withAnimation(reduceMotion ? nil : .snappy) {
             onSelectActivity(activityID)
         }
     }
@@ -198,6 +200,8 @@ struct ActivityList: View {
 }
 
 private struct ActivityInsertionButton: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     let positionLabel: String
     let accessibilitySuffix: String
     let anchor: ActivityInsertionAnchor
@@ -260,7 +264,7 @@ private struct ActivityInsertionButton: View {
         .buttonStyle(.plain)
         .focused($isFocused)
         .onHover { isHovered = $0 }
-        .animation(.snappy(duration: 0.18), value: isActive)
+        .animation(reduceMotion ? nil : .snappy(duration: 0.18), value: isActive)
         .accessibilityLabel("予定を追加")
         .accessibilityHint("挿入位置: \(positionLabel)")
         .accessibilityIdentifier("activity-insert-\(accessibilitySuffix)")

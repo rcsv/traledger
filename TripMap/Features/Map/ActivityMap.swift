@@ -27,6 +27,8 @@ struct ActivityMapPinLabel: Hashable {
 }
 
 struct ActivityMap: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     let day: Day
     let selectedActivityID: Activity.ID?
     let cameraRequest: MapCameraRequest?
@@ -211,7 +213,7 @@ struct ActivityMap: View {
         }
         .onChange(of: venueCandidate?.id) { _, _ in
             guard let place = venueCandidate?.place else { return }
-            withAnimation(.easeInOut) {
+            withAnimation(reduceMotion ? nil : .easeInOut) {
                 cameraPosition = .region(
                     MKCoordinateRegion(
                         center: place.coordinate,
@@ -234,7 +236,7 @@ struct ActivityMap: View {
             showWholeDay()
         case .activity(let activityID):
             guard let place = day.activities.first(where: { $0.id == activityID })?.place else { return }
-            withAnimation(.easeInOut) {
+            withAnimation(reduceMotion ? nil : .easeInOut) {
                 cameraPosition = .region(
                     MKCoordinateRegion(
                         center: place.coordinate,
@@ -247,7 +249,7 @@ struct ActivityMap: View {
 
     private func showWholeDay() {
         guard let region = Self.region(for: day) else { return }
-        withAnimation(.easeInOut) {
+        withAnimation(reduceMotion ? nil : .easeInOut) {
             cameraPosition = .region(region)
         }
     }
@@ -430,6 +432,8 @@ private struct VenueCandidateOverlay: View {
 }
 
 private struct ActivitySequencePin: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     let label: ActivityMapPinLabel
     let isSelected: Bool
 
@@ -462,7 +466,7 @@ private struct ActivitySequencePin: View {
         .frame(width: 28, height: 31, alignment: .top)
         .shadow(color: .black.opacity(0.28), radius: 3, y: 2)
         .scaleEffect(isSelected ? 1.12 : 1)
-        .animation(.easeOut(duration: 0.15), value: isSelected)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: isSelected)
     }
 }
 
