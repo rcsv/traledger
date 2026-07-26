@@ -153,13 +153,13 @@ private struct ParticipantEditorTarget: Identifiable {
     let id = UUID()
 }
 
-private struct ParticipantDraft {
+struct ParticipantDraft {
     var id: UUID?
     var displayName: String
     var note: String
 }
 
-private struct ParticipantEditorView: View {
+struct ParticipantEditorView: View {
     let participant: StoredParticipant?
     let onSave: (ParticipantDraft) -> String?
     @Environment(\.dismiss) private var dismiss

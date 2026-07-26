@@ -646,8 +646,11 @@ struct PlanView: View {
             interaction.selectDay(dayID, in: trip)
             interaction.selectActivity(activityID, source: .list, in: trip)
             activityEditor = ActivityEditorTarget(activityID: activityID)
-        case .trip, .participants:
+        case .trip:
             destination = .overview
+        case .participants:
+            destination = .overview
+            participantCommandRequestID = UUID()
         }
     }
 
@@ -1923,7 +1926,9 @@ private struct TripDoctorSummary: View {
             "該当する予定の編集画面を開きます"
         case .day:
             "該当する日を表示します"
-        case .trip, .participants:
+        case .participants:
+            "Participantの追加画面を開きます"
+        case .trip:
             ""
         }
     }
@@ -2336,7 +2341,8 @@ private struct TripOverviewView: View {
                 participants: participants.filter { participant in
                     !tripAssignments.contains(where: { $0.participant?.id == participant.id })
                 },
-                onSelect: assign
+                onSelect: assign,
+                onCreate: createAndAssign
             )
         }
         .sheet(isPresented: $isChecklistEditorPresented) {
@@ -2455,6 +2461,36 @@ private struct TripOverviewView: View {
         return persistChanges()
     }
 
+    private func createAndAssign(_ draft: ParticipantDraft) -> String? {
+        let name = draft.displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else {
+            return "名前を入力してください。"
+        }
+        guard let storedTrip else {
+            return "旅行データを読み込めませんでした。"
+        }
+        let note = draft.note.trimmingCharacters(in: .whitespacesAndNewlines)
+        let participant = StoredParticipant(
+            displayName: name,
+            note: note.isEmpty ? nil : note
+        )
+        modelContext.insert(participant)
+        modelContext.insert(
+            StoredTripParticipant(
+                trip: storedTrip,
+                participant: participant
+            )
+        )
+        do {
+            try modelContext.save()
+            persistenceErrorMessage = nil
+            return nil
+        } catch {
+            modelContext.rollback()
+            return error.localizedDescription
+        }
+    }
+
     private func remove(_ assignment: StoredTripParticipant) {
         modelContext.delete(assignment)
         persistChanges()
@@ -2490,7 +2526,10 @@ private struct TripOverviewView: View {
 private struct ParticipantPickerSheet: View {
     let participants: [StoredParticipant]
     let onSelect: (StoredParticipant) -> Bool
+    let onCreate: (ParticipantDraft) -> String?
     @Environment(\.dismiss) private var dismiss
+    @State private var isParticipantCreationPresented = false
+    @State private var dismissAfterCreation = false
 
     var body: some View {
         NavigationStack {
@@ -2505,9 +2544,36 @@ private struct ParticipantPickerSheet: View {
                 if participants.isEmpty { ContentUnavailableView("追加できるParticipantがいません", systemImage: "person.2") }
             }
             .navigationTitle("Participantを追加")
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("キャンセル") { dismiss() } } }
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("キャンセル") { dismiss() }
+                }
+                ToolbarItem(placement: .primaryAction) {
+                    Button("新規Participant", systemImage: "person.badge.plus") {
+                        isParticipantCreationPresented = true
+                    }
+                    .accessibilityIdentifier("participant-picker-create-button")
+                }
+            }
         }
         .frame(minWidth: 360, minHeight: 280)
+        .accessibilityIdentifier("participant-picker")
+        .sheet(isPresented: $isParticipantCreationPresented) {
+            ParticipantEditorView(
+                participant: nil,
+                onSave: { draft in
+                    let errorMessage = onCreate(draft)
+                    dismissAfterCreation = errorMessage == nil
+                    return errorMessage
+                }
+            )
+        }
+        .onChange(of: isParticipantCreationPresented) { _, isPresented in
+            if !isPresented, dismissAfterCreation {
+                dismissAfterCreation = false
+                dismiss()
+            }
+        }
     }
 }
 

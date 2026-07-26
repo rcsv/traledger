@@ -341,6 +341,31 @@ final class VenueImageUITests: XCTestCase {
     }
 
     @MainActor
+    func testDoctorParticipantIssueOpensAssignmentPicker() {
+        let app = launchUserImageFixture()
+        let overview = app.descendants(matching: .any)
+            .matching(identifier: "trip-overview")
+            .firstMatch
+
+        XCTAssertTrue(overview.waitForExistence(timeout: 15))
+        overview.click()
+
+        let issue = app.buttons[
+            "doctor-issue-participantsNotAssigned-participants"
+        ].firstMatch
+        XCTAssertTrue(issue.waitForExistence(timeout: 10))
+        issue.click()
+
+        XCTAssertTrue(
+            app.descendants(matching: .any)
+                .matching(identifier: "participant-picker")
+                .firstMatch
+                .waitForExistence(timeout: 10)
+        )
+        XCTAssertTrue(app.buttons["participant-picker-create-button"].firstMatch.exists)
+    }
+
+    @MainActor
     func testWikimediaAttributionReceivesKeyboardFocus() {
         let app = XCUIApplication()
         app.launchArguments = [
