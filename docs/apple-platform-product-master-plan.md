@@ -596,6 +596,14 @@ iOS 27 Simulator の縦レイアウトも実画面確認済みである。
 - macOS の Increase Contrast
 - VoiceOver の実読み上げ・移動順
 
+2026-07-27 の再試行では最新 Debug-QA macOS build は成功したが、保護された
+`com.apple.universalaccess` への command-line 変更は拒否された。System Settings の通常 UI では
+Accessibility までは開けたものの、Display への遷移時に GUI 操作ブリッジが切断され、再接続も
+失敗した。`increaseContrast` は再確認して `0` のままであり、ユーザー設定は変更していない。
+操作可能な対話セッションで Increase Contrast を有効化し、同じ result-list fixture の sheet
+screenshot と VoiceOver の header → search field → results → preview → footer の実移動順を
+確認できた時にだけ、この二項目を完了へ移す。
+
 これらは layout 実装の差し戻し条件ではなく P7.5 の検証 follow-up とする。失敗が見つかった場合も
 Venue / Activity Domain や MapKit 検索順位へ問題を広げず、presentation と fixture の範囲で修正する。
 
